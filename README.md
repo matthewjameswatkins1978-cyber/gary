@@ -63,3 +63,36 @@ testdata/             stable fixtures for tests
 
 Build 2A complete. Do not put credentials in this repository; copy
 `.env.example` to `.env` when configuration is later introduced.
+
+## Go Development Tools
+
+### Required (built into Go)
+
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| `go` | Go toolchain | v1.24.0+ required |
+| `gofmt` | Code formatting | Built-in, runs automatically |
+| `go vet` | Basic static analysis | Built-in, catches common mistakes |
+
+### Recommended (for coding agents like opencode)
+
+| Tool | Purpose | Install |
+|------|---------|---------|
+| `gopls` | Language Server Protocol (LSP) | `go install golang.org/x/tools/gopls@latest` |
+| `goimports` | Import organization | `go install golang.org/x/tools/cmd/goimports@latest` |
+| `staticcheck` | Advanced static analysis | `go install honnef.co/go/tools/cmd/staticcheck@latest` |
+
+### Optional (not installed for GARY V1)
+
+| Tool | Reason skipped |
+|------|----------------|
+| `delve` | Debugger not needed for V1 CLI |
+| `golangci-lint` | Meta-linter overkill for small project |
+
+### Verification
+
+Run `gary doctor` to check all tools are available:
+
+```powershell
+go run ./cmd/gary doctor
+```

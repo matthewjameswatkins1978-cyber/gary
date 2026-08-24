@@ -37,6 +37,11 @@ func runChecks() []check {
 	var checks []check
 
 	checks = append(checks, checkGo())
+	checks = append(checks, checkGofmt())
+	checks = append(checks, checkGoVet())
+	checks = append(checks, checkGopls())
+	checks = append(checks, checkGoimports())
+	checks = append(checks, checkStaticcheck())
 	checks = append(checks, checkGit())
 	checks = append(checks, checkDocker())
 	checks = append(checks, checkGcloud())
@@ -55,6 +60,56 @@ func checkGo() check {
 		return check{"Go", "FAIL", "not found on PATH"}
 	}
 	return check{"Go", "PASS", strings.TrimSpace(out)}
+}
+
+func checkGofmt() check {
+	_, err := runCmd("gofmt", "-h")
+	// gofmt -h returns exit code 0 on some systems, non-zero on others
+	// The key is that the command exists
+	if err != nil {
+		// Check if it's a "not found" error vs just usage help
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not recognized") {
+			return check{"gofmt", "WARN", "not found (built into Go, check PATH)"}
+		}
+	}
+	return check{"gofmt", "PASS", "built-in"}
+}
+
+func checkGoVet() check {
+	_, err := runCmd("go", "vet", "-h")
+	// go vet -h returns exit code 2 (usage), but that means it exists
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not recognized") {
+			return check{"go vet", "WARN", "not found (built into Go, check PATH)"}
+		}
+	}
+	return check{"go vet", "PASS", "built-in"}
+}
+
+func checkGopls() check {
+	out, err := runCmd("gopls", "version")
+	if err != nil {
+		return check{"gopls", "WARN", "not installed (optional, needed for LSP support)"}
+	}
+	return check{"gopls", "PASS", strings.TrimSpace(out)}
+}
+
+func checkGoimports() check {
+	_, err := runCmd("goimports", "-h")
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "not recognized") {
+			return check{"goimports", "WARN", "not installed (optional, helps with import organization)"}
+		}
+	}
+	return check{"goimports", "PASS", "installed"}
+}
+
+func checkStaticcheck() check {
+	out, err := runCmd("staticcheck", "-version")
+	if err != nil {
+		return check{"staticcheck", "WARN", "not installed (optional, advanced static analysis)"}
+	}
+	return check{"staticcheck", "PASS", strings.TrimSpace(out)}
 }
 
 func checkGit() check {
