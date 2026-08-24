@@ -150,9 +150,9 @@ func SubmitJob(cfg JobConfig) (string, error) {
 
 	args := []string{
 		"batch", "jobs", "submit", cfg.JobName,
-		"--location=" + cfg.Region,
-		"--project=" + cfg.Project,
-		"--config=" + tmpFile.Name(),
+		"--location", cfg.Region,
+		"--project", cfg.Project,
+		"--config", tmpFile.Name(),
 	}
 
 	out, err := exec.Command("gcloud", args...).CombinedOutput()
@@ -167,9 +167,9 @@ func SubmitJob(cfg JobConfig) (string, error) {
 func DescribeJob(project, region, jobID string) (*JobStatus, error) {
 	args := []string{
 		"batch", "jobs", "describe", jobID,
-		"--location=" + region,
-		"--project=" + project,
-		"--format=json",
+		"--location", region,
+		"--project", project,
+		"--format", "json",
 	}
 
 	out, err := exec.Command("gcloud", args...).CombinedOutput()
@@ -195,10 +195,10 @@ func QueryLogs(project, jobUID, heartbeat string) (string, error) {
 
 	args := []string{
 		"logging", "read", filter,
-		"--project=" + project,
-		"--format=value(textPayload)",
-		"--freshness=10m",
-		"--limit=10",
+		"--project", project,
+		"--format", "value(textPayload)",
+		"--freshness", "10m",
+		"--limit", "10",
 	}
 
 	out, err := exec.Command("gcloud", args...).CombinedOutput()
