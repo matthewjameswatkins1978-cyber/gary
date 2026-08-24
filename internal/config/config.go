@@ -10,25 +10,33 @@ import (
 
 // Config holds the GARY environment configuration.
 type Config struct {
-	GCPProject  string
-	GCPRegion   string
-	GCPZone     string
-	GitHubRepo  string
-	ResultsDir  string
+	GCPProject       string
+	GCPRegion        string
+	GCPZone          string
+	GitHubRepo       string
+	ResultsDir       string
+	GeminiAPIKey     string
+	ImplementerModel string
 }
 
 // Load reads configuration from environment variables and applies defaults.
 func Load() (*Config, error) {
 	c := &Config{
-		GCPProject: os.Getenv("GARY_GCP_PROJECT"),
-		GCPRegion:  os.Getenv("GARY_GCP_REGION"),
-		GCPZone:    os.Getenv("GARY_GCP_ZONE"),
-		GitHubRepo: os.Getenv("GARY_GITHUB_REPO"),
-		ResultsDir: os.Getenv("GARY_RESULTS_DIR"),
+		GCPProject:       os.Getenv("GARY_GCP_PROJECT"),
+		GCPRegion:        os.Getenv("GARY_GCP_REGION"),
+		GCPZone:          os.Getenv("GARY_GCP_ZONE"),
+		GitHubRepo:       os.Getenv("GARY_GITHUB_REPO"),
+		ResultsDir:       os.Getenv("GARY_RESULTS_DIR"),
+		GeminiAPIKey:     os.Getenv("GEMINI_API_KEY"),
+		ImplementerModel: os.Getenv("GARY_IMPLEMENTER_MODEL"),
 	}
 
 	if c.ResultsDir == "" {
 		c.ResultsDir = filepath.Join(".", "results")
+	}
+
+	if c.ImplementerModel == "" {
+		c.ImplementerModel = "gemini-3.5-flash-lite"
 	}
 
 	return c, nil

@@ -49,6 +49,7 @@ func runChecks() []check {
 	checks = append(checks, checkGoogleAccount())
 	checks = append(checks, checkGCPProject())
 	checks = append(checks, checkGCPRegion())
+	checks = append(checks, checkGeminiAPIKey())
 	checks = append(checks, checkConfig())
 
 	return checks
@@ -210,6 +211,14 @@ func checkConfig() check {
 	parts = append(parts, "results="+cfg.ResultsDir)
 
 	return check{"Config", "PASS", strings.Join(parts, ", ")}
+}
+
+func checkGeminiAPIKey() check {
+	key := os.Getenv("GEMINI_API_KEY")
+	if key == "" {
+		return check{"Gemini API key", "FAIL", "set GEMINI_API_KEY environment variable"}
+	}
+	return check{"Gemini API key", "OK", "set"}
 }
 
 func runCmd(name string, args ...string) (string, error) {

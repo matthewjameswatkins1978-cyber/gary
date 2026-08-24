@@ -61,7 +61,7 @@ testdata/             stable fixtures for tests
 
 ## Status
 
-Build 2C complete — dedicated GARY cloud yard created. Do not put
+Build 2D complete — first Google AI worker verified. Do not put
 credentials in this repository; copy `.env.example` to `.env` when
 configuration is later introduced.
 

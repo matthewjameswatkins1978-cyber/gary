@@ -44,7 +44,7 @@
 ## Summary
 
 GARY now has a dedicated Google Cloud project (`gary-agent-yard`) with billing
-linked, required APIs enabled, and a $75/month budget alerting guardrail. The
+linked, required APIs enabled, and a 75 GBP/month budget alerting guardrail. The
 Batch heartbeat was verified against this project. No compute resources remain
 running. The project is parked and ready for reuse.
 

@@ -111,3 +111,40 @@ func TestHasGCPConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadImplementerModelDefault(t *testing.T) {
+	os.Unsetenv("GARY_IMPLEMENTER_MODEL")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ImplementerModel != "gemini-3.5-flash-lite" {
+		t.Errorf("ImplementerModel = %q, want gemini-3.5-flash-lite", cfg.ImplementerModel)
+	}
+}
+
+func TestLoadImplementerModelFromEnv(t *testing.T) {
+	os.Setenv("GARY_IMPLEMENTER_MODEL", "gemini-2.5-pro")
+	defer os.Unsetenv("GARY_IMPLEMENTER_MODEL")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ImplementerModel != "gemini-2.5-pro" {
+		t.Errorf("ImplementerModel = %q, want gemini-2.5-pro", cfg.ImplementerModel)
+	}
+}
+
+func TestLoadGeminiAPIKey(t *testing.T) {
+	os.Setenv("GEMINI_API_KEY", "test-key-123")
+	defer os.Unsetenv("GEMINI_API_KEY")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.GeminiAPIKey != "test-key-123" {
+		t.Errorf("GeminiAPIKey = %q, want test-key-123", cfg.GeminiAPIKey)
+	}
+}
