@@ -163,6 +163,42 @@ func SubmitJob(cfg JobConfig) (string, error) {
 	return cfg.JobName, nil
 }
 
+// SubmitCodingJob writes the config to a temp file and calls gcloud batch jobs submit.
+func SubmitCodingJob(cfg CodingJobConfig) (string, error) {
+	data, err := GenerateCodingJobConfig(cfg)
+	if err != nil {
+		return "", fmt.Errorf("generate config: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp("", "gary-batch-coding-*.json")
+	if err != nil {
+		return "", fmt.Errorf("create temp config: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		return "", fmt.Errorf("write temp config: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return "", fmt.Errorf("close temp config: %w", err)
+	}
+
+	args := []string{
+		"batch", "jobs", "submit", cfg.JobName,
+		"--location", cfg.Region,
+		"--project", cfg.Project,
+		"--config", tmpFile.Name(),
+	}
+
+	out, err := exec.Command("gcloud", args...).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("gcloud batch submit failed: %s\n%s", err, string(out))
+	}
+
+	return cfg.JobName, nil
+}
+
 // DescribeJob calls gcloud batch jobs describe and returns the parsed status.
 func DescribeJob(project, region, jobID string) (*JobStatus, error) {
 	args := []string{
@@ -250,4 +286,150 @@ func WaitForTerminal(project, region, jobID string, pollInterval time.Duration, 
 // Now returns the current time. Extracted for testability.
 func Now() time.Time {
 	return time.Now()
+}
+
+// CodingJobConfig holds the parameters for a Batch coding job.
+type CodingJobConfig struct {
+	Project      string
+	Region       string
+	JobName      string
+	RepoURL      string
+	BaseBranch   string
+	GaryBranch   string
+	Task         string
+	Acceptance   string
+	GCSPath      string
+	MachineType  string
+	MaxRunDurSec int
+}
+
+// GenerateCodingJobConfig produces the JSON config for a Batch coding job.
+func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
+	if cfg.MachineType == "" {
+		cfg.MachineType = "e2-standard-4"
+	}
+	if cfg.MaxRunDurSec == 0 {
+		cfg.MaxRunDurSec = 600
+	}
+
+	// Build the script without backticks to avoid Go raw string issues
+	parts := []string{
+		"#!/bin/bash",
+		"set -e",
+		"",
+		"export GEMINI_CLI_TRUST_WORKSPACE=true",
+		"",
+		"echo \"GARY CODING WORKER STARTING\"",
+		"echo \"Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)\"",
+		"",
+		"# Clone the repository",
+		fmt.Sprintf("echo \"Cloning %s...\"", cfg.RepoURL),
+		fmt.Sprintf("git clone %s /workspace/repo", cfg.RepoURL),
+		"cd /workspace/repo",
+		"",
+		"# Set git identity for commits",
+		"git config --global user.email \"gary@agent-yard.local\"",
+		"git config --global user.name \"GARY Worker\"",
+		"",
+		"# Checkout base branch and create GARY branch",
+		fmt.Sprintf("echo \"Creating branch %s from %s...\"", cfg.GaryBranch, cfg.BaseBranch),
+		fmt.Sprintf("git checkout %s", cfg.BaseBranch),
+		fmt.Sprintf("git checkout -b %s", cfg.GaryBranch),
+		"",
+		"# Run Gemini CLI",
+		"echo \"Running Gemini CLI...\"",
+		"gemini -m gemini-3.5-flash-lite --yolo \\",
+		"  -p \"You are a GARY implementation worker. Work only in this repository.",
+		"",
+		"Complete only this job:",
+		"",
+		cfg.Task,
+		"",
+		"Do not redesign unrelated code.",
+		"Do not modify tests unless explicitly required by the task.",
+		"",
+		"When the task is complete and checks pass, stop.",
+		"Do not ask questions unless genuinely blocked.\" || true",
+		"",
+		"# Run acceptance checks",
+		"echo \"Running acceptance checks...\"",
+		fmt.Sprintf("if %s; then", cfg.Acceptance),
+		"  echo \"ACCEPTANCE PASSED\"",
+		"else",
+		"  echo \"ACCEPTANCE FAILED\"",
+		"  exit 1",
+		"fi",
+		"",
+		"# Commit changes",
+		"echo \"Committing changes...\"",
+		"git add -A",
+		"git commit -m \"GARY: " + cfg.Task + "\" || true",
+		"",
+		"# Generate patch",
+		"echo \"Generating patch...\"",
+		fmt.Sprintf("git format-patch %s --stdout > /workspace/result.patch", cfg.BaseBranch),
+		"",
+		"# Upload to GCS",
+		fmt.Sprintf("echo \"Uploading result to %s...\"", cfg.GCSPath),
+		fmt.Sprintf("gsutil cp /workspace/result.patch %s/result.patch", cfg.GCSPath),
+		"",
+		"echo \"GARY CODING WORKER COMPLETE\"",
+	}
+
+	script := strings.Join(parts, "\n")
+
+	config := map[string]interface{}{
+		"taskGroups": []map[string]interface{}{
+			{
+				"taskCount":   "1",
+				"parallelism": "1",
+				"taskSpec": map[string]interface{}{
+					"runnables": []map[string]interface{}{
+						{
+							"container": map[string]interface{}{
+								"imageUri":   "europe-west2-docker.pkg.dev/gary-agent-yard/gary-workers/gary-batch-worker:latest",
+								"entrypoint": "/bin/bash",
+								"commands":   []string{"-c", script},
+							},
+						},
+					},
+					"maxRunDuration": fmt.Sprintf("%ds", cfg.MaxRunDurSec),
+					"maxRetryCount":  0,
+					"environment": map[string]interface{}{
+						"secretVariables": map[string]string{
+							"GEMINI_API_KEY": "projects/418146339023/secrets/gary-gemini-api-key/versions/latest",
+						},
+					},
+				},
+			},
+		},
+		"allocationPolicy": map[string]interface{}{
+			"instances": []map[string]interface{}{
+				{
+					"policy": map[string]interface{}{
+						"machineType":       cfg.MachineType,
+						"provisioningModel": "STANDARD",
+					},
+				},
+			},
+			"network": map[string]interface{}{
+				"networkInterfaces": []map[string]interface{}{
+					{
+						"network": "global/networks/default",
+					},
+				},
+			},
+			"serviceAccount": map[string]interface{}{
+				"email": "gary-batch-worker@gary-agent-yard.iam.gserviceaccount.com",
+			},
+		},
+		"labels": map[string]string{
+			"gary-build": "3a",
+		},
+		"logsPolicy": map[string]interface{}{
+			"destination": "CLOUD_LOGGING",
+		},
+	}
+
+	return json.MarshalIndent(config, "", "  ")
 }

@@ -1,0 +1,9 @@
+{
+  "id": "fix-clamp",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
+  "base_branch": "main",
+  "task": "Fix the Clamp function so it correctly clamps a value to the [min, max] range. The current implementation just returns the value unchanged.",
+  "acceptance": [
+    "go test ./..."
+  ]
+}
