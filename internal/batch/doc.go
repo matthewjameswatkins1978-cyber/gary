@@ -1,3 +1,4 @@
-// Package batch will isolate Google Cloud Batch submission and status queries.
-// TODO: Do not leak provider-specific types into the rest of the controller.
+// Package batch isolates Google Cloud Batch submission and status queries.
+// It uses os/exec to call documented gcloud CLI commands, keeping the
+// Google Cloud boundary in one place.
 package batch

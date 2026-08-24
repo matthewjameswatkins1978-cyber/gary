@@ -17,6 +17,8 @@ func main() {
 		cmdVersion()
 	case "doctor":
 		cmdDoctor()
+	case "smoke":
+		cmdSmoke()
 	case "help", "--help", "-h":
 		printUsage()
 	default:
@@ -32,5 +34,6 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  version   Print version information")
 	fmt.Fprintln(os.Stderr, "  doctor    Check environment readiness")
+	fmt.Fprintln(os.Stderr, "  smoke     Run Google Cloud Batch heartbeat smoke test")
 	fmt.Fprintln(os.Stderr, "  help      Show this help message")
 }

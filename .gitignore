@@ -10,6 +10,9 @@ bin/
 *.out
 coverage.*
 
+# Runtime results (local records, not committed)
+results/
+
 # Editor and operating-system files
 .DS_Store
 Thumbs.db

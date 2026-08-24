@@ -144,7 +144,7 @@ func checkGitHubCLI() check {
 	}
 	first := strings.SplitN(strings.TrimSpace(out), "\n", 2)[0]
 
-	out, err = runCmd("gh", "auth", "status")
+	_, err = runCmd("gh", "auth", "status")
 	if err != nil {
 		return check{"GitHub CLI", "WARN", first + " (not authenticated: run gh auth login)"}
 	}

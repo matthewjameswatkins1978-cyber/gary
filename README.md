@@ -61,8 +61,18 @@ testdata/             stable fixtures for tests
 
 ## Status
 
-Build 2A complete. Do not put credentials in this repository; copy
+Build 2B complete. Do not put credentials in this repository; copy
 `.env.example` to `.env` when configuration is later introduced.
+
+## First Cloud Heartbeat
+
+```powershell
+go run ./cmd/gary smoke
+```
+
+Submits one tiny Google Cloud Batch job, waits for it to succeed, verifies
+the heartbeat marker in Cloud Logging, and records a local result. Requires
+`GARY_GCP_PROJECT` and `GARY_GCP_REGION` (or a configured `gcloud` project).
 
 ## Go Development Tools
 
