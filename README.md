@@ -61,8 +61,9 @@ testdata/             stable fixtures for tests
 
 ## Status
 
-Build 2B live heartbeat passed. Do not put credentials in this repository;
-copy `.env.example` to `.env` when configuration is later introduced.
+Build 2C complete — dedicated GARY cloud yard created. Do not put
+credentials in this repository; copy `.env.example` to `.env` when
+configuration is later introduced.
 
 ## First Cloud Heartbeat
 
