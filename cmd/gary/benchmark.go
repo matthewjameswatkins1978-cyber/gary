@@ -43,6 +43,7 @@ func cmdBenchmarkWorker() {
 	routeA.EstimatedModelCost = benchmark.EstimateCost(pt,
 		routeA.InputTokens-routeA.CachedTokens,
 		routeA.OutputTokens,
+		routeA.ThoughtTokens,
 		routeA.CachedTokens)
 
 	routeB := benchmark.Record{
@@ -61,13 +62,14 @@ func cmdBenchmarkWorker() {
 		ThoughtTokens:      0,
 		TotalTokens:        90172,
 		ComputeSeconds:     78,
-		TransferBytes:      2048,
-		TransferSeconds:    1,
+		TransferBytes:      1212,
+		TransferSeconds:    2,
 		Attempts:           3,
 	}
 	routeB.EstimatedModelCost = benchmark.EstimateCost(pt,
 		routeB.InputTokens-routeB.CachedTokens,
 		routeB.OutputTokens,
+		routeB.ThoughtTokens,
 		routeB.CachedTokens)
 
 	result := benchmark.Result{

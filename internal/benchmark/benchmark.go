@@ -49,20 +49,22 @@ type PriceTable struct {
 	CachedPrice float64 `json:"cached_per_token"`
 }
 
-// DefaultPriceTable returns the current pricing for gemini-3.5-flash-lite.
+// DefaultPriceTable returns the current Gemini Developer API standard pricing
+// for gemini-3.5-flash-lite.
 func DefaultPriceTable() PriceTable {
 	return PriceTable{
 		ModelName:   "gemini-3.5-flash-lite",
-		InputPrice:  0.000000075,
-		OutputPrice: 0.0000003,
-		CachedPrice: 0.00000001875,
+		InputPrice:  0.0000003,  // $0.30 / 1M
+		OutputPrice: 0.0000025,  // $2.50 / 1M (includes thinking tokens)
+		CachedPrice: 0.00000003, // $0.03 / 1M
 	}
 }
 
 // EstimateCost calculates estimated model cost in USD.
-func EstimateCost(pt PriceTable, inputTokens, outputTokens, cachedTokens int) float64 {
+// Billed output tokens = outputTokens + thoughtTokens.
+func EstimateCost(pt PriceTable, inputTokens, outputTokens, thoughtTokens, cachedTokens int) float64 {
 	input := float64(inputTokens) * pt.InputPrice
-	output := float64(outputTokens) * pt.OutputPrice
+	output := float64(outputTokens+thoughtTokens) * pt.OutputPrice
 	cached := float64(cachedTokens) * pt.CachedPrice
 	return input + output + cached
 }

@@ -23,6 +23,8 @@ func main() {
 		cmdAgentSmoke()
 	case "benchmark":
 		cmdBenchmarkWorker()
+	case "benchmark-verify":
+		cmdBenchmarkVerify()
 	case "help", "--help", "-h":
 		printUsage()
 	default:
@@ -41,5 +43,6 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  smoke        Run Google Cloud Batch heartbeat smoke test")
 	fmt.Fprintln(os.Stderr, "  agent-smoke  Run Gemini AI worker smoke test")
 	fmt.Fprintln(os.Stderr, "  benchmark    Show worker benchmark comparison")
+	fmt.Fprintln(os.Stderr, "  benchmark-verify  Download and verify Batch result")
 	fmt.Fprintln(os.Stderr, "  help         Show this help message")
 }
