@@ -1,4 +1,4 @@
-// Command city is the CLI controller for City Computer.
+// Command gary is the CLI controller for GARY.
 package main
 
 import (
@@ -27,7 +27,7 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: city <command>")
+	fmt.Fprintln(os.Stderr, "Usage: gary <command>")
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  version   Print version information")

@@ -6,12 +6,11 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	// Clear env vars to test defaults.
-	os.Unsetenv("CITY_GCP_PROJECT")
-	os.Unsetenv("CITY_GCP_REGION")
-	os.Unsetenv("CITY_GCP_ZONE")
-	os.Unsetenv("CITY_GITHUB_REPO")
-	os.Unsetenv("CITY_RESULTS_DIR")
+	os.Unsetenv("GARY_GCP_PROJECT")
+	os.Unsetenv("GARY_GCP_REGION")
+	os.Unsetenv("GARY_GCP_ZONE")
+	os.Unsetenv("GARY_GITHUB_REPO")
+	os.Unsetenv("GARY_RESULTS_DIR")
 
 	cfg, err := Load()
 	if err != nil {
@@ -27,17 +26,17 @@ func TestLoadDefaults(t *testing.T) {
 }
 
 func TestLoadFromEnv(t *testing.T) {
-	os.Setenv("CITY_GCP_PROJECT", "my-project")
-	os.Setenv("CITY_GCP_REGION", "us-central1")
-	os.Setenv("CITY_GCP_ZONE", "us-central1-a")
-	os.Setenv("CITY_GITHUB_REPO", "owner/repo")
-	os.Setenv("CITY_RESULTS_DIR", "/tmp/results")
+	os.Setenv("GARY_GCP_PROJECT", "my-project")
+	os.Setenv("GARY_GCP_REGION", "us-central1")
+	os.Setenv("GARY_GCP_ZONE", "us-central1-a")
+	os.Setenv("GARY_GITHUB_REPO", "owner/repo")
+	os.Setenv("GARY_RESULTS_DIR", "/tmp/results")
 	defer func() {
-		os.Unsetenv("CITY_GCP_PROJECT")
-		os.Unsetenv("CITY_GCP_REGION")
-		os.Unsetenv("CITY_GCP_ZONE")
-		os.Unsetenv("CITY_GITHUB_REPO")
-		os.Unsetenv("CITY_RESULTS_DIR")
+		os.Unsetenv("GARY_GCP_PROJECT")
+		os.Unsetenv("GARY_GCP_REGION")
+		os.Unsetenv("GARY_GCP_ZONE")
+		os.Unsetenv("GARY_GITHUB_REPO")
+		os.Unsetenv("GARY_RESULTS_DIR")
 	}()
 
 	cfg, err := Load()

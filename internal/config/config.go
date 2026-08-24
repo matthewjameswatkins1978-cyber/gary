@@ -1,4 +1,4 @@
-// Package config loads and validates City Computer configuration from
+// Package config loads and validates GARY configuration from
 // environment variables.
 package config
 
@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 )
 
-// Config holds the City Computer environment configuration.
+// Config holds the GARY environment configuration.
 type Config struct {
 	GCPProject  string
 	GCPRegion   string
@@ -20,11 +20,11 @@ type Config struct {
 // Load reads configuration from environment variables and applies defaults.
 func Load() (*Config, error) {
 	c := &Config{
-		GCPProject: os.Getenv("CITY_GCP_PROJECT"),
-		GCPRegion:  os.Getenv("CITY_GCP_REGION"),
-		GCPZone:    os.Getenv("CITY_GCP_ZONE"),
-		GitHubRepo: os.Getenv("CITY_GITHUB_REPO"),
-		ResultsDir: os.Getenv("CITY_RESULTS_DIR"),
+		GCPProject: os.Getenv("GARY_GCP_PROJECT"),
+		GCPRegion:  os.Getenv("GARY_GCP_REGION"),
+		GCPZone:    os.Getenv("GARY_GCP_ZONE"),
+		GitHubRepo: os.Getenv("GARY_GITHUB_REPO"),
+		ResultsDir: os.Getenv("GARY_RESULTS_DIR"),
 	}
 
 	if c.ResultsDir == "" {
@@ -41,10 +41,10 @@ func (c *Config) Validate() error {
 	var missing []string
 
 	if c.GCPProject == "" {
-		missing = append(missing, "CITY_GCP_PROJECT")
+		missing = append(missing, "GARY_GCP_PROJECT")
 	}
 	if c.GCPRegion == "" {
-		missing = append(missing, "CITY_GCP_REGION")
+		missing = append(missing, "GARY_GCP_REGION")
 	}
 
 	if len(missing) > 0 {

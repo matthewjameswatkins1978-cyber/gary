@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"city-computer/internal/config"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 )
 
 type check struct {
@@ -16,7 +16,7 @@ type check struct {
 }
 
 func cmdDoctor() {
-	fmt.Println("CITY COMPUTER // DOCTOR")
+	fmt.Println("GARY // DOCTOR")
 	fmt.Println()
 
 	checks := runChecks()
@@ -40,6 +40,7 @@ func runChecks() []check {
 	checks = append(checks, checkGit())
 	checks = append(checks, checkDocker())
 	checks = append(checks, checkGcloud())
+	checks = append(checks, checkGitHubCLI())
 	checks = append(checks, checkGoogleAccount())
 	checks = append(checks, checkGCPProject())
 	checks = append(checks, checkGCPRegion())
@@ -67,7 +68,7 @@ func checkGit() check {
 func checkDocker() check {
 	out, err := runCmd("docker", "--version")
 	if err != nil {
-		return check{"Docker", "FAIL", "not found on PATH"}
+		return check{"Docker", "WARN", "not found on PATH (not required for GCP managed builds)"}
 	}
 	return check{"Docker", "PASS", strings.TrimSpace(out)}
 }
@@ -79,6 +80,20 @@ func checkGcloud() check {
 	}
 	first := strings.SplitN(strings.TrimSpace(out), "\n", 2)[0]
 	return check{"gcloud", "PASS", first}
+}
+
+func checkGitHubCLI() check {
+	out, err := runCmd("gh", "--version")
+	if err != nil {
+		return check{"GitHub CLI", "WARN", "gh not found on PATH"}
+	}
+	first := strings.SplitN(strings.TrimSpace(out), "\n", 2)[0]
+
+	out, err = runCmd("gh", "auth", "status")
+	if err != nil {
+		return check{"GitHub CLI", "WARN", first + " (not authenticated: run gh auth login)"}
+	}
+	return check{"GitHub CLI", "PASS", first}
 }
 
 func checkGoogleAccount() check {
@@ -106,10 +121,10 @@ func checkGCPProject() check {
 }
 
 func checkGCPRegion() check {
-	project := os.Getenv("CITY_GCP_PROJECT")
-	region := os.Getenv("CITY_GCP_REGION")
+	project := os.Getenv("GARY_GCP_PROJECT")
+	region := os.Getenv("GARY_GCP_REGION")
 	if project == "" || region == "" {
-		return check{"GCP region", "WARN", "set CITY_GCP_PROJECT and CITY_GCP_REGION for cloud jobs"}
+		return check{"GCP region", "WARN", "set GARY_GCP_PROJECT and GARY_GCP_REGION for cloud jobs"}
 	}
 	return check{"GCP region", "PASS", region}
 }

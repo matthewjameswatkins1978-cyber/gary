@@ -62,12 +62,12 @@ func TestFormatCheck(t *testing.T) {
 }
 
 func TestCheckStructFields(t *testing.T) {
-	c := check{name: "Docker", status: "FAIL", detail: "not installed"}
+	c := check{name: "Docker", status: "WARN", detail: "not installed"}
 	if c.name != "Docker" {
 		t.Errorf("name = %q", c.name)
 	}
-	if c.status != "FAIL" {
-		t.Errorf("status = %q", c.status)
+	if c.status != "WARN" {
+		t.Errorf("status = %q, want WARN", c.status)
 	}
 	if c.detail != "not installed" {
 		t.Errorf("detail = %q", c.detail)
