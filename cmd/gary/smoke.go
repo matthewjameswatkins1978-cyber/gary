@@ -53,7 +53,6 @@ func cmdSmoke() {
 	}
 
 	submittedAt := time.Now()
-	fmt.Println("SUBMITTED")
 
 	jobID, err := batch.SubmitJob(batchCfg)
 	if err != nil {
@@ -61,6 +60,8 @@ func cmdSmoke() {
 		os.Exit(1)
 	}
 	_ = jobID
+
+	fmt.Println("SUBMITTED")
 
 	fmt.Println()
 	fmt.Println("POLLING")
@@ -74,8 +75,8 @@ func cmdSmoke() {
 		os.Exit(1)
 	}
 
-	if status.State != "SUCCEEDED" {
-		fmt.Fprintf(os.Stderr, "job ended with state: %s\n", status.State)
+	if status.State() != "SUCCEEDED" {
+		fmt.Fprintf(os.Stderr, "job ended with state: %s\n", status.State())
 		os.Exit(1)
 	}
 
@@ -114,7 +115,7 @@ func cmdSmoke() {
 		SubmittedAt:       submittedAt.Format(time.RFC3339),
 		FinishedAt:        finishedAt.Format(time.RFC3339),
 		DurationSeconds:   finishedAt.Sub(submittedAt).Seconds(),
-		FinalState:        status.State,
+		FinalState:        status.State(),
 		Heartbeat:         heartbeat,
 		HeartbeatVerified: heartbeatVerified,
 	}

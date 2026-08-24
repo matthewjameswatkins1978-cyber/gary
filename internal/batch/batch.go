@@ -23,10 +23,21 @@ type JobConfig struct {
 }
 
 // JobStatus holds the result of a gcloud batch jobs describe call.
+// Google Batch returns state nested under status.state.
 type JobStatus struct {
-	UID   string `json:"uid"`
+	UID    string        `json:"uid"`
+	Name   string        `json:"name"`
+	Status JobStatusInfo `json:"status"`
+}
+
+// JobStatusInfo holds the nested status from a Batch describe response.
+type JobStatusInfo struct {
 	State string `json:"state"`
-	Name  string `json:"name"`
+}
+
+// State returns the top-level job state for convenience.
+func (js *JobStatus) State() string {
+	return js.Status.State
 }
 
 // SmokeResult is the local record written after a successful smoke test.
@@ -51,6 +62,7 @@ var TerminalStates = map[string]bool{
 	"SUCCEEDED": true,
 	"FAILED":    true,
 	"CANCELLED": true,
+	"DELETING":  true,
 	"DELETED":   true,
 }
 
@@ -222,12 +234,12 @@ func WaitForTerminal(project, region, jobID string, pollInterval time.Duration, 
 			return nil, time.Time{}, fmt.Errorf("describe job: %w", err)
 		}
 
-		if status.State != lastState {
-			fmt.Println(status.State)
-			lastState = status.State
+		if status.State() != lastState {
+			fmt.Println(status.State())
+			lastState = status.State()
 		}
 
-		if IsTerminal(status.State) {
+		if IsTerminal(status.State()) {
 			return status, time.Now(), nil
 		}
 

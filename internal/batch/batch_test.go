@@ -114,6 +114,7 @@ func TestIsTerminal(t *testing.T) {
 		{"SUCCEEDED", true},
 		{"FAILED", true},
 		{"CANCELLED", true},
+		{"DELETING", true},
 		{"DELETED", true},
 		{"QUEUED", false},
 		{"SCHEDULED", false},
@@ -165,6 +166,62 @@ func TestSmokeResultJSON(t *testing.T) {
 	}
 	if parsed.DurationSeconds != 60 {
 		t.Errorf("DurationSeconds = %v, want 60", parsed.DurationSeconds)
+	}
+}
+
+func TestParseJobStatusRealistic(t *testing.T) {
+	raw := `{
+  "name": "projects/resolve-ai-agentic-2608151746/locations/europe-west2/jobs/gary-smoke-20260824-120000",
+  "uid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "priority": 0,
+  "taskGroups": [],
+  "allocationPolicy": {},
+  "labels": {"gary-build": "2b"},
+  "status": {
+    "state": "SUCCEEDED"
+  },
+  "createTime": "2026-08-24T12:00:00Z",
+  "updateTime": "2026-08-24T12:01:00Z"
+}`
+
+	var status JobStatus
+	if err := json.Unmarshal([]byte(raw), &status); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	if status.UID != "a1b2c3d4-e5f6-7890-abcd-ef1234567890" {
+		t.Errorf("UID = %q, want a1b2c3d4-e5f6-7890-abcd-ef1234567890", status.UID)
+	}
+	if status.Name != "projects/resolve-ai-agentic-2608151746/locations/europe-west2/jobs/gary-smoke-20260824-120000" {
+		t.Errorf("Name = %q, want full job path", status.Name)
+	}
+	if status.State() != "SUCCEEDED" {
+		t.Errorf("State() = %q, want SUCCEEDED", status.State())
+	}
+	if !IsTerminal(status.State()) {
+		t.Errorf("SUCCEEDED should be terminal")
+	}
+}
+
+func TestParseJobStatusRunning(t *testing.T) {
+	raw := `{
+  "name": "projects/p/locations/r/jobs/j",
+  "uid": "uid-123",
+  "status": {
+    "state": "RUNNING"
+  }
+}`
+
+	var status JobStatus
+	if err := json.Unmarshal([]byte(raw), &status); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	if status.State() != "RUNNING" {
+		t.Errorf("State() = %q, want RUNNING", status.State())
+	}
+	if IsTerminal(status.State()) {
+		t.Errorf("RUNNING should not be terminal")
 	}
 }
 
