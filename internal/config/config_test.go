@@ -148,3 +148,27 @@ func TestLoadGeminiAPIKey(t *testing.T) {
 		t.Errorf("GeminiAPIKey = %q, want test-key-123", cfg.GeminiAPIKey)
 	}
 }
+
+func TestLoadWorkerRuntimeDefault(t *testing.T) {
+	os.Unsetenv("GARY_WORKER_RUNTIME")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.WorkerRuntime != "batch" {
+		t.Errorf("WorkerRuntime = %q, want batch", cfg.WorkerRuntime)
+	}
+}
+
+func TestLoadWorkerRuntimeFromEnv(t *testing.T) {
+	os.Setenv("GARY_WORKER_RUNTIME", "managed")
+	defer os.Unsetenv("GARY_WORKER_RUNTIME")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.WorkerRuntime != "managed" {
+		t.Errorf("WorkerRuntime = %q, want managed", cfg.WorkerRuntime)
+	}
+}

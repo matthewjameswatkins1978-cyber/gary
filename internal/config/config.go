@@ -17,6 +17,7 @@ type Config struct {
 	ResultsDir       string
 	GeminiAPIKey     string
 	ImplementerModel string
+	WorkerRuntime    string
 }
 
 // Load reads configuration from environment variables and applies defaults.
@@ -29,6 +30,7 @@ func Load() (*Config, error) {
 		ResultsDir:       os.Getenv("GARY_RESULTS_DIR"),
 		GeminiAPIKey:     os.Getenv("GEMINI_API_KEY"),
 		ImplementerModel: os.Getenv("GARY_IMPLEMENTER_MODEL"),
+		WorkerRuntime:    os.Getenv("GARY_WORKER_RUNTIME"),
 	}
 
 	if c.ResultsDir == "" {
@@ -37,6 +39,10 @@ func Load() (*Config, error) {
 
 	if c.ImplementerModel == "" {
 		c.ImplementerModel = "gemini-3.5-flash-lite"
+	}
+
+	if c.WorkerRuntime == "" {
+		c.WorkerRuntime = "batch"
 	}
 
 	return c, nil

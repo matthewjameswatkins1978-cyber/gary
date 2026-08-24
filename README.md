@@ -41,6 +41,7 @@ supported variables.
 | `GARY_GCP_ZONE` | No | Google Cloud zone |
 | `GARY_GITHUB_REPO` | No | GitHub repository (owner/repo) |
 | `GARY_RESULTS_DIR` | No | Local results directory (default: ./results) |
+| `GARY_WORKER_RUNTIME` | No | Default worker: `batch` or `managed` (default: batch) |
 
 ## Layout
 
@@ -61,7 +62,7 @@ testdata/             stable fixtures for tests
 
 ## Status
 
-Build 2E complete — worker benchmark done. Do not put
+Build 2F complete — Batch chosen as default worker. Do not put
 credentials in this repository; copy `.env.example` to `.env` when
 configuration is later introduced.
 
@@ -74,6 +75,20 @@ go run ./cmd/gary smoke
 Submits one tiny Google Cloud Batch job, waits for it to succeed, verifies
 the heartbeat marker in Cloud Logging, and records a local result. Requires
 `GARY_GCP_PROJECT` and `GARY_GCP_REGION` (or a configured `gcloud` project).
+
+## Default Worker
+
+Batch + Gemini CLI is the default worker (faster, lower-token, cheaper per
+Build 2E benchmark). Managed Agent is available as an alternate route.
+
+```powershell
+go run ./cmd/gary worker
+```
+
+```
+Default worker: batch
+Model: gemini-3.5-flash-lite
+```
 
 ## Go Development Tools
 
