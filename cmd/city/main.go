@@ -1,7 +1,36 @@
-// Command city will be the CLI controller for City Computer.
-// TODO: Add subcommands only after the V1 run contract is agreed.
+// Command city is the CLI controller for City Computer.
 package main
 
+import (
+	"fmt"
+	"os"
+)
+
 func main() {
-	// Intentionally empty: repository scaffold only.
+	if len(os.Args) < 2 {
+		printUsage()
+		os.Exit(1)
+	}
+
+	switch os.Args[1] {
+	case "version":
+		cmdVersion()
+	case "doctor":
+		cmdDoctor()
+	case "help", "--help", "-h":
+		printUsage()
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", os.Args[1])
+		printUsage()
+		os.Exit(1)
+	}
+}
+
+func printUsage() {
+	fmt.Fprintln(os.Stderr, "Usage: city <command>")
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Commands:")
+	fmt.Fprintln(os.Stderr, "  version   Print version information")
+	fmt.Fprintln(os.Stderr, "  doctor    Check environment readiness")
+	fmt.Fprintln(os.Stderr, "  help      Show this help message")
 }

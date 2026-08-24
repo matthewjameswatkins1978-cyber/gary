@@ -2,21 +2,55 @@
 
 CLI-only Google Cloud Batch AI build farm.
 
-V1 is intentionally just a repository skeleton. The eventual controller will
-submit disposable worker jobs, collect their result records, and present a
-small terminal report. It will not include a web UI, a daemon, or cloud setup
-automation until those are separately designed.
+## Build 1: Local Foundation
 
-## Planned commands
+This build provides the local CLI, configuration, environment checks, and tests.
+Cloud job submission is not yet implemented.
 
-- `city prepare` — validate a project dossier and job definitions.
-- `city launch` — submit a bounded batch run.
-- `city oversee` — review worker outcomes and choose a next action.
-- `city report` — print run and cost summaries.
+### Quick start
 
-Those commands are names only at this stage; none is implemented.
+Print version information:
 
-## Layout
+```powershell
+go run ./cmd/city version
+```
+
+Check environment readiness:
+
+```powershell
+go run ./cmd/city doctor
+```
+
+Run tests:
+
+```powershell
+go test ./...
+```
+
+### Configuration
+
+Set environment variables in PowerShell:
+
+```powershell
+$env:CITY_GCP_PROJECT = "your-project-id"
+$env:CITY_GCP_REGION = "us-central1"
+$env:CITY_GCP_ZONE = "us-central1-a"
+$env:CITY_GITHUB_REPO = "owner/repo"
+$env:CITY_RESULTS_DIR = ".\results"
+```
+
+Or copy `.env.example` to `.env` and source it. See `.env.example` for all
+supported variables.
+
+| Variable | Required | Description |
+|---|---|---|
+| `CITY_GCP_PROJECT` | Yes (cloud ops) | Google Cloud project ID |
+| `CITY_GCP_REGION` | Yes (cloud ops) | Google Cloud region |
+| `CITY_GCP_ZONE` | No | Google Cloud zone |
+| `CITY_GITHUB_REPO` | No | GitHub repository (owner/repo) |
+| `CITY_RESULTS_DIR` | No | Local results directory (default: ./results) |
+
+### Layout
 
 ```text
 cmd/city/             CLI entry point
@@ -33,7 +67,14 @@ docs/                 decisions and operational notes
 testdata/             stable fixtures for tests
 ```
 
-## Status
+### Planned commands
 
-Scaffold only. Do not put credentials in this repository; copy `.env.example`
+- `city prepare` -- validate a project dossier and job definitions.
+- `city launch` -- submit a bounded batch run.
+- `city oversee` -- review worker outcomes and choose a next action.
+- `city report` -- print run and cost summaries.
+
+### Status
+
+Build 1 complete. Do not put credentials in this repository; copy `.env.example`
 to `.env` when configuration is later introduced.
