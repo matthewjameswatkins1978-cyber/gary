@@ -19,4 +19,9 @@ type RunResult struct {
 	Accepted     bool    `json:"accepted"`
 	DurationSecs float64 `json:"duration_seconds"`
 	PatchBytes   int64   `json:"patch_bytes"`
+	Attempts     int     `json:"attempts"`
+	RepairCount  int     `json:"repair_count"`
+	Escalated    bool    `json:"escalated"`
+	CloserUsed   bool    `json:"closer_used"`
+	FinalStatus  string  `json:"final_status"`
 }

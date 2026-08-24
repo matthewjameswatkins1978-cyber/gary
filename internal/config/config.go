@@ -17,6 +17,7 @@ type Config struct {
 	ResultsDir       string
 	GeminiAPIKey     string
 	ImplementerModel string
+	CloserModel      string
 	WorkerRuntime    string
 }
 
@@ -30,6 +31,7 @@ func Load() (*Config, error) {
 		ResultsDir:       os.Getenv("GARY_RESULTS_DIR"),
 		GeminiAPIKey:     os.Getenv("GEMINI_API_KEY"),
 		ImplementerModel: os.Getenv("GARY_IMPLEMENTER_MODEL"),
+		CloserModel:      os.Getenv("GARY_CLOSER_MODEL"),
 		WorkerRuntime:    os.Getenv("GARY_WORKER_RUNTIME"),
 	}
 
@@ -39,6 +41,10 @@ func Load() (*Config, error) {
 
 	if c.ImplementerModel == "" {
 		c.ImplementerModel = "gemini-3.5-flash-lite"
+	}
+
+	if c.CloserModel == "" {
+		c.CloserModel = "gemini-2.5-flash"
 	}
 
 	if c.WorkerRuntime == "" {

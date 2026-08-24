@@ -300,13 +300,17 @@ type CodingJobConfig struct {
 	Acceptance   string
 	GCSPath      string
 	MachineType  string
+	Model        string
 	MaxRunDurSec int
 }
 
 // GenerateCodingJobConfig produces the JSON config for a Batch coding job.
 func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 	if cfg.MachineType == "" {
-		cfg.MachineType = "e2-standard-4"
+		cfg.MachineType = "e2-small"
+	}
+	if cfg.Model == "" {
+		cfg.Model = "gemini-3.5-flash-lite"
 	}
 	if cfg.MaxRunDurSec == 0 {
 		cfg.MaxRunDurSec = 600
@@ -338,7 +342,7 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 		"",
 		"# Run Gemini CLI",
 		"echo \"Running Gemini CLI...\"",
-		"gemini -m gemini-3.5-flash-lite --yolo \\",
+		fmt.Sprintf("gemini -m %s --yolo \\", cfg.Model),
 		"  -p \"You are a GARY implementation worker. Work only in this repository.",
 		"",
 		"Complete only this job:",
@@ -353,17 +357,20 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 		"",
 		"# Run acceptance checks",
 		"echo \"Running acceptance checks...\"",
-		fmt.Sprintf("if %s; then", cfg.Acceptance),
-		"  echo \"ACCEPTANCE PASSED\"",
+		fmt.Sprintf("%s > /workspace/acceptance_output.txt 2>&1 || true", cfg.Acceptance),
+		"",
+		"# Determine pass/fail",
+		"if grep -q \"^ok\" /workspace/acceptance_output.txt || grep -q \"PASS\" /workspace/acceptance_output.txt; then",
+		"  echo \"ACCEPTANCE PASSED\" | tee -a /workspace/acceptance_output.txt",
 		"else",
-		"  echo \"ACCEPTANCE FAILED\"",
+		"  echo \"ACCEPTANCE FAILED\" | tee -a /workspace/acceptance_output.txt",
 		"  exit 1",
 		"fi",
 		"",
 		"# Commit changes",
 		"echo \"Committing changes...\"",
 		"git add -A",
-		"git commit -m \"GARY: " + cfg.Task + "\" || true",
+		fmt.Sprintf("git commit -m \"GARY: %s\" || true", cfg.Task),
 		"",
 		"# Generate patch",
 		"echo \"Generating patch...\"",
@@ -372,6 +379,7 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 		"# Upload to GCS",
 		fmt.Sprintf("echo \"Uploading result to %s...\"", cfg.GCSPath),
 		fmt.Sprintf("gsutil cp /workspace/result.patch %s/result.patch", cfg.GCSPath),
+		fmt.Sprintf("gsutil cp /workspace/acceptance_output.txt %s/acceptance_output.txt", cfg.GCSPath),
 		"",
 		"echo \"GARY CODING WORKER COMPLETE\"",
 	}
