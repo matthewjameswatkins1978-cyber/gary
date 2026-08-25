@@ -219,6 +219,19 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 		if batchSucceeded {
 			logPrintln(prefix, "  BATCH SUCCEEDED — verifying locally")
 
+			// If GCS upload failed (patchData empty), try to get patch from GitHub
+			if patchData == "" {
+				logPrintln(prefix, "  No patch from GCS — pulling from GitHub")
+				workDir := filepath.Join(attemptDir, "repo")
+				if err := gitops.Clone(job.Repo, workDir); err == nil {
+					if err := gitops.FetchBranch(workDir, "origin", garyBranch); err == nil {
+						if err := gitops.Checkout(workDir, garyBranch); err == nil {
+							patchData, _ = gitops.FormatPatch(workDir, job.BaseBranch)
+						}
+					}
+				}
+			}
+
 			localAccepted := runLocalAcceptance(attemptDir, job, garyBranch, patchData, prefix)
 			if localAccepted {
 				workDir := filepath.Join(attemptDir, "repo")

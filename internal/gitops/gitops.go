@@ -46,6 +46,16 @@ func Push(dir, remote, branch string) error {
 	return runGit(dir, "push", remote, branch)
 }
 
+// FetchBranch fetches a specific branch from the remote.
+func FetchBranch(dir, remote, branch string) error {
+	return runGit(dir, "fetch", remote, branch)
+}
+
+// FormatPatch generates a format-patch from baseBranch to HEAD.
+func FormatPatch(dir, baseBranch string) (string, error) {
+	return runGitCapture(dir, "format-patch", baseBranch, "--stdout")
+}
+
 // ApplyPatch applies a unified diff patch to the working tree.
 func ApplyPatch(dir, patch string) error {
 	cmd := exec.Command("git", "apply", "--verbose")
