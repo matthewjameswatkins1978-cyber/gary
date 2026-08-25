@@ -409,10 +409,10 @@ func extractFromBatchLogs(project, region, jobName, marker string) string {
 	startMarker := marker + "_B64_START"
 	endMarker := marker + "_B64_END"
 
-	// Query Cloud Logging for the batch task logs
+	// Query Cloud Logging for the batch task logs using textPayload
 	filter := fmt.Sprintf(
-		`logName="projects/%s/logs/batch_task_logs" AND jsonPayload.jobName="%s"`,
-		project, jobName,
+		`logName="projects/%s/logs/batch_task_logs" AND textPayload:"%s"`,
+		project, startMarker,
 	)
 	cmd := exec.Command("gcloud", "logging", "read", filter,
 		"--project", project,
@@ -432,14 +432,14 @@ func extractFromBatchLogs(project, region, jobName, marker string) string {
 	capturing := false
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == startMarker {
+		if strings.Contains(line, startMarker) {
 			capturing = true
 			continue
 		}
-		if line == endMarker {
+		if strings.Contains(line, endMarker) {
 			break
 		}
-		if capturing && line != "" {
+		if capturing && line != "" && !strings.HasPrefix(line, "GARY_") {
 			b64Lines = append(b64Lines, line)
 		}
 	}
