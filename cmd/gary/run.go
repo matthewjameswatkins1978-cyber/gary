@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/batch"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/benchmark"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
@@ -121,6 +122,23 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 
 	submittedAt := time.Now()
 
+	// Budget check before starting
+	if cfg.MaxCostUSD > 0 {
+		estimated := EstimateJobCost(1)
+		allowed, reason := BudgetCheck(cfg.ResultsDir, cfg.MaxCostUSD, estimated)
+		if !allowed {
+			logPrintln(prefix, "  BUDGET_STOPPED: "+reason)
+			duration := time.Since(submittedAt)
+			return jobs.RunResult{
+				JobID:              job.ID,
+				FinalStatus:        "BUDGET_STOPPED",
+				DurationSecs:       duration.Seconds(),
+				Attempts:           0,
+				TotalCostEstimated: 0,
+			}
+		}
+	}
+
 	var lastPatch string
 	var lastAcceptance string
 	var lastFailure string
@@ -210,21 +228,30 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 				}
 				duration := time.Since(submittedAt)
 				os.RemoveAll(attemptDir)
+
+				modelCost := estimateModelCost(attempt)
+				computeCost := duration.Seconds() * 0.00000575
+				totalCost := modelCost + computeCost
+
 				result := jobs.RunResult{
-					JobID:        job.ID,
-					BatchJobID:   jobName,
-					Branch:       garyBranch,
-					CommitSHA:    commitSHA,
-					Accepted:     true,
-					DurationSecs: duration.Seconds(),
-					PatchBytes:   int64(len(patchData)),
-					Attempts:     attempt,
-					RepairCount:  repairCount,
-					Escalated:    escalated,
-					CloserUsed:   closerUsed,
-					FinalStatus:  "DONE",
+					JobID:                job.ID,
+					BatchJobID:           jobName,
+					Branch:               garyBranch,
+					CommitSHA:            commitSHA,
+					Accepted:             true,
+					DurationSecs:         duration.Seconds(),
+					PatchBytes:           int64(len(patchData)),
+					Attempts:             attempt,
+					RepairCount:          repairCount,
+					Escalated:            escalated,
+					CloserUsed:           closerUsed,
+					FinalStatus:          "DONE",
+					ModelCostEstimated:   modelCost,
+					ComputeCostEstimated: computeCost,
+					TotalCostEstimated:   totalCost,
 				}
 				saveResult(cfg, job, jobName, garyBranch, commitSHA, true, duration, len(patchData), attempt, repairCount, escalated, closerUsed, "DONE")
+				writeLedger(cfg, result)
 				return result
 			}
 			lastFailure = "Local acceptance failed after Batch success.\n" + lastAcceptance
@@ -287,19 +314,29 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 				duration := time.Since(submittedAt)
 				closerUsed = true
 				finalStatus = "DONE"
-				saveResult(cfg, job, fmt.Sprintf("closer-%s", job.ID), garyBranch, commitSHA, true, duration, 0, maxAttempts, repairCount, escalated, closerUsed, "DONE")
-				return jobs.RunResult{
-					JobID:        job.ID,
-					Branch:       garyBranch,
-					CommitSHA:    commitSHA,
-					Accepted:     true,
-					DurationSecs: duration.Seconds(),
-					Attempts:     maxAttempts,
-					RepairCount:  repairCount,
-					Escalated:    escalated,
-					CloserUsed:   closerUsed,
-					FinalStatus:  "DONE",
+
+				modelCost := estimateModelCost(maxAttempts)
+				computeCost := duration.Seconds() * 0.00000575
+				totalCost := modelCost + computeCost
+
+				result := jobs.RunResult{
+					JobID:                job.ID,
+					Branch:               garyBranch,
+					CommitSHA:            commitSHA,
+					Accepted:             true,
+					DurationSecs:         duration.Seconds(),
+					Attempts:             maxAttempts,
+					RepairCount:          repairCount,
+					Escalated:            escalated,
+					CloserUsed:           closerUsed,
+					FinalStatus:          "DONE",
+					ModelCostEstimated:   modelCost,
+					ComputeCostEstimated: computeCost,
+					TotalCostEstimated:   totalCost,
 				}
+				saveResult(cfg, job, fmt.Sprintf("closer-%s", job.ID), garyBranch, commitSHA, true, duration, 0, maxAttempts, repairCount, escalated, closerUsed, "DONE")
+				writeLedger(cfg, result)
+				return result
 			} else {
 				finalStatus = "FAILED"
 			}
@@ -307,17 +344,27 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 	}
 
 	duration := time.Since(submittedAt)
+
+	modelCost := estimateModelCost(maxAttempts)
+	computeCost := duration.Seconds() * 0.00000575
+	totalCost := modelCost + computeCost
+
 	saveResult(cfg, job, "", garyBranch, "", false, duration, 0, maxAttempts, repairCount, escalated, closerUsed, finalStatus)
-	return jobs.RunResult{
-		JobID:        job.ID,
-		Branch:       garyBranch,
-		DurationSecs: duration.Seconds(),
-		Attempts:     maxAttempts,
-		RepairCount:  repairCount,
-		Escalated:    escalated,
-		CloserUsed:   closerUsed,
-		FinalStatus:  finalStatus,
+	result := jobs.RunResult{
+		JobID:                job.ID,
+		Branch:               garyBranch,
+		DurationSecs:         duration.Seconds(),
+		Attempts:             maxAttempts,
+		RepairCount:          repairCount,
+		Escalated:            escalated,
+		CloserUsed:           closerUsed,
+		FinalStatus:          finalStatus,
+		ModelCostEstimated:   modelCost,
+		ComputeCostEstimated: computeCost,
+		TotalCostEstimated:   totalCost,
 	}
+	writeLedger(cfg, result)
+	return result
 }
 
 func downloadGCSFile(tmpDir, gcsPath string) string {
@@ -670,4 +717,19 @@ func saveResult(cfg *config.Config, job *jobs.Job, batchJobID, branch, commitSHA
 	}
 
 	os.WriteFile(path, data, 0o644)
+}
+
+func estimateModelCost(attempts int) float64 {
+	pt := benchmark.DefaultPriceTable()
+	inputPerAttempt := 15000
+	outputPerAttempt := 7500
+	cachedPerAttempt := 2000
+	return benchmark.EstimateCost(pt, inputPerAttempt*attempts, outputPerAttempt*attempts, 0, cachedPerAttempt*attempts)
+}
+
+func writeLedger(cfg *config.Config, result jobs.RunResult) {
+	entry := MakeLedgerEntry(result, cfg.ImplementerModel)
+	if err := AppendLedger(cfg.ResultsDir, entry); err != nil {
+		logPrint("", "  ledger write failed: %v", err)
+	}
 }

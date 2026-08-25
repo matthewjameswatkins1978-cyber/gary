@@ -12,16 +12,19 @@ type Job struct {
 
 // RunResult records the outcome of a single gary run invocation.
 type RunResult struct {
-	JobID        string  `json:"job_id"`
-	BatchJobID   string  `json:"batch_job_id"`
-	Branch       string  `json:"branch"`
-	CommitSHA    string  `json:"commit_sha"`
-	Accepted     bool    `json:"accepted"`
-	DurationSecs float64 `json:"duration_seconds"`
-	PatchBytes   int64   `json:"patch_bytes"`
-	Attempts     int     `json:"attempts"`
-	RepairCount  int     `json:"repair_count"`
-	Escalated    bool    `json:"escalated"`
-	CloserUsed   bool    `json:"closer_used"`
-	FinalStatus  string  `json:"final_status"`
+	JobID                string  `json:"job_id"`
+	BatchJobID           string  `json:"batch_job_id"`
+	Branch               string  `json:"branch"`
+	CommitSHA            string  `json:"commit_sha"`
+	Accepted             bool    `json:"accepted"`
+	DurationSecs         float64 `json:"duration_seconds"`
+	PatchBytes           int64   `json:"patch_bytes"`
+	Attempts             int     `json:"attempts"`
+	RepairCount          int     `json:"repair_count"`
+	Escalated            bool    `json:"escalated"`
+	CloserUsed           bool    `json:"closer_used"`
+	FinalStatus          string  `json:"final_status"`
+	ModelCostEstimated   float64 `json:"model_cost_estimated"`
+	ComputeCostEstimated float64 `json:"compute_cost_estimated"`
+	TotalCostEstimated   float64 `json:"total_cost_estimated"`
 }

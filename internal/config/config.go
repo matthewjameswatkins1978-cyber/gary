@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 // Config holds the GARY environment configuration.
@@ -19,6 +20,7 @@ type Config struct {
 	ImplementerModel string
 	CloserModel      string
 	WorkerRuntime    string
+	MaxCostUSD       float64
 }
 
 // Load reads configuration from environment variables and applies defaults.
@@ -49,6 +51,14 @@ func Load() (*Config, error) {
 
 	if c.WorkerRuntime == "" {
 		c.WorkerRuntime = "batch"
+	}
+
+	if v := os.Getenv("GARY_MAX_COST_USD"); v != "" {
+		n, err := strconv.ParseFloat(v, 64)
+		if err != nil || n < 0 {
+			return nil, fmt.Errorf("invalid GARY_MAX_COST_USD: %s", v)
+		}
+		c.MaxCostUSD = n
 	}
 
 	return c, nil

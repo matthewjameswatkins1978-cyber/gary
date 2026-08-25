@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
@@ -50,7 +51,6 @@ func cmdRunMany() {
 		maxWorkers = n
 	}
 
-	// Load all jobs
 	type jobEntry struct {
 		path string
 		job  *jobs.Job
@@ -75,14 +75,34 @@ func cmdRunMany() {
 	fmt.Println("GARY // RUN-MANY")
 	fmt.Printf("Jobs:      %d\n", len(entries))
 	fmt.Printf("Workers:   %d\n", maxWorkers)
+	if cfg.MaxCostUSD > 0 {
+		fmt.Printf("Max cost:  $%.2f ESTIMATED\n", cfg.MaxCostUSD)
+	}
 	fmt.Println()
+
+	// Budget check: reject jobs that would exceed limit before starting
+	checked := make([]jobEntry, 0, len(entries))
+	budgetStopped := 0
+	for _, e := range entries {
+		if cfg.MaxCostUSD > 0 {
+			estimated := EstimateJobCost(1)
+			allowed, reason := BudgetCheck(cfg.ResultsDir, cfg.MaxCostUSD, estimated)
+			if !allowed {
+				fmt.Printf("[%s] BUDGET_STOPPED: %s\n", e.job.ID, reason)
+				budgetStopped++
+				continue
+			}
+		}
+		checked = append(checked, e)
+	}
 
 	// Run concurrently
 	sem := make(chan struct{}, maxWorkers)
 	var wg sync.WaitGroup
-	results := make([]jobs.RunResult, len(entries))
+	results := make([]jobs.RunResult, len(checked))
+	var runSpend atomic.Int64 // fixed-point * 10000
 
-	for i, entry := range entries {
+	for i, entry := range checked {
 		wg.Add(1)
 		go func(idx int, e jobEntry) {
 			defer wg.Done()
@@ -90,12 +110,16 @@ func cmdRunMany() {
 			defer func() { <-sem }()
 
 			results[idx] = RunJob(cfg, e.job, e.job.ID)
+
+			cost := int64(results[idx].TotalCostEstimated * 10000)
+			newTotal := runSpend.Add(cost)
+			printRunSpend(e.job.ID, float64(newTotal)/10000)
 		}(i, entry)
 	}
 
 	wg.Wait()
 
-	// Print summary
+	// Summary
 	fmt.Println()
 	fmt.Println("GARY // YARD COMPLETE")
 	fmt.Println()
@@ -105,6 +129,8 @@ func cmdRunMany() {
 	done := 0
 	failed := 0
 	human := 0
+	budgetStoppedCount := 0
+	totalCost := 0.0
 	for _, r := range results {
 		status := r.FinalStatus
 		branch := r.Branch
@@ -114,18 +140,32 @@ func cmdRunMany() {
 		attempts := fmt.Sprintf("%d", r.Attempts)
 		fmt.Printf("%-20s %-10s %-10s %s\n", r.JobID, status, attempts, branch)
 
+		totalCost += r.TotalCostEstimated
 		switch r.FinalStatus {
 		case "DONE":
 			done++
 		case "HUMAN_REQUIRED":
 			human++
+		case "BUDGET_STOPPED":
+			budgetStoppedCount++
 		default:
 			failed++
 		}
 	}
+	budgetStoppedCount += budgetStopped
 
 	fmt.Println()
 	fmt.Printf("Done: %d\n", done)
 	fmt.Printf("Failed: %d\n", failed)
 	fmt.Printf("Human required: %d\n", human)
+	if budgetStoppedCount > 0 {
+		fmt.Printf("Budget stopped: %d\n", budgetStoppedCount)
+	}
+	fmt.Printf("Estimated total cost: $%.4f\n", totalCost)
+}
+
+func printRunSpend(jobID string, spend float64) {
+	outputMu.Lock()
+	defer outputMu.Unlock()
+	fmt.Printf("[%s] Estimated run spend so far: $%.4f\n", jobID, spend)
 }
