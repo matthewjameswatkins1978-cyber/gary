@@ -2,6 +2,7 @@
 package gitops
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -58,7 +59,7 @@ func FormatPatch(dir, baseBranch string) (string, error) {
 
 // ApplyPatch applies a unified diff patch to the working tree.
 func ApplyPatch(dir, patch string) error {
-	cmd := exec.Command("git", "apply", "--verbose")
+	cmd := gitCommand("git", "apply", "--verbose")
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(patch)
 	out, err := cmd.CombinedOutput()
@@ -69,7 +70,7 @@ func ApplyPatch(dir, patch string) error {
 }
 
 func runGit(dir string, args ...string) error {
-	cmd := exec.Command("git", args...)
+	cmd := gitCommand("git", args...)
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -77,11 +78,23 @@ func runGit(dir string, args ...string) error {
 }
 
 func runGitCapture(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	cmd := gitCommand("git", args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w\n%s", strings.Join(args, " "), err, string(out))
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// gitCommand supplies a short-lived GitHub App installation token to git
+// without writing it to a remote URL or repository configuration. It is empty
+// outside Actions, so local developer behaviour stays unchanged.
+func gitCommand(name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+	if token := os.Getenv("GARY_GITHUB_TOKEN"); token != "" {
+		header := "Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte("x-access-token:"+token))
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=http.https://github.com/.extraheader", "GIT_CONFIG_VALUE_0="+header)
+	}
+	return cmd
 }

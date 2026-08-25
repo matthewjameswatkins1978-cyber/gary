@@ -1,0 +1,124 @@
+name: GARY control
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+concurrency:
+  group: gary-control-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  control:
+    # GitHub cannot filter issue authors or bodies in the event declaration.
+    # This gate keeps untrusted issues from receiving checkout, OIDC, or a reply.
+    if: >-
+      github.event.issue.user.login == 'matthewjameswatkins1978-cyber' &&
+      github.event.sender.login == 'matthewjameswatkins1978-cyber' &&
+      github.event.issue.title == 'GARY COMMAND' &&
+      github.event.issue.pull_request == null
+    runs-on: ubuntu-latest
+    env:
+      GARY_GCP_PROJECT: ${{ vars.GARY_GCP_PROJECT }}
+      GARY_GCP_REGION: ${{ vars.GARY_GCP_REGION }}
+      GARY_WIF_PROVIDER: ${{ vars.GARY_WIF_PROVIDER }}
+      GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+    steps:
+      - name: Refuse a repeated command
+        id: idempotency
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = `<!-- gary-control-issue:${context.issue.number} -->`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            core.setOutput("already_processed", comments.some((comment) => comment.body.includes(marker)) ? "true" : "false");
+
+      - uses: actions/checkout@v4
+        if: steps.idempotency.outputs.already_processed != 'true'
+
+      - uses: actions/setup-go@v5
+        if: steps.idempotency.outputs.already_processed != 'true'
+        with:
+          go-version-file: go.mod
+
+      - name: Require OIDC configuration
+        if: steps.idempotency.outputs.already_processed != 'true'
+        run: |
+          test -n "$GARY_GCP_PROJECT" && test -n "$GARY_GCP_REGION" && test -n "$GARY_WIF_PROVIDER" && test -n "$GARY_DISPATCH_SERVICE_ACCOUNT" || {
+            echo "GARY OIDC control is not configured; do not add a service-account key."
+            exit 1
+          }
+
+      - name: Authenticate to Google Cloud with OIDC
+        if: steps.idempotency.outputs.already_processed != 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GARY_WIF_PROVIDER }}
+          service_account: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.idempotency.outputs.already_processed != 'true'
+
+      # This is intentionally optional until the dedicated app is manually
+      # registered. Read-only commands remain useful before it exists; submit
+      # and recover fail before starting work when no token is available.
+      - name: Create short-lived GARY GitHub App token
+        id: gary-app
+        if: steps.idempotency.outputs.already_processed != 'true' && vars.GARY_GITHUB_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.GARY_GITHUB_APP_ID }}
+          private-key: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Execute bounded GARY command
+        id: execute
+        if: steps.idempotency.outputs.already_processed != 'true'
+        env:
+          GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token }}
+        run: |
+          set +e
+          go run ./cmd/gary issue execute "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/gary-issue-result.json"
+          exit_code=$?
+          if [ ! -f "$RUNNER_TEMP/gary-issue-result.json" ]; then
+            printf '{"ok":false,"close":true,"comment":"GARY // COMMAND FAILED\\nNo result record was produced."}\n' > "$RUNNER_TEMP/gary-issue-result.json"
+          fi
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Post GARY result and close command issue
+        if: steps.idempotency.outputs.already_processed != 'true'
+        uses: actions/github-script@v7
+        env:
+          GARY_RESULT_PATH: ${{ runner.temp }}/gary-issue-result.json
+        with:
+          script: |
+            const fs = require("fs");
+            const result = JSON.parse(fs.readFileSync(process.env.GARY_RESULT_PATH, "utf8"));
+            const marker = `<!-- gary-control-issue:${context.issue.number} -->`;
+            const text = String(result.comment || "GARY produced no comment.").replace(/```/g, "'''");
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `${marker}\n\`\`\`text\n${text}\n\`\`\``,
+            });
+            if (result.close) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                state: "closed",
+                state_reason: result.ok ? "completed" : "not_planned",
+              });
+            }

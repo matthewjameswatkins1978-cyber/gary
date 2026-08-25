@@ -36,6 +36,13 @@ type JobStatusInfo struct {
 	State string `json:"state"`
 }
 
+// JobSummary is the bounded information exposed by GARY's control plane.
+type JobSummary struct {
+	Name       string `json:"name"`
+	State      string `json:"state"`
+	CreateTime string `json:"create_time"`
+}
+
 // State returns the top-level job state for convenience.
 func (js *JobStatus) State() string {
 	return js.Status.State
@@ -220,6 +227,60 @@ func DescribeJob(project, region, jobID string) (*JobStatus, error) {
 	}
 
 	return &status, nil
+}
+
+// ListJobs lists recent jobs in one GARY Batch region.
+func ListJobs(project, region string, limit int) ([]JobSummary, error) {
+	if limit < 1 || limit > 50 {
+		return nil, fmt.Errorf("limit must be between 1 and 50")
+	}
+	out, err := exec.Command("gcloud", "batch", "jobs", "list",
+		"--project", project, "--location", region,
+		"--limit", fmt.Sprintf("%d", limit),
+		"--format", "json(name,status.state,createTime)").CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("gcloud batch list failed: %w\n%s", err, string(out))
+	}
+	var raw []struct {
+		Name       string `json:"name"`
+		CreateTime string `json:"createTime"`
+		Status     struct {
+			State string `json:"state"`
+		} `json:"status"`
+	}
+	if err := json.Unmarshal(out, &raw); err != nil {
+		return nil, fmt.Errorf("parse batch list: %w", err)
+	}
+	items := make([]JobSummary, 0, len(raw))
+	for _, job := range raw {
+		items = append(items, JobSummary{Name: job.Name, State: job.Status.State, CreateTime: job.CreateTime})
+	}
+	return items, nil
+}
+
+// RecentLogs returns a concise, job-UID-scoped Cloud Logging excerpt.
+func RecentLogs(project, jobUID string, limit int) (string, error) {
+	if limit < 1 || limit > 50 {
+		return "", fmt.Errorf("limit must be between 1 and 50")
+	}
+	filter := fmt.Sprintf(`logName="projects/%s/logs/batch_task_logs" AND labels.job_uid="%s"`, project, jobUID)
+	out, err := exec.Command("gcloud", "logging", "read", filter,
+		"--project", project, "--format", "value(textPayload)",
+		"--limit", fmt.Sprintf("%d", limit)).CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("gcloud logging read failed: %w\n%s", err, string(out))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// CancelJob cancels one non-terminal Batch job by its exact GARY job ID.
+func CancelJob(project, region, jobID string) error {
+	out, err := exec.Command("gcloud", "batch", "jobs", "cancel", jobID,
+		"--project", project, "--location", region, "--quiet").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("gcloud batch cancel failed: %w\n%s", err, string(out))
+	}
+	return nil
 }
 
 // QueryLogs queries Cloud Logging for the heartbeat marker from the given job UID.

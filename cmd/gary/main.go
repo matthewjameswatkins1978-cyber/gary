@@ -23,6 +23,8 @@ func main() {
 		cmdRunMany()
 	case "inbox":
 		cmdInbox()
+	case "issue":
+		cmdIssue()
 	case "status":
 		cmdStatus()
 	case "smoke":
@@ -53,6 +55,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  run          Run a coding job against a repository")
 	fmt.Fprintln(os.Stderr, "  run-many     Run multiple coding jobs concurrently")
 	fmt.Fprintln(os.Stderr, "  inbox        Validate or dispatch repository inbox jobs")
+	fmt.Fprintln(os.Stderr, "  issue        Execute one authenticated GitHub Issue command")
 	fmt.Fprintln(os.Stderr, "  status       Show yard status and cost summary")
 	fmt.Fprintln(os.Stderr, "  worker       Show default worker configuration")
 	fmt.Fprintln(os.Stderr, "  smoke        Run Google Cloud Batch heartbeat smoke test")
