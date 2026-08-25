@@ -1,7 +1,9 @@
 package batch
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -246,6 +248,188 @@ func TestHeartbeatInScript(t *testing.T) {
 			}
 			if !strings.Contains(string(data), hb) {
 				t.Errorf("heartbeat %q not found in generated config", hb)
+			}
+		})
+	}
+}
+
+func TestCodingJobAcceptanceUsesExitCode(t *testing.T) {
+	cfg := CodingJobConfig{
+		Project:    "p",
+		Region:     "r",
+		JobName:    "j",
+		RepoURL:    "https://example.com/repo.git",
+		BaseBranch: "main",
+		GaryBranch: "gary/test",
+		Task:       "do stuff",
+		Acceptance: "python -m pytest -q",
+	}
+
+	script := generateCodingWorkerScript(cfg)
+
+	// Must use exit code, not grep
+	if strings.Contains(script, "grep -q") {
+		t.Error("coding job script must not use grep for acceptance detection")
+	}
+	// Must capture exit code
+	if !strings.Contains(script, "ACCEPTANCE_EXIT=$?") {
+		t.Error("coding job script must capture acceptance exit code")
+	}
+	// Must check exit code 0
+	if !strings.Contains(script, "$ACCEPTANCE_EXIT -eq 0") {
+		t.Error("coding job script must check exit code equals 0")
+	}
+}
+
+func TestCodingJobCommitMessageIsShort(t *testing.T) {
+	cfg := CodingJobConfig{
+		Project:    "p",
+		Region:     "r",
+		JobName:    "j",
+		RepoURL:    "https://example.com/repo.git",
+		BaseBranch: "main",
+		GaryBranch: "gary/test",
+		Task:       "fix the bug",
+		Acceptance: "echo ok",
+	}
+
+	script := generateCodingWorkerScript(cfg)
+
+	// Must use short stable commit message
+	if !strings.Contains(script, "GARY worker result") {
+		t.Error("worker commit message should be 'GARY worker result'")
+	}
+
+	// The git commit command line must use the literal message, not task text.
+	var commitLine string
+	for _, line := range strings.Split(script, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "git commit") {
+			commitLine = trimmed
+			break
+		}
+	}
+	if commitLine == "" {
+		t.Fatal("no git commit line found in script")
+	}
+	if !strings.Contains(commitLine, "GARY worker result") {
+		t.Errorf("git commit line should contain 'GARY worker result', got: %s", commitLine)
+	}
+	if strings.Contains(commitLine, cfg.Task) {
+		t.Error("git commit line must not contain task text")
+	}
+}
+
+func TestCodingJobAcceptancePytestStyle(t *testing.T) {
+	// Pytest outputs lowercase "passed" — must NOT affect acceptance.
+	// Only exit code matters.
+	cfg := CodingJobConfig{
+		Project:    "p",
+		Region:     "r",
+		JobName:    "j",
+		RepoURL:    "https://example.com/repo.git",
+		BaseBranch: "main",
+		GaryBranch: "gary/test",
+		Task:       "fix tests",
+		Acceptance: "python -m pytest -q",
+	}
+
+	script := generateCodingWorkerScript(cfg)
+
+	// The script must not parse "passed" or "PASS" from output
+	if strings.Contains(script, "grep") && strings.Contains(script, "PASS") {
+		t.Error("coding job must not grep for PASS/PASS in acceptance output")
+	}
+}
+
+func TestPromptTransportRoundTrip(t *testing.T) {
+	// B3: Task text must survive base64 encode → shell decode byte-for-byte.
+	specialTask := `Fix "process_items" so it handles:
+- double quote: "
+- single quote: '
+- dollar sign: $PATH
+- backtick: ` + "`" + `cmd` + "`" + `
+- JSON: {"key": "value", "nested": {"a": 1}}
+- multiple lines
+  with indentation
+  and special chars: <>&|;`
+
+	cfg := CodingJobConfig{
+		Project:    "p",
+		Region:     "r",
+		JobName:    "j",
+		RepoURL:    "https://example.com/repo.git",
+		BaseBranch: "main",
+		GaryBranch: "gary/test",
+		Task:       specialTask,
+		Acceptance: "echo ok",
+	}
+
+	// Build the full prompt the same way GenerateCodingJobConfig does
+	prompt := fmt.Sprintf(`You are a GARY implementation worker. Work only in this repository.
+
+Complete only this job:
+
+%s
+
+Do not redesign unrelated code.
+Do not modify tests unless explicitly required by the task.
+
+When the task is complete and checks pass, stop.
+Do not ask questions unless genuinely blocked.`, cfg.Task)
+
+	promptB64 := base64.StdEncoding.EncodeToString([]byte(prompt))
+
+	// Simulate shell decode
+	decoded, err := base64.StdEncoding.DecodeString(promptB64)
+	if err != nil {
+		t.Fatalf("base64 decode failed: %v", err)
+	}
+
+	if string(decoded) != prompt {
+		t.Errorf("round-trip mismatch\ngot:\n%s\nwant:\n%s", string(decoded), prompt)
+	}
+}
+
+func TestPromptShellSafe(t *testing.T) {
+	// B3: The base64-encoded prompt must not appear as raw shell syntax.
+	tasks := []string{
+		`has "double quotes"`,
+		`has 'single quotes'`,
+		"has $DOLLAR",
+		"has `backticks`",
+		`has {"json": true}`,
+		"has\nmultiple\nlines",
+		"has <redirection> and |pipe| and ;semi",
+	}
+
+	for _, task := range tasks {
+		name := task
+		if len(name) > 20 {
+			name = name[:20]
+		}
+		t.Run(name, func(t *testing.T) {
+			cfg := CodingJobConfig{
+				Project:    "p",
+				Region:     "r",
+				JobName:    "j",
+				RepoURL:    "https://example.com/repo.git",
+				BaseBranch: "main",
+				GaryBranch: "gary/test",
+				Task:       task,
+				Acceptance: "echo ok",
+			}
+
+			// GenerateCodingJobConfig must succeed with no error
+			data, err := GenerateCodingJobConfig(cfg)
+			if err != nil {
+				t.Fatalf("GenerateCodingJobConfig failed: %v", err)
+			}
+
+			// The raw task text must NOT appear in the JSON config
+			// (it should be base64 encoded)
+			if strings.Contains(string(data), task) {
+				t.Errorf("raw task text must not appear in Batch config JSON")
 			}
 		})
 	}

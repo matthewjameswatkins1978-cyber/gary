@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -141,6 +143,53 @@ func TestBudgetCheckConcurrentReservation(t *testing.T) {
 	allowed, _ = BudgetCheck(0.06, 0.050, 0.025)
 	if allowed {
 		t.Error("third job should be rejected")
+	}
+}
+
+func TestConcurrentBudgetReservation(t *testing.T) {
+	// Prove concurrent CAS reservations cannot exceed budget.
+	// 10 goroutines race to reserve $0.015 each against a $0.06 budget.
+	// At most 4 can succeed (4 × 0.015 = 0.06). The 5th must be rejected.
+	var committed atomic.Int64 // fixed-point * 10000
+	budget := 0.06
+	jobCost := 0.015
+	const goroutines = 10
+
+	var allowedCount atomic.Int64
+	var wg sync.WaitGroup
+
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				old := committed.Load()
+				current := float64(old) / 10000
+				ok, _ := BudgetCheck(budget, current, jobCost)
+				if !ok {
+					return
+				}
+				newVal := int64((current + jobCost) * 10000)
+				if committed.CompareAndSwap(old, newVal) {
+					allowedCount.Add(1)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	finalCommitted := float64(committed.Load()) / 10000
+	allowed := int(allowedCount.Load())
+
+	if allowed > 4 {
+		t.Errorf("expected at most 4 allowed, got %d", allowed)
+	}
+	if finalCommitted > budget+0.001 {
+		t.Errorf("committed $%.4f exceeds budget $%.2f", finalCommitted, budget)
+	}
+	if allowed == 0 {
+		t.Error("expected at least 1 allowed reservation")
 	}
 }
 

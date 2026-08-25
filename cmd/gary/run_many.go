@@ -96,7 +96,8 @@ func cmdRunMany() {
 			if cfg.MaxCostUSD > 0 {
 				jobCost := EstimateJobCost(1)
 				for {
-					committed := float64(runCommitted.Load()) / 10000
+					old := runCommitted.Load()
+					committed := float64(old) / 10000
 					allowed, reason := BudgetCheck(cfg.MaxCostUSD, committed, jobCost)
 					if !allowed {
 						logPrint(e.job.ID, "BUDGET_STOPPED: %s", reason)
@@ -107,7 +108,7 @@ func cmdRunMany() {
 						return
 					}
 					newCommitted := int64((committed + jobCost) * 10000)
-					if runCommitted.CompareAndSwap(runCommitted.Load(), newCommitted) {
+					if runCommitted.CompareAndSwap(old, newCommitted) {
 						break
 					}
 				}

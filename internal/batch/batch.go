@@ -3,6 +3,7 @@
 package batch
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -305,19 +306,9 @@ type CodingJobConfig struct {
 	MaxRunDurSec int
 }
 
-// GenerateCodingJobConfig produces the JSON config for a Batch coding job.
-func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
-	if cfg.MachineType == "" {
-		cfg.MachineType = "e2-small"
-	}
-	if cfg.Model == "" {
-		cfg.Model = "gemini-3.5-flash-lite"
-	}
-	if cfg.MaxRunDurSec == 0 {
-		cfg.MaxRunDurSec = 600
-	}
-
-	// Build the script without backticks to avoid Go raw string issues
+// generateCodingWorkerScript builds the raw bash script for a coding worker.
+// Separated from GenerateCodingJobConfig for testability and prompt transport.
+func generateCodingWorkerScript(cfg CodingJobConfig) string {
 	parts := []string{
 		"#!/bin/bash",
 		"set -e",
@@ -347,37 +338,33 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 		"  gsutil cp $PREV_PATCH_GCS /workspace/prev.patch 2>/dev/null && git apply /workspace/prev.patch && echo \"Previous patch applied\" || echo \"No previous patch to apply\"",
 		"fi",
 		"",
-		"# Run Gemini CLI",
+		"# Decode base64 prompt to file (transport-safe, no shell interpolation)",
+		"echo \"$GARY_PROMPT_B64\" | base64 -d > /workspace/gary_prompt.txt",
+		"",
+		"# Run Gemini CLI from prompt file",
 		"echo \"Running Gemini CLI...\"",
-		fmt.Sprintf("gemini -m %s --yolo \\", cfg.Model),
-		"  -p \"You are a GARY implementation worker. Work only in this repository.",
+		fmt.Sprintf("gemini -m %s --yolo -f /workspace/gary_prompt.txt || true", cfg.Model),
 		"",
-		"Complete only this job:",
-		"",
-		cfg.Task,
-		"",
-		"Do not redesign unrelated code.",
-		"Do not modify tests unless explicitly required by the task.",
-		"",
-		"When the task is complete and checks pass, stop.",
-		"Do not ask questions unless genuinely blocked.\" || true",
-		"",
-		"# Run acceptance checks",
+		"# Run acceptance checks using exit code as truth",
 		"echo \"Running acceptance checks...\"",
-		fmt.Sprintf("%s > /workspace/acceptance_output.txt 2>&1 || true", cfg.Acceptance),
+		fmt.Sprintf("%s > /workspace/acceptance_output.txt 2>&1", cfg.Acceptance),
+		"ACCEPTANCE_EXIT=$?",
 		"",
-		"# Determine pass/fail",
-		"if grep -q \"^ok\" /workspace/acceptance_output.txt || grep -q \"PASS\" /workspace/acceptance_output.txt; then",
+		"# Always preserve acceptance_output.txt",
+		"cat /workspace/acceptance_output.txt || true",
+		"",
+		"# Exit code 0 = PASSED, nonzero = FAILED",
+		"if [ $ACCEPTANCE_EXIT -eq 0 ]; then",
 		"  echo \"ACCEPTANCE PASSED\" | tee -a /workspace/acceptance_output.txt",
 		"else",
-		"  echo \"ACCEPTANCE FAILED\" | tee -a /workspace/acceptance_output.txt",
+		"  echo \"ACCEPTANCE FAILED (exit code $ACCEPTANCE_EXIT)\" | tee -a /workspace/acceptance_output.txt",
 		"  exit 1",
 		"fi",
 		"",
 		"# Commit changes",
 		"echo \"Committing changes...\"",
 		"git add -A",
-		fmt.Sprintf("git commit -m \"GARY: %s\" || true", cfg.Task),
+		"git commit -m \"GARY worker result\" || true",
 		"",
 		"# Generate patch",
 		"echo \"Generating patch...\"",
@@ -391,7 +378,41 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 		"echo \"GARY CODING WORKER COMPLETE\"",
 	}
 
-	script := strings.Join(parts, "\n")
+	return strings.Join(parts, "\n")
+}
+
+// GenerateCodingJobConfig produces the JSON config for a Batch coding job.
+func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
+	if cfg.MachineType == "" {
+		cfg.MachineType = "e2-small"
+	}
+	if cfg.Model == "" {
+		cfg.Model = "gemini-3.5-flash-lite"
+	}
+	if cfg.MaxRunDurSec == 0 {
+		cfg.MaxRunDurSec = 600
+	}
+
+	// Build the full prompt for the worker
+	prompt := fmt.Sprintf(`You are a GARY implementation worker. Work only in this repository.
+
+Complete only this job:
+
+%s
+
+Do not redesign unrelated code.
+Do not modify tests unless explicitly required by the task.
+
+When the task is complete and checks pass, stop.
+Do not ask questions unless genuinely blocked.`, cfg.Task)
+
+	// Base64 encode prompt for safe shell transport
+	promptB64 := base64.StdEncoding.EncodeToString([]byte(prompt))
+
+	// Build script with the base64 prompt injected as env var
+	script := generateCodingWorkerScript(cfg)
+	// Inject the prompt as an environment variable at the top of the script
+	script = "export GARY_PROMPT_B64=\"" + promptB64 + "\"\n" + script
 
 	config := map[string]interface{}{
 		"taskGroups": []map[string]interface{}{
