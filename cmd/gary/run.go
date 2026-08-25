@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -208,6 +209,14 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 		patchData := downloadGCSFile(attemptDir, attemptGCSPath+"/result.patch")
 		acceptOutput := downloadGCSFile(attemptDir, attemptGCSPath+"/acceptance_output.txt")
 
+		// If GCS download failed, try to extract from batch logs
+		if patchData == "" {
+			patchData = extractFromBatchLogs(cfg.GCPProject, cfg.GCPRegion, jobName, "GARY_PATCH_B64")
+		}
+		if acceptOutput == "" {
+			acceptOutput = extractFromBatchLogs(cfg.GCPProject, cfg.GCPRegion, jobName, "GARY_ACCEPTANCE_B64")
+		}
+
 		if patchData != "" {
 			lastPatch = patchData
 			prevGCSPatch = attemptGCSPath + "/result.patch"
@@ -392,6 +401,58 @@ func downloadGCSFile(tmpDir, gcsPath string) string {
 		return ""
 	}
 	return string(data)
+}
+
+// extractFromBatchLogs retrieves base64-encoded data from Cloud Logging.
+// It looks for GARY_<marker>_B64_START and GARY_<marker>_B64_END markers.
+func extractFromBatchLogs(project, region, jobName, marker string) string {
+	startMarker := marker + "_B64_START"
+	endMarker := marker + "_B64_END"
+
+	// Query Cloud Logging for the batch task logs
+	filter := fmt.Sprintf(
+		`logName="projects/%s/logs/batch_task_logs" AND jsonPayload.jobName="%s"`,
+		project, jobName,
+	)
+	cmd := exec.Command("gcloud", "logging", "read", filter,
+		"--project", project,
+		"--format", "value(textPayload)",
+		"--freshness", "30m",
+		"--limit", "100",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return ""
+	}
+
+	logs := string(out)
+	lines := strings.Split(logs, "\n")
+
+	var b64Lines []string
+	capturing := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == startMarker {
+			capturing = true
+			continue
+		}
+		if line == endMarker {
+			break
+		}
+		if capturing && line != "" {
+			b64Lines = append(b64Lines, line)
+		}
+	}
+
+	if len(b64Lines) == 0 {
+		return ""
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(strings.Join(b64Lines, ""))
+	if err != nil {
+		return ""
+	}
+	return string(decoded)
 }
 
 func runLocalAcceptance(tmpDir string, job *jobs.Job, garyBranch, patchData, prefix string) bool {
