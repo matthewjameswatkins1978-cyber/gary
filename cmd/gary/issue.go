@@ -117,14 +117,11 @@ func loadIssueCommand(path string) (*issueEvent, *issueCommand, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("read GitHub event: %w", err)
 	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
 	var event issueEvent
-	if err := decoder.Decode(&event); err != nil {
+	// GitHub's event envelope evolves independently of GARY. Decode only the
+	// fields we authenticate; strictness belongs to the command body below.
+	if err := json.Unmarshal(data, &event); err != nil {
 		return nil, nil, fmt.Errorf("parse GitHub event: %w", err)
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return nil, nil, errors.New("GitHub event contains more than one JSON value")
 	}
 	if err := validateIssueEvent(&event); err != nil {
 		return nil, nil, err
