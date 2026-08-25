@@ -1,0 +1,7 @@
+{
+  "id": "smoke-inbox",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
+  "base_branch": "master",
+  "task": "Harmless inbox smoke check: make no repository changes and report the existing test result.",
+  "acceptance": ["go test ./..."]
+}

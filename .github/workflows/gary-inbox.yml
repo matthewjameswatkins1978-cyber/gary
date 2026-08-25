@@ -1,0 +1,63 @@
+name: GARY inbox
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "gary/inbox/pending/**"
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: gary-inbox
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    env:
+      GARY_GCP_PROJECT: ${{ vars.GARY_GCP_PROJECT }}
+      GARY_GCP_REGION: ${{ vars.GARY_GCP_REGION }}
+      GARY_WIF_PROVIDER: ${{ vars.GARY_WIF_PROVIDER }}
+      GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Require GitHub OIDC configuration
+        run: |
+          test -n "$GARY_GCP_PROJECT" && test -n "$GARY_GCP_REGION" && test -n "$GARY_WIF_PROVIDER" && test -n "$GARY_DISPATCH_SERVICE_ACCOUNT" || {
+            echo "GARY OIDC dispatch is not configured. Complete docs/github-oidc-setup.md; do not add a service-account key."
+            exit 1
+          }
+
+      - name: Authenticate to Google Cloud with OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GARY_WIF_PROVIDER }}
+          service_account: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Dispatch pending jobs
+        id: dispatch
+        continue-on-error: true
+        run: go run ./cmd/gary inbox dispatch gary/inbox/pending
+
+      - name: Record GARY status
+        if: always()
+        run: |
+          git config user.name "GARY inbox"
+          git config user.email "gary@agent-yard.local"
+          git add gary/inbox/status
+          git diff --cached --quiet || git commit -m "GARY inbox status"
+          git push
+
+      - name: Propagate dispatch failure
+        if: steps.dispatch.outcome == 'failure'
+        run: exit 1
