@@ -1,19 +1,28 @@
-FROM debian:bookworm-slim
+FROM python:3.12-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     curl \
+    wget \
     git \
     ca-certificates \
     gnupg \
-    python3.12 \
-    python3.12-venv \
-    python3-pip \
+    ripgrep \
+    fd-find \
+    jq \
+    file \
+    tree \
+    less \
+    procps \
+    zip \
+    unzip \
+    xz-utils \
+    build-essential \
+    make \
     && rm -rf /var/lib/apt/lists/*
 
-# Make python3.12 the default python
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1 \
-    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
+# fd-find installs as fdfind on Debian; symlink to fd
+RUN ln -sf /usr/bin/fdfind /usr/local/bin/fd
 
 # Install Go 1.24
 RUN curl -fsSL https://go.dev/dl/go1.24.0.linux-amd64.tar.gz | tar -C /usr/local -xz
@@ -25,10 +34,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # Install gsutil via pip
-RUN pip3 install --break-system-packages gsutil
+RUN pip install --no-cache-dir gsutil
 
-# Install Gemini CLI
-RUN npm install -g @anthropic-ai/gemini-cli
+# Install Gemini CLI (pinned to known-working version)
+RUN npm install -g @google/gemini-cli@0.56.0
 
 # Set up workspace
 RUN mkdir -p /workspace

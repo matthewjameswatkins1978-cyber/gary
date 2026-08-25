@@ -370,10 +370,10 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		"echo \"Generating patch...\"",
 		fmt.Sprintf("git format-patch %s --stdout > /workspace/result.patch", cfg.BaseBranch),
 		"",
-		"# Upload to GCS",
+		"# Upload to GCS (non-fatal: accept success even if GCS upload fails)",
 		fmt.Sprintf("echo \"Uploading result to %s...\"", cfg.GCSPath),
-		fmt.Sprintf("gsutil cp /workspace/result.patch %s/result.patch", cfg.GCSPath),
-		fmt.Sprintf("gsutil cp /workspace/acceptance_output.txt %s/acceptance_output.txt", cfg.GCSPath),
+		fmt.Sprintf("gsutil cp /workspace/result.patch %s/result.patch || true", cfg.GCSPath),
+		fmt.Sprintf("gsutil cp /workspace/acceptance_output.txt %s/acceptance_output.txt || true", cfg.GCSPath),
 		"",
 		"echo \"GARY CODING WORKER COMPLETE\"",
 	}
