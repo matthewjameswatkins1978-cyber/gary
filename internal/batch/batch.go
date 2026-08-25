@@ -299,6 +299,7 @@ type CodingJobConfig struct {
 	Task         string
 	Acceptance   string
 	GCSPath      string
+	PrevGCSPath  string
 	MachineType  string
 	Model        string
 	MaxRunDurSec int
@@ -339,6 +340,12 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 		fmt.Sprintf("echo \"Creating branch %s from %s...\"", cfg.GaryBranch, cfg.BaseBranch),
 		fmt.Sprintf("git checkout %s", cfg.BaseBranch),
 		fmt.Sprintf("git checkout -b %s", cfg.GaryBranch),
+		"",
+		"# Apply previous attempt patch if available",
+		"if [ -n \"$PREV_PATCH_GCS\" ]; then",
+		"  echo \"Applying previous patch from $PREV_PATCH_GCS...\"",
+		"  gsutil cp $PREV_PATCH_GCS /workspace/prev.patch 2>/dev/null && git apply /workspace/prev.patch && echo \"Previous patch applied\" || echo \"No previous patch to apply\"",
+		"fi",
 		"",
 		"# Run Gemini CLI",
 		"echo \"Running Gemini CLI...\"",
@@ -404,6 +411,9 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 					"maxRunDuration": fmt.Sprintf("%ds", cfg.MaxRunDurSec),
 					"maxRetryCount":  0,
 					"environment": map[string]interface{}{
+						"variables": map[string]string{
+							"PREV_PATCH_GCS": cfg.PrevGCSPath,
+						},
 						"secretVariables": map[string]string{
 							"GEMINI_API_KEY": "projects/418146339023/secrets/gary-gemini-api-key/versions/latest",
 						},

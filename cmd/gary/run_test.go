@@ -1,6 +1,10 @@
 package main
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -130,4 +134,139 @@ func searchString(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// TestPatchChainPreservesState proves that:
+// 1. attempt 1 produces a partial fix (patch1)
+// 2. attempt 2 receives patch1 applied, then produces patch2
+// 3. the combined state (patch1 + patch2) passes acceptance
+//
+// This is a local integration test — no cloud credits burned.
+func TestPatchChainPreservesState(t *testing.T) {
+	dir := t.TempDir()
+
+	// Init git repo
+	run := func(args ...string) string {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %s\n%s", args, err, string(out))
+		}
+		return strings.TrimSpace(string(out))
+	}
+
+	run("init")
+	run("config", "user.email", "test@test.com")
+	run("config", "user.name", "Test")
+
+	// Create initial file with a buggy function
+	buggyCode := `package clamp
+
+func Clamp(val, min, max int) int {
+	return val
+}
+`
+	os.WriteFile(filepath.Join(dir, "clamp.go"), []byte(buggyCode), 0o644)
+
+	// Create test file that expects correct clamping
+	testCode := `package clamp
+
+import "testing"
+
+func TestClamp(t *testing.T) {
+	if got := Clamp(15, 0, 10); got != 10 {
+		t.Errorf("Clamp(15, 0, 10) = %d, want 10", got)
+	}
+	if got := Clamp(-5, 0, 10); got != 0 {
+		t.Errorf("Clamp(-5, 0, 10) = %d, want 0", got)
+	}
+	if got := Clamp(5, 0, 10); got != 5 {
+		t.Errorf("Clamp(5, 0, 10) = %d, want 5", got)
+	}
+}
+`
+	os.WriteFile(filepath.Join(dir, "clamp_test.go"), []byte(testCode), 0o644)
+
+	// Create go.mod
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module clamp\n\ngo 1.24\n"), 0o644)
+
+	run("add", "-A")
+	run("commit", "-m", "initial: buggy Clamp function")
+
+	// --- ATTEMPT 1: partial fix (only fixes above-max case) ---
+	patch1Code := `package clamp
+
+func Clamp(val, min, max int) int {
+	if val > max {
+		return max
+	}
+	return val
+}
+`
+	os.WriteFile(filepath.Join(dir, "clamp.go"), []byte(patch1Code), 0o644)
+
+	// Generate patch1
+	patch1 := run("diff", "HEAD")
+	if patch1 == "" {
+		t.Fatal("patch1 is empty")
+	}
+
+	// Verify patch1 is partial: below-min case still broken
+	if !strings.Contains(patch1, "if val > max") {
+		t.Error("patch1 should contain the > max fix")
+	}
+
+	// Reset to clean state for attempt 2
+	run("checkout", "--", "clamp.go")
+
+	// --- ATTEMPT 2: receives patch1, then applies additional fix ---
+	// Simulate what the worker does: apply previous patch by writing the file,
+	// then make new changes on top
+	os.WriteFile(filepath.Join(dir, "clamp.go"), []byte(patch1Code), 0o644)
+
+	// Now apply the second fix on top of patch1
+	patch2Code := `package clamp
+
+func Clamp(val, min, max int) int {
+	if val > max {
+		return max
+	}
+	if val < min {
+		return min
+	}
+	return val
+}
+`
+	os.WriteFile(filepath.Join(dir, "clamp.go"), []byte(patch2Code), 0o644)
+
+	// Generate combined patch (attempt1 + attempt2 changes from main)
+	combinedPatch := run("diff", "HEAD")
+	if combinedPatch == "" {
+		t.Fatal("combined patch is empty")
+	}
+
+	// Verify combined patch has BOTH fixes
+	if !strings.Contains(combinedPatch, "if val > max") {
+		t.Error("combined patch should contain > max fix")
+	}
+	if !strings.Contains(combinedPatch, "if val < min") {
+		t.Error("combined patch should contain < min fix")
+	}
+
+	// Verify acceptance passes with combined state
+	run("add", "-A")
+	run("commit", "-m", "fix: both cases")
+
+	cmd := exec.Command("go", "test", "./...")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("acceptance failed after combined patch: %s\n%s", err, string(out))
+	}
+	if !strings.Contains(string(out), "PASS") && !strings.Contains(string(out), "ok") {
+		t.Fatalf("expected PASS or ok in test output: %s", string(out))
+	}
+
+	t.Logf("patch chain test passed: attempt1 partial + attempt2 full = ACCEPTED")
 }

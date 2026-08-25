@@ -84,18 +84,12 @@ func cmdRun() {
 	var lastPatch string
 	var lastAcceptance string
 	var lastFailure string
+	var prevGCSPatch string
 	progressHistory := make([]string, 0)
 	repairCount := 0
 	escalated := false
 	closerUsed := false
 	finalStatus := "FAILED"
-
-	tmpDir, err := os.MkdirTemp("", "gary-run-*")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "create temp dir: %v\n", err)
-		os.Exit(1)
-	}
-	defer os.RemoveAll(tmpDir)
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		attemptTask := job.Task
@@ -105,6 +99,13 @@ func cmdRun() {
 
 		jobName := fmt.Sprintf("gary-run-%s-%d-%s", job.ID, attempt, time.Now().Format("20060102-150405"))
 		attemptGCSPath := fmt.Sprintf("%s/attempt-%d", gcsPath, attempt)
+
+		// Fresh per-attempt workspace
+		attemptDir, err := os.MkdirTemp("", fmt.Sprintf("gary-attempt-%d-*", attempt))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "create attempt dir: %v\n", err)
+			os.Exit(1)
+		}
 
 		fmt.Printf("ATTEMPT %d\n", attempt)
 
@@ -118,13 +119,15 @@ func cmdRun() {
 			Task:         attemptTask,
 			Acceptance:   acceptanceStr,
 			GCSPath:      attemptGCSPath,
+			PrevGCSPath:  prevGCSPatch,
 			MachineType:  "e2-small",
 			MaxRunDurSec: 600,
 		}
 
-		_, err := batch.SubmitCodingJob(codingCfg)
+		_, err = batch.SubmitCodingJob(codingCfg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "submission failed: %v\n", err)
+			os.RemoveAll(attemptDir)
 			os.Exit(1)
 		}
 
@@ -136,17 +139,19 @@ func cmdRun() {
 		)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  polling failed: %v\n", err)
+			os.RemoveAll(attemptDir)
 			os.Exit(1)
 		}
 
 		batchSucceeded := status.State() == "SUCCEEDED"
 
 		// Download patch and acceptance output
-		patchData := downloadGCSFile(tmpDir, attemptGCSPath+"/result.patch")
-		acceptOutput := downloadGCSFile(tmpDir, attemptGCSPath+"/acceptance_output.txt")
+		patchData := downloadGCSFile(attemptDir, attemptGCSPath+"/result.patch")
+		acceptOutput := downloadGCSFile(attemptDir, attemptGCSPath+"/acceptance_output.txt")
 
 		if patchData != "" {
 			lastPatch = patchData
+			prevGCSPatch = attemptGCSPath + "/result.patch"
 		}
 		if acceptOutput != "" {
 			lastAcceptance = acceptOutput
@@ -156,10 +161,9 @@ func cmdRun() {
 			// Worker reported success — run local acceptance
 			fmt.Println("  BATCH SUCCEEDED — verifying locally")
 
-			localAccepted := runLocalAcceptance(tmpDir, job, garyBranch, patchData)
+			localAccepted := runLocalAcceptance(attemptDir, job, garyBranch, patchData)
 			if localAccepted {
-				// Push branch
-				workDir := filepath.Join(tmpDir, "repo")
+				workDir := filepath.Join(attemptDir, "repo")
 				commitSHA, _ := gitops.CommitSHA(workDir)
 				if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
 					fmt.Fprintf(os.Stderr, "  push: %v\n", err)
@@ -172,6 +176,7 @@ func cmdRun() {
 				fmt.Printf("Attempts: %d\n", attempt)
 				fmt.Printf("Duration: %.0fs\n", duration.Seconds())
 				finalStatus = "DONE"
+				os.RemoveAll(attemptDir)
 				saveResult(cfg, job, jobName, garyBranch, commitSHA, true, duration, len(patchData), attempt, repairCount, escalated, closerUsed, finalStatus)
 				return
 			}
@@ -183,6 +188,8 @@ func cmdRun() {
 				lastFailure += "\nWorker acceptance output:\n" + lastAcceptance
 			}
 		}
+
+		os.RemoveAll(attemptDir)
 
 		// Check progress
 		if attempt > 1 {
@@ -220,13 +227,20 @@ func cmdRun() {
 	// Escalation to Closer
 	if escalated {
 		fmt.Println("ESCALATING TO CLOSER")
+		closerDir, err := os.MkdirTemp("", "gary-closer-*")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "create closer dir: %v\n", err)
+			os.Exit(1)
+		}
+		defer os.RemoveAll(closerDir)
+
 		closerTask := buildCloserTask(job, lastPatch, lastAcceptance, lastFailure, progressHistory)
-		closeResult, err := runCloser(cfg, closerTask, tmpDir, job, garyBranch, acceptanceStr, gcsPath)
+		closeResult, err := runCloser(cfg, closerTask, closerDir, job, garyBranch, acceptanceStr, gcsPath)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  closer failed: %v\n", err)
 			finalStatus = "FAILED"
 		} else if closeResult {
-			workDir := filepath.Join(tmpDir, "repo")
+			workDir := filepath.Join(closerDir, "repo")
 			commitSHA, _ := gitops.CommitSHA(workDir)
 			gitops.Push(workDir, "origin", garyBranch)
 			duration := time.Since(submittedAt)
@@ -294,6 +308,13 @@ func runLocalAcceptance(tmpDir string, job *jobs.Job, garyBranch, patchData stri
 		}
 		fmt.Println("    LOCAL PASS")
 	}
+
+	// Commit the applied patch so push has something to push
+	if err := gitops.CommitAll(workDir, fmt.Sprintf("GARY: %s", job.Task)); err != nil {
+		fmt.Printf("    LOCAL COMMIT FAIL: %v\n", err)
+		return false
+	}
+
 	return true
 }
 
