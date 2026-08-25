@@ -439,10 +439,10 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		"base64 /workspace/acceptance_output.txt",
 		"echo \"GARY_ACCEPTANCE_B64_END\"",
 		"",
-		"# Upload to GCS (non-fatal: accept success even if GCS upload fails)",
+		"# Upload to GCS using gcloud storage (uses attached service account)",
 		fmt.Sprintf("echo \"Uploading result to %s...\"", cfg.GCSPath),
-		fmt.Sprintf("gsutil cp /workspace/result.patch %s/result.patch || true", cfg.GCSPath),
-		fmt.Sprintf("gsutil cp /workspace/acceptance_output.txt %s/acceptance_output.txt || true", cfg.GCSPath),
+		fmt.Sprintf("gcloud storage cp /workspace/result.patch %s/result.patch || true", cfg.GCSPath),
+		fmt.Sprintf("gcloud storage cp /workspace/acceptance_output.txt %s/acceptance_output.txt || true", cfg.GCSPath),
 		"",
 		"echo \"GARY CODING WORKER COMPLETE\"",
 	}
