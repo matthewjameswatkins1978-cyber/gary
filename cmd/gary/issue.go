@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/matthewjameswatkins1978-cyber/gary/control"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/batch"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
@@ -435,7 +436,10 @@ func issueSuccess(comment string) issueResult {
 	return issueResult{OK: true, Close: true, Comment: truncateIssueText(comment, 11000)}
 }
 func issueFailure(err error) issueResult {
-	return issueResult{OK: false, Close: true, Comment: truncateIssueText("GARY // COMMAND FAILED\n"+err.Error(), 11000)}
+	class := control.ClassifyError(err, "")
+	comment := fmt.Sprintf("GARY // COMMAND FAILED\nclass: %s\nerror: %s\naction: %s",
+		class, err.Error(), control.SuggestNextAction(class))
+	return issueResult{OK: false, Close: true, Comment: truncateIssueText(comment, 11000)}
 }
 
 func truncateIssueText(value string, max int) string {

@@ -396,7 +396,7 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		"# Apply previous attempt patch if available",
 		"if [ -n \"$PREV_PATCH_GCS\" ]; then",
 		"  echo \"Applying previous patch from $PREV_PATCH_GCS...\"",
-		"  gsutil cp $PREV_PATCH_GCS /workspace/prev.patch 2>/dev/null && git apply /workspace/prev.patch && echo \"Previous patch applied\" || echo \"No previous patch to apply\"",
+		"  gcloud storage cp $PREV_PATCH_GCS /workspace/prev.patch 2>/dev/null && git apply /workspace/prev.patch && echo \"Previous patch applied\" || echo \"No previous patch to apply\"",
 		"fi",
 		"",
 		"# Decode base64 prompt to file (transport-safe, no shell interpolation)",

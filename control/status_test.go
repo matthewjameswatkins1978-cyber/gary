@@ -9,9 +9,8 @@ import (
 
 func TestUpdateAndReadSnapshot(t *testing.T) {
 	dir := t.TempDir()
-	statusPath := filepath.Join(dir, "gary", "control", "status.json")
+	statusPath := filepath.Join(dir, "control", "status.json")
 
-	// Write snapshot
 	active := []JobEntry{
 		{ID: "jc-01", State: JobRunning, Repo: "test-repo"},
 	}
@@ -24,12 +23,10 @@ func TestUpdateAndReadSnapshot(t *testing.T) {
 		t.Fatalf("UpdateSnapshot: %v", err)
 	}
 
-	// Verify file exists
 	if _, err := os.Stat(statusPath); os.IsNotExist(err) {
 		t.Fatalf("status.json not created at %s", statusPath)
 	}
 
-	// Read and verify
 	snap, err := ReadSnapshot(dir)
 	if err != nil {
 		t.Fatalf("ReadSnapshot: %v", err)
@@ -49,10 +46,54 @@ func TestUpdateAndReadSnapshot(t *testing.T) {
 	}
 }
 
+func TestGitHubReadablePath(t *testing.T) {
+	dir := t.TempDir()
+
+	// The snapshot MUST live at control/status.json so Lucy can fetch it
+	// via: https://raw.githubusercontent.com/<repo>/master/control/status.json
+	err := UpdateSnapshot(dir, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateSnapshot: %v", err)
+	}
+
+	path := StatusPath(dir)
+	if filepath.Base(path) != "status.json" {
+		t.Errorf("StatusPath base = %q, want status.json", filepath.Base(path))
+	}
+	if filepath.Dir(path) != filepath.Join(dir, "control") {
+		t.Errorf("StatusPath dir = %q, want control/", filepath.Dir(path))
+	}
+
+	// Verify file is valid JSON with expected top-level keys
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	requiredKeys := []string{"updated_at", "yard_state"}
+	for _, key := range requiredKeys {
+		if _, ok := raw[key]; !ok {
+			t.Errorf("snapshot missing required key %q", key)
+		}
+	}
+
+	// Must NOT contain secrets
+	content := string(data)
+	for _, bad := range []string{"GEMINI_API_KEY", "password", "secret", "token", "private_key"} {
+		if contains(content, bad) {
+			t.Errorf("snapshot contains forbidden pattern %q", bad)
+		}
+	}
+}
+
 func TestBoundedHistory(t *testing.T) {
 	dir := t.TempDir()
 
-	// Create 25 recent jobs
 	recent := make([]JobEntry, 25)
 	for i := range recent {
 		recent[i] = JobEntry{ID: "jc-" + string(rune('0'+i%10)), State: JobAccepted}
@@ -85,15 +126,13 @@ func TestNoSecretsInSnapshot(t *testing.T) {
 		t.Fatalf("UpdateSnapshot: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(dir, "gary", "control", "status.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "control", "status.json"))
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
 
-	// Should not contain any secret patterns
 	content := string(data)
-	badPatterns := []string{"GEMINI_API_KEY", "password", "secret", "token", "private_key"}
-	for _, p := range badPatterns {
+	for _, p := range []string{"GEMINI_API_KEY", "password", "secret", "token", "private_key"} {
 		if contains(content, p) {
 			t.Errorf("snapshot contains forbidden pattern %q", p)
 		}
@@ -120,7 +159,6 @@ func TestSerializationRoundTrip(t *testing.T) {
 		t.Fatalf("ReadSnapshot: %v", err)
 	}
 
-	// Verify JSON is valid
 	data, err := json.Marshal(snap)
 	if err != nil {
 		t.Fatalf("json.Marshal: %v", err)
@@ -169,10 +207,6 @@ func TestReadSnapshotNotExist(t *testing.T) {
 }
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
-}
-
-func containsSubstring(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
 			return true

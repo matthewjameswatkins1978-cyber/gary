@@ -1,27 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/control"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
-
-// updateSnapshot writes the current yard state to gary/control/status.json.
-func updateSnapshot(cfg *config.Config, activeJobs []control.JobEntry, recentJobs []control.JobEntry) {
-	repoRoot := findRepoRoot()
-	if repoRoot == "" {
-		return // silently skip if not in a git repo
-	}
-
-	err := control.UpdateSnapshot(repoRoot, activeJobs, recentJobs)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to update status snapshot: %v\n", err)
-	}
-}
 
 // snapshotActiveJob records a job as active in the snapshot.
 func snapshotActiveJob(jobID, batchJobID, repo, baseBranch, resultBranch string, state control.JobState, attempts int, startedAt string) {
@@ -71,7 +58,7 @@ func snapshotActiveJob(jobID, batchJobID, repo, baseBranch, resultBranch string,
 		})
 	}
 
-	control.UpdateSnapshot(repoRoot, snap.ActiveJobs, recent)
+	control.PublishSnapshot(repoRoot, snap.ActiveJobs, recent)
 }
 
 // snapshotJobComplete moves a job from active to recent in the snapshot.
@@ -113,10 +100,10 @@ func snapshotJobComplete(jobID string, result jobs.RunResult) {
 		Attempts:     result.Attempts,
 		EstCost:      result.TotalCostEstimated,
 		Summary:      summary,
-		FinishedAt:   result.FinalStatus,
+		FinishedAt:   time.Now().UTC().Format(time.RFC3339),
 	})
 
-	control.UpdateSnapshot(repoRoot, active, recent)
+	control.PublishSnapshot(repoRoot, active, recent)
 }
 
 // findRepoRoot walks up to find a .git directory.
@@ -137,4 +124,12 @@ func findRepoRoot() string {
 		}
 		dir = parent
 	}
+}
+
+func updateSnapshot(cfg *config.Config, activeJobs []control.JobEntry, recentJobs []control.JobEntry) {
+	repoRoot := findRepoRoot()
+	if repoRoot == "" {
+		return
+	}
+	control.PublishSnapshot(repoRoot, activeJobs, recentJobs)
 }
