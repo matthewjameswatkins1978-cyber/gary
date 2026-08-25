@@ -80,32 +80,39 @@ func cmdRunMany() {
 	}
 	fmt.Println()
 
-	// Budget check: reject jobs that would exceed limit before starting
-	checked := make([]jobEntry, 0, len(entries))
-	budgetStopped := 0
-	for _, e := range entries {
-		if cfg.MaxCostUSD > 0 {
-			estimated := EstimateJobCost(1)
-			allowed, reason := BudgetCheck(cfg.ResultsDir, cfg.MaxCostUSD, estimated)
-			if !allowed {
-				fmt.Printf("[%s] BUDGET_STOPPED: %s\n", e.job.ID, reason)
-				budgetStopped++
-				continue
-			}
-		}
-		checked = append(checked, e)
-	}
-
-	// Run concurrently
+	// Run concurrently with per-run budget tracking
 	sem := make(chan struct{}, maxWorkers)
 	var wg sync.WaitGroup
-	results := make([]jobs.RunResult, len(checked))
-	var runSpend atomic.Int64 // fixed-point * 10000
+	results := make([]jobs.RunResult, len(entries))
+	var runCommitted atomic.Int64 // fixed-point * 10000
+	var runSpend atomic.Int64     // fixed-point * 10000
 
-	for i, entry := range checked {
+	for i, entry := range entries {
 		wg.Add(1)
 		go func(idx int, e jobEntry) {
 			defer wg.Done()
+
+			// Budget check: reserve cost for this job
+			if cfg.MaxCostUSD > 0 {
+				jobCost := EstimateJobCost(1)
+				for {
+					committed := float64(runCommitted.Load()) / 10000
+					allowed, reason := BudgetCheck(cfg.MaxCostUSD, committed, jobCost)
+					if !allowed {
+						logPrint(e.job.ID, "BUDGET_STOPPED: %s", reason)
+						results[idx] = jobs.RunResult{
+							JobID:       e.job.ID,
+							FinalStatus: "BUDGET_STOPPED",
+						}
+						return
+					}
+					newCommitted := int64((committed + jobCost) * 10000)
+					if runCommitted.CompareAndSwap(runCommitted.Load(), newCommitted) {
+						break
+					}
+				}
+			}
+
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -152,7 +159,6 @@ func cmdRunMany() {
 			failed++
 		}
 	}
-	budgetStoppedCount += budgetStopped
 
 	fmt.Println()
 	fmt.Printf("Done: %d\n", done)

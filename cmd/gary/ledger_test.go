@@ -86,38 +86,23 @@ func TestLedgerEmpty(t *testing.T) {
 }
 
 func TestBudgetCheckUnset(t *testing.T) {
-	dir := t.TempDir()
-
-	allowed, _ := BudgetCheck(dir, 0, 0.01)
+	allowed, _ := BudgetCheck(0, 0, 0.01)
 	if !allowed {
 		t.Error("unset budget should allow work")
 	}
 }
 
 func TestBudgetCheckWithinLimit(t *testing.T) {
-	dir := t.TempDir()
-
-	// No existing entries, limit $1.00, job costs $0.50
-	allowed, _ := BudgetCheck(dir, 1.0, 0.5)
+	// No committed work, limit $1.00, job costs $0.50
+	allowed, _ := BudgetCheck(1.0, 0, 0.5)
 	if !allowed {
 		t.Error("should allow job within budget")
 	}
 }
 
 func TestBudgetCheckExceedsLimit(t *testing.T) {
-	dir := t.TempDir()
-
-	// Add existing entries totaling $0.80
-	for i := 0; i < 4; i++ {
-		AppendLedger(dir, LedgerEntry{
-			Timestamp:          time.Now().UTC().Format(time.RFC3339),
-			JobID:              "job",
-			TotalCostEstimated: 0.20,
-		})
-	}
-
-	// Limit $1.00, new job costs $0.30 → projected $1.10 > $1.00
-	allowed, reason := BudgetCheck(dir, 1.0, 0.3)
+	// Committed $0.80, limit $1.00, new job costs $0.30 → projected $1.10 > $1.00
+	allowed, reason := BudgetCheck(1.0, 0.80, 0.3)
 	if allowed {
 		t.Error("should reject job that exceeds budget")
 	}
@@ -126,33 +111,36 @@ func TestBudgetCheckExceedsLimit(t *testing.T) {
 	}
 }
 
-func TestBudgetCheckAlreadyRunningNotKilled(t *testing.T) {
-	dir := t.TempDir()
-
-	// Simulate: 2 jobs already ran ($0.40 total), limit $0.50
-	// New job costs $0.15 → projected $0.55 > $0.50
-	AppendLedger(dir, LedgerEntry{
-		Timestamp:          time.Now().UTC().Format(time.RFC3339),
-		JobID:              "running-job",
-		TotalCostEstimated: 0.20,
-	})
-	AppendLedger(dir, LedgerEntry{
-		Timestamp:          time.Now().UTC().Format(time.RFC3339),
-		JobID:              "running-job-2",
-		TotalCostEstimated: 0.20,
-	})
-
-	// The existing work is NOT killed — it's already in the ledger
-	// Budget check only prevents NEW work
-	allowed, _ := BudgetCheck(dir, 0.50, 0.15)
+func TestBudgetCheckDoesNotKillRunning(t *testing.T) {
+	// Committed $0.40 (2 jobs already dispatched), limit $0.50
+	// Existing work is NOT killed — budget only prevents NEW work
+	allowed, _ := BudgetCheck(0.50, 0.40, 0.15)
 	if allowed {
-		t.Error("should prevent new work")
+		t.Error("should prevent new work when committed + new exceeds budget")
 	}
+}
 
-	// But reading the ledger shows the existing work is preserved
-	entries, _ := ReadLedger(dir)
-	if len(entries) != 2 {
-		t.Errorf("existing entries should be preserved, got %d", len(entries))
+func TestBudgetCheckHistoricalSpendIgnored(t *testing.T) {
+	// Historical ledger has $0.80 of old spend, but current run committed is $0
+	// Per-run budget should allow work regardless of history
+	allowed, _ := BudgetCheck(0.50, 0, 0.3)
+	if !allowed {
+		t.Error("historical spend should NOT consume a new run budget")
+	}
+}
+
+func TestBudgetCheckConcurrentReservation(t *testing.T) {
+	// Simulate concurrent dispatch: GARY_MAX_COST_USD=0.06, each job $0.025
+	// Job A: committed 0 + 0.025 = 0.025 ≤ 0.06 → allowed
+	// Job B: committed 0.025 + 0.025 = 0.050 ≤ 0.06 → allowed
+	// Job C: committed 0.050 + 0.025 = 0.075 > 0.06 → rejected
+	allowed, _ := BudgetCheck(0.06, 0.025, 0.025)
+	if !allowed {
+		t.Error("second job should be allowed")
+	}
+	allowed, _ = BudgetCheck(0.06, 0.050, 0.025)
+	if allowed {
+		t.Error("third job should be rejected")
 	}
 }
 

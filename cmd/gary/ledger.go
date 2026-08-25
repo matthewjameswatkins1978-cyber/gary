@@ -116,28 +116,18 @@ func SummarizeCosts(resultsDir, runID string) CostSummary {
 	return s
 }
 
-// BudgetCheck reports whether a new job can start within the cost limit.
-// Returns (allowed, reason).
-func BudgetCheck(resultsDir string, maxCostUSD float64, estimatedJobCost float64) (bool, string) {
+// BudgetCheck reports whether a new job can start within the per-run cost limit.
+// currentRunCommitted is the estimated total cost of jobs already dispatched
+// in this invocation. Month-to-date and lifetime spend are NOT considered.
+func BudgetCheck(maxCostUSD, currentRunCommitted, estimatedJobCost float64) (bool, string) {
 	if maxCostUSD <= 0 {
 		return true, ""
 	}
 
-	entries, _ := ReadLedger(resultsDir)
-	now := time.Now()
-	monthPrefix := now.Format("2006-01")
-	var monthCost float64
-
-	for _, e := range entries {
-		if len(e.Timestamp) >= 7 && e.Timestamp[:7] == monthPrefix {
-			monthCost += e.TotalCostEstimated
-		}
-	}
-
-	projected := monthCost + estimatedJobCost
+	projected := currentRunCommitted + estimatedJobCost
 	if projected > maxCostUSD {
-		return false, fmt.Sprintf("ESTIMATED month spend $%.2f + job $%.2f = $%.2f exceeds limit $%.2f",
-			monthCost, estimatedJobCost, projected, maxCostUSD)
+		return false, fmt.Sprintf("ESTIMATED run committed $%.2f + job $%.2f = $%.2f exceeds limit $%.2f",
+			currentRunCommitted, estimatedJobCost, projected, maxCostUSD)
 	}
 	return true, ""
 }

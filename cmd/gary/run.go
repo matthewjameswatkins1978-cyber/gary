@@ -125,7 +125,7 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 	// Budget check before starting
 	if cfg.MaxCostUSD > 0 {
 		estimated := EstimateJobCost(1)
-		allowed, reason := BudgetCheck(cfg.ResultsDir, cfg.MaxCostUSD, estimated)
+		allowed, reason := BudgetCheck(cfg.MaxCostUSD, 0, estimated)
 		if !allowed {
 			logPrintln(prefix, "  BUDGET_STOPPED: "+reason)
 			duration := time.Since(submittedAt)
