@@ -409,15 +409,19 @@ func extractFromBatchLogs(project, region, jobName, marker string) string {
 	startMarker := marker + "_B64_START"
 	endMarker := marker + "_B64_END"
 
-	// Query Cloud Logging for the batch task logs using textPayload
+	// Scope the marker query to this exact Batch job. Recovery can happen long
+	// after completion, so do not impose an artificial freshness window.
+	status, err := batch.DescribeJob(project, region, jobName)
+	if err != nil || status.UID == "" {
+		return ""
+	}
 	filter := fmt.Sprintf(
-		`logName="projects/%s/logs/batch_task_logs" AND textPayload:"%s"`,
-		project, startMarker,
+		`logName="projects/%s/logs/batch_task_logs" AND labels.job_uid="%s" AND textPayload:"%s"`,
+		project, status.UID, startMarker,
 	)
 	cmd := exec.Command("gcloud", "logging", "read", filter,
 		"--project", project,
 		"--format", "value(textPayload)",
-		"--freshness", "30m",
 		"--limit", "100",
 	)
 	out, err := cmd.CombinedOutput()
