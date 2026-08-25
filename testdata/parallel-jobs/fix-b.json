@@ -1,0 +1,9 @@
+{
+  "id": "fix-clamp-b",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
+  "base_branch": "main",
+  "task": "The Clamp function in clamp.go is broken — it returns the input value unchanged instead of constraining it to [min, max]. Fix it so all tests pass.",
+  "acceptance": [
+    "go test ./..."
+  ]
+}

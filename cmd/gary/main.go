@@ -19,6 +19,8 @@ func main() {
 		cmdDoctor()
 	case "run":
 		cmdRun()
+	case "run-many":
+		cmdRunMany()
 	case "smoke":
 		cmdSmoke()
 	case "agent-smoke":
@@ -45,6 +47,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  version      Print version information")
 	fmt.Fprintln(os.Stderr, "  doctor       Check environment readiness")
 	fmt.Fprintln(os.Stderr, "  run          Run a coding job against a repository")
+	fmt.Fprintln(os.Stderr, "  run-many     Run multiple coding jobs concurrently")
 	fmt.Fprintln(os.Stderr, "  worker       Show default worker configuration")
 	fmt.Fprintln(os.Stderr, "  smoke        Run Google Cloud Batch heartbeat smoke test")
 	fmt.Fprintln(os.Stderr, "  agent-smoke  Run Gemini AI worker smoke test")

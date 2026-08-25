@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/batch"
@@ -21,6 +22,29 @@ import (
 )
 
 const maxAttempts = 3
+
+var outputMu sync.Mutex
+
+func logPrint(prefix, format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	outputMu.Lock()
+	defer outputMu.Unlock()
+	if prefix != "" {
+		fmt.Printf("[%s] %s\n", prefix, strings.TrimRight(msg, "\n"))
+	} else {
+		fmt.Println(strings.TrimRight(msg, "\n"))
+	}
+}
+
+func logPrintln(prefix, msg string) {
+	outputMu.Lock()
+	defer outputMu.Unlock()
+	if prefix != "" {
+		fmt.Printf("[%s] %s\n", prefix, msg)
+	} else {
+		fmt.Println(msg)
+	}
+}
 
 func cmdRun() {
 	if len(os.Args) < 3 {
@@ -65,22 +89,38 @@ func cmdRun() {
 		job.Acceptance = []string{"echo no-acceptance-command"}
 	}
 
+	fmt.Println("GARY // RUN")
+	fmt.Println()
+
+	result := RunJob(cfg, job, "")
+
+	fmt.Println()
+	if result.FinalStatus == "DONE" {
+		fmt.Println("ACCEPTED")
+		fmt.Printf("Branch pushed: %s\n", result.Branch)
+		fmt.Printf("Commit: %s\n", result.CommitSHA)
+		fmt.Printf("Attempts: %d\n", result.Attempts)
+		fmt.Printf("Duration: %.0fs\n", result.DurationSecs)
+	} else {
+		fmt.Printf("final_status=%s\n", result.FinalStatus)
+	}
+}
+
+// RunJob executes a single coding job with retry logic.
+// It returns a RunResult without calling os.Exit.
+func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 	suffix := randomSuffix(8)
 	garyBranch := fmt.Sprintf("gary/%s-%s", job.ID, suffix)
 	runID := fmt.Sprintf("%s-%s", job.ID, suffix)
 	gcsPath := fmt.Sprintf("gs://gary-batch-results-418146339023/runs/%s", runID)
 	acceptanceStr := strings.Join(job.Acceptance, " && ")
 
-	fmt.Println("GARY // RUN")
-	fmt.Println()
-	fmt.Printf("Job        %s\n", job.ID)
-	fmt.Printf("Worker     batch\n")
-	fmt.Printf("Branch     %s\n", garyBranch)
-	fmt.Println()
+	logPrintln(prefix, fmt.Sprintf("Job        %s", job.ID))
+	logPrintln(prefix, "Worker     batch")
+	logPrintln(prefix, fmt.Sprintf("Branch     %s", garyBranch))
 
 	submittedAt := time.Now()
 
-	// State across attempts
 	var lastPatch string
 	var lastAcceptance string
 	var lastFailure string
@@ -100,14 +140,14 @@ func cmdRun() {
 		jobName := fmt.Sprintf("gary-run-%s-%d-%s", job.ID, attempt, time.Now().Format("20060102-150405"))
 		attemptGCSPath := fmt.Sprintf("%s/attempt-%d", gcsPath, attempt)
 
-		// Fresh per-attempt workspace
-		attemptDir, err := os.MkdirTemp("", fmt.Sprintf("gary-attempt-%d-*", attempt))
+		attemptDir, err := os.MkdirTemp("", fmt.Sprintf("gary-%s-attempt-%d-*", job.ID, attempt))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "create attempt dir: %v\n", err)
-			os.Exit(1)
+			logPrint(prefix, "  create attempt dir: %v", err)
+			finalStatus = "FAILED"
+			break
 		}
 
-		fmt.Printf("ATTEMPT %d\n", attempt)
+		logPrint(prefix, "ATTEMPT %d", attempt)
 
 		codingCfg := batch.CodingJobConfig{
 			Project:      cfg.GCPProject,
@@ -126,26 +166,27 @@ func cmdRun() {
 
 		_, err = batch.SubmitCodingJob(codingCfg)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "submission failed: %v\n", err)
+			logPrint(prefix, "  submission failed: %v", err)
 			os.RemoveAll(attemptDir)
-			os.Exit(1)
+			finalStatus = "FAILED"
+			break
 		}
 
-		fmt.Println("  SUBMITTED")
+		logPrintln(prefix, "  SUBMITTED")
 
 		status, _, err := batch.WaitForTerminal(
 			cfg.GCPProject, cfg.GCPRegion, jobName,
 			10*time.Second, 15*time.Minute,
 		)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  polling failed: %v\n", err)
+			logPrint(prefix, "  polling failed: %v", err)
 			os.RemoveAll(attemptDir)
-			os.Exit(1)
+			finalStatus = "FAILED"
+			break
 		}
 
 		batchSucceeded := status.State() == "SUCCEEDED"
 
-		// Download patch and acceptance output
 		patchData := downloadGCSFile(attemptDir, attemptGCSPath+"/result.patch")
 		acceptOutput := downloadGCSFile(attemptDir, attemptGCSPath+"/acceptance_output.txt")
 
@@ -158,31 +199,37 @@ func cmdRun() {
 		}
 
 		if batchSucceeded {
-			// Worker reported success — run local acceptance
-			fmt.Println("  BATCH SUCCEEDED — verifying locally")
+			logPrintln(prefix, "  BATCH SUCCEEDED — verifying locally")
 
-			localAccepted := runLocalAcceptance(attemptDir, job, garyBranch, patchData)
+			localAccepted := runLocalAcceptance(attemptDir, job, garyBranch, patchData, prefix)
 			if localAccepted {
 				workDir := filepath.Join(attemptDir, "repo")
 				commitSHA, _ := gitops.CommitSHA(workDir)
 				if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
-					fmt.Fprintf(os.Stderr, "  push: %v\n", err)
+					logPrint(prefix, "  push: %v", err)
 				}
 				duration := time.Since(submittedAt)
-				fmt.Println()
-				fmt.Println("ACCEPTED")
-				fmt.Printf("Branch pushed: %s\n", garyBranch)
-				fmt.Printf("Commit: %s\n", commitSHA)
-				fmt.Printf("Attempts: %d\n", attempt)
-				fmt.Printf("Duration: %.0fs\n", duration.Seconds())
-				finalStatus = "DONE"
 				os.RemoveAll(attemptDir)
-				saveResult(cfg, job, jobName, garyBranch, commitSHA, true, duration, len(patchData), attempt, repairCount, escalated, closerUsed, finalStatus)
-				return
+				result := jobs.RunResult{
+					JobID:        job.ID,
+					BatchJobID:   jobName,
+					Branch:       garyBranch,
+					CommitSHA:    commitSHA,
+					Accepted:     true,
+					DurationSecs: duration.Seconds(),
+					PatchBytes:   int64(len(patchData)),
+					Attempts:     attempt,
+					RepairCount:  repairCount,
+					Escalated:    escalated,
+					CloserUsed:   closerUsed,
+					FinalStatus:  "DONE",
+				}
+				saveResult(cfg, job, jobName, garyBranch, commitSHA, true, duration, len(patchData), attempt, repairCount, escalated, closerUsed, "DONE")
+				return result
 			}
 			lastFailure = "Local acceptance failed after Batch success.\n" + lastAcceptance
 		} else {
-			fmt.Printf("  BATCH %s\n", status.State())
+			logPrint(prefix, "  BATCH %s", status.State())
 			lastFailure = fmt.Sprintf("Batch job ended with state: %s\n", status.State())
 			if lastAcceptance != "" {
 				lastFailure += "\nWorker acceptance output:\n" + lastAcceptance
@@ -191,77 +238,86 @@ func cmdRun() {
 
 		os.RemoveAll(attemptDir)
 
-		// Check progress
 		if attempt > 1 {
 			improved := checkProgress(progressHistory, lastAcceptance)
 			if !improved {
-				fmt.Println("  LOW PROGRESS — no meaningful change")
+				logPrintln(prefix, "  LOW PROGRESS — no meaningful change")
 				if attempt == maxAttempts {
 					escalated = true
 					break
 				}
-				fmt.Println()
 				continue
 			}
 		}
 
 		progressHistory = append(progressHistory, summarizeAcceptance(lastAcceptance))
 
-		// Generate repair brief
-		fmt.Println("  GENERATING REPAIR BRIEF")
+		logPrintln(prefix, "  GENERATING REPAIR BRIEF")
 		brief, err := generateRepairBrief(cfg, job.Task, acceptanceStr, lastPatch, lastAcceptance, "")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  repair brief failed: %v\n", err)
+			logPrint(prefix, "  repair brief failed: %v", err)
 			lastFailure = fmt.Sprintf("Repair brief generation failed: %v\n\nPrevious failure:\n%s", err, lastFailure)
-			fmt.Println()
 			continue
 		}
 		repairCount++
-		fmt.Printf("  Cause: %s\n", brief.Cause)
-		fmt.Printf("  Next:  %s\n", brief.NextAction)
+		logPrint(prefix, "  Cause: %s", brief.Cause)
+		logPrint(prefix, "  Next:  %s", brief.NextAction)
 
 		lastFailure = formatRepairBrief(brief)
-		fmt.Println()
 	}
 
-	// Escalation to Closer
 	if escalated {
-		fmt.Println("ESCALATING TO CLOSER")
-		closerDir, err := os.MkdirTemp("", "gary-closer-*")
+		logPrintln(prefix, "ESCALATING TO CLOSER")
+		closerDir, err := os.MkdirTemp("", fmt.Sprintf("gary-%s-closer-*", job.ID))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "create closer dir: %v\n", err)
-			os.Exit(1)
-		}
-		defer os.RemoveAll(closerDir)
-
-		closerTask := buildCloserTask(job, lastPatch, lastAcceptance, lastFailure, progressHistory)
-		closeResult, err := runCloser(cfg, closerTask, closerDir, job, garyBranch, acceptanceStr, gcsPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "  closer failed: %v\n", err)
+			logPrint(prefix, "  create closer dir: %v", err)
 			finalStatus = "FAILED"
-		} else if closeResult {
-			workDir := filepath.Join(closerDir, "repo")
-			commitSHA, _ := gitops.CommitSHA(workDir)
-			gitops.Push(workDir, "origin", garyBranch)
-			duration := time.Since(submittedAt)
-			fmt.Println()
-			fmt.Println("ACCEPTED (CLOSER)")
-			fmt.Printf("Branch pushed: %s\n", garyBranch)
-			fmt.Printf("Commit: %s\n", commitSHA)
-			fmt.Printf("Attempts: %d\n", maxAttempts)
-			fmt.Printf("Duration: %.0fs\n", duration.Seconds())
-			closerUsed = true
-			finalStatus = "DONE"
-			saveResult(cfg, job, fmt.Sprintf("closer-%s", job.ID), garyBranch, commitSHA, true, duration, 0, maxAttempts, repairCount, escalated, closerUsed, finalStatus)
-			return
 		} else {
-			finalStatus = "FAILED"
+			defer os.RemoveAll(closerDir)
+
+			closerTask := buildCloserTask(job, lastPatch, lastAcceptance, lastFailure, progressHistory)
+			closeResult, err := runCloser(cfg, closerTask, closerDir, job, garyBranch, acceptanceStr, gcsPath, prefix)
+			if err != nil {
+				logPrint(prefix, "  closer failed: %v", err)
+				finalStatus = "FAILED"
+			} else if closeResult {
+				workDir := filepath.Join(closerDir, "repo")
+				commitSHA, _ := gitops.CommitSHA(workDir)
+				gitops.Push(workDir, "origin", garyBranch)
+				duration := time.Since(submittedAt)
+				closerUsed = true
+				finalStatus = "DONE"
+				saveResult(cfg, job, fmt.Sprintf("closer-%s", job.ID), garyBranch, commitSHA, true, duration, 0, maxAttempts, repairCount, escalated, closerUsed, "DONE")
+				return jobs.RunResult{
+					JobID:        job.ID,
+					Branch:       garyBranch,
+					CommitSHA:    commitSHA,
+					Accepted:     true,
+					DurationSecs: duration.Seconds(),
+					Attempts:     maxAttempts,
+					RepairCount:  repairCount,
+					Escalated:    escalated,
+					CloserUsed:   closerUsed,
+					FinalStatus:  "DONE",
+				}
+			} else {
+				finalStatus = "FAILED"
+			}
 		}
 	}
 
-	fmt.Printf("\nfinal_status=%s\n", finalStatus)
 	duration := time.Since(submittedAt)
 	saveResult(cfg, job, "", garyBranch, "", false, duration, 0, maxAttempts, repairCount, escalated, closerUsed, finalStatus)
+	return jobs.RunResult{
+		JobID:        job.ID,
+		Branch:       garyBranch,
+		DurationSecs: duration.Seconds(),
+		Attempts:     maxAttempts,
+		RepairCount:  repairCount,
+		Escalated:    escalated,
+		CloserUsed:   closerUsed,
+		FinalStatus:  finalStatus,
+	}
 }
 
 func downloadGCSFile(tmpDir, gcsPath string) string {
@@ -278,7 +334,7 @@ func downloadGCSFile(tmpDir, gcsPath string) string {
 	return string(data)
 }
 
-func runLocalAcceptance(tmpDir string, job *jobs.Job, garyBranch, patchData string) bool {
+func runLocalAcceptance(tmpDir string, job *jobs.Job, garyBranch, patchData, prefix string) bool {
 	workDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		return false
@@ -303,15 +359,14 @@ func runLocalAcceptance(tmpDir string, job *jobs.Job, garyBranch, patchData stri
 		c.Dir = workDir
 		out, err := c.CombinedOutput()
 		if err != nil {
-			fmt.Printf("    LOCAL FAIL: %s\n", strings.TrimSpace(string(out)))
+			logPrint(prefix, "    LOCAL FAIL: %s", strings.TrimSpace(string(out)))
 			return false
 		}
-		fmt.Println("    LOCAL PASS")
+		logPrintln(prefix, "    LOCAL PASS")
 	}
 
-	// Commit the applied patch so push has something to push
 	if err := gitops.CommitAll(workDir, fmt.Sprintf("GARY: %s", job.Task)); err != nil {
-		fmt.Printf("    LOCAL COMMIT FAIL: %v\n", err)
+		logPrint(prefix, "    LOCAL COMMIT FAIL: %v", err)
 		return false
 	}
 
@@ -413,7 +468,6 @@ func callGeminiJSON(cfg *config.Config, prompt string) (*repairBrief, error) {
 	rawText := apiResp.Candidates[0].Content.Parts[0].Text
 	rawText = strings.TrimSpace(rawText)
 
-	// Extract JSON from markdown code fences if present
 	if idx := strings.Index(rawText, "```json"); idx != -1 {
 		rawText = rawText[idx+7:]
 		if endIdx := strings.Index(rawText, "```"); endIdx != -1 {
@@ -482,22 +536,15 @@ func checkProgress(history []string, current string) bool {
 	failCount := strings.Count(last, "FAIL")
 	currentFailCount := strings.Count(currentSum, "FAIL")
 
-	// More failures is not progress
 	if currentFailCount > failCount {
 		return false
 	}
-
-	// Fewer failures is progress
 	if currentFailCount < failCount {
 		return true
 	}
-
-	// Same failure count: pass after fail is progress
 	if strings.Contains(currentSum, "PASS") && !strings.Contains(last, "PASS") {
 		return true
 	}
-
-	// Same failure count but different failure messages: progress
 	if currentSum != last {
 		return true
 	}
@@ -523,8 +570,8 @@ func buildCloserTask(job *jobs.Job, lastPatch, lastAcceptance, lastFailure strin
 	return sb.String()
 }
 
-func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.Job, garyBranch, acceptanceStr, gcsPath string) (bool, error) {
-	fmt.Println("  Submitting Closer job...")
+func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.Job, garyBranch, acceptanceStr, gcsPath, prefix string) (bool, error) {
+	logPrintln(prefix, "  Submitting Closer job...")
 
 	jobName := fmt.Sprintf("gary-closer-%s-%s", job.ID, time.Now().Format("20060102-150405"))
 	attemptGCSPath := fmt.Sprintf("%s/closer", gcsPath)
@@ -549,7 +596,7 @@ func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.J
 		return false, fmt.Errorf("submit closer: %w", err)
 	}
 
-	fmt.Println("  SUBMITTED")
+	logPrintln(prefix, "  SUBMITTED")
 
 	status, _, err := batch.WaitForTerminal(
 		cfg.GCPProject, cfg.GCPRegion, jobName,
@@ -568,7 +615,7 @@ func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.J
 		return false, fmt.Errorf("no patch from closer")
 	}
 
-	return runLocalAcceptance(tmpDir, job, garyBranch, patchData), nil
+	return runLocalAcceptance(tmpDir, job, garyBranch, patchData, prefix), nil
 }
 
 func loadJob(path string) (*jobs.Job, error) {

@@ -1,0 +1,9 @@
+{
+  "id": "fix-clamp-c",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
+  "base_branch": "main",
+  "task": "Implement proper clamping logic in the Clamp function. It should return min if value < min, max if value > max, and value otherwise.",
+  "acceptance": [
+    "go test ./..."
+  ]
+}
