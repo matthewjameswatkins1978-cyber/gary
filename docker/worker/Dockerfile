@@ -33,12 +33,14 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Google Cloud SDK (includes gcloud storage)
-RUN curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list \
-    && apt-get update \
-    && apt-get install -y google-cloud-cli \
-    && rm -rf /var/lib/apt/lists/*
+# Install Google Cloud SDK via standalone installer (gcloud storage primary)
+RUN curl -fsSL https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz | tar -C /opt -xz \
+    && /opt/google-cloud-sdk/install.sh --quiet --path-update true --rc-path /etc/bash.bashrc
+ENV PATH="/opt/google-cloud-sdk/bin:${PATH}"
+ENV CLOUDSDK_PYTHON="/usr/local/bin/python"
+
+# Install gsutil via pip (gsutil fallback, uses Python 3.12)
+RUN pip install --no-cache-dir gsutil
 
 # Install Gemini CLI (pinned to known-working version)
 RUN npm install -g @google/gemini-cli@0.56.0

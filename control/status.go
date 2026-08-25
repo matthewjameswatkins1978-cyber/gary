@@ -3,6 +3,7 @@ package control
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -99,12 +100,14 @@ func UpdateSnapshot(repoRoot string, activeJobs []JobEntry, recentJobs []JobEntr
 
 // PublishSnapshot writes the snapshot and commits it to the repository.
 // Publishing failure must not fail the calling operation.
+// Uses GARY_GITHUB_TOKEN env var for push auth when available.
 func PublishSnapshot(repoRoot string, activeJobs []JobEntry, recentJobs []JobEntry) {
 	if err := UpdateSnapshot(repoRoot, activeJobs, recentJobs); err != nil {
 		return
 	}
 
-	// Best-effort git commit + push. Never propagate errors.
+	token := os.Getenv("GARY_GITHUB_TOKEN")
+
 	git := func(args ...string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = repoRoot
@@ -122,9 +125,14 @@ func PublishSnapshot(repoRoot string, activeJobs []JobEntry, recentJobs []JobEnt
 	diff := exec.Command("git", "diff", "--cached", "--quiet", "control/status.json")
 	diff.Dir = repoRoot
 	if diff.Run() != nil {
-		// There are staged changes
 		git("commit", "-m", "GARY: update status snapshot")
-		git("push", "origin", "HEAD")
+		// Push with token auth if available, otherwise try anonymous (local dev)
+		if token != "" {
+			pushURL := fmt.Sprintf("https://x-access-token:%s@github.com/%s.git", token, "matthewjameswatkins1978-cyber/gary")
+			git("push", pushURL, "HEAD")
+		} else {
+			git("push", "origin", "HEAD")
+		}
 	}
 }
 

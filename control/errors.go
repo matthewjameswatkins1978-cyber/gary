@@ -1,6 +1,8 @@
 // Package control provides structured error types for GARY operations.
 package control
 
+import "strings"
+
 // ErrorClass classifies the type of failure.
 type ErrorClass string
 
@@ -15,15 +17,15 @@ const (
 
 // StructuredError provides concise, machine-readable error information.
 type StructuredError struct {
-	Class          ErrorClass `json:"class"`
-	BatchJobID     string     `json:"batch_job_id,omitempty"`
-	Attempt        int        `json:"attempt,omitempty"`
-	WorkerState    string     `json:"worker_state,omitempty"`
-	Acceptance     string     `json:"acceptance_state,omitempty"`
-	Branch         string     `json:"branch,omitempty"`
-	Commit         string     `json:"commit,omitempty"`
-	Summary        string     `json:"summary"`
-	NextAction     string     `json:"next_action"`
+	Class      ErrorClass `json:"class"`
+	BatchJobID string     `json:"batch_job_id,omitempty"`
+	Attempt    int        `json:"attempt,omitempty"`
+	WorkerState string    `json:"worker_state,omitempty"`
+	Acceptance string     `json:"acceptance_state,omitempty"`
+	Branch     string     `json:"branch,omitempty"`
+	Commit     string     `json:"commit,omitempty"`
+	Summary    string     `json:"summary"`
+	NextAction string     `json:"next_action"`
 }
 
 // ClassifyError determines the error class from error characteristics.
@@ -32,23 +34,22 @@ func ClassifyError(err error, batchState string) ErrorClass {
 		return ErrClassUnknown
 	}
 
-	msg := err.Error()
+	msg := strings.ToLower(err.Error())
 
 	// Environment failures
-	if containsAny(msg, []string{
-		"not found on PATH",
+	if containsAnyLower(msg, []string{
+		"not found on path",
 		"executable file not found",
 		"no such file or directory",
-		"Permission denied",
+		"permission denied",
 	}) {
 		return ErrClassEnvironment
 	}
 
 	// Auth failures
-	if containsAny(msg, []string{
-		"API_KEY_INVALID",
-		"API key not valid",
-		"permission denied",
+	if containsAnyLower(msg, []string{
+		"api_key_invalid",
+		"api key not valid",
 		"401",
 		"403",
 		"not authenticated",
@@ -57,7 +58,7 @@ func ClassifyError(err error, batchState string) ErrorClass {
 	}
 
 	// Timeout
-	if containsAny(msg, []string{
+	if containsAnyLower(msg, []string{
 		"timeout",
 		"deadline exceeded",
 		"context canceled",
@@ -66,29 +67,26 @@ func ClassifyError(err error, batchState string) ErrorClass {
 	}
 
 	// Budget
-	if containsAny(msg, []string{
-		"BUDGET_STOPPED",
+	if containsAnyLower(msg, []string{
+		"budget_stopped",
 		"exceeds limit",
 	}) {
 		return ErrClassBudget
 	}
 
 	// Worker failures based on Batch state
-	if batchState == "FAILED" || batchState == "CANCELLED" {
+	lower := strings.ToLower(batchState)
+	if lower == "failed" || lower == "cancelled" {
 		return ErrClassWorker
 	}
 
 	return ErrClassUnknown
 }
 
-func containsAny(s string, patterns []string) bool {
+func containsAnyLower(s string, patterns []string) bool {
 	for _, p := range patterns {
-		if len(s) >= len(p) {
-			for i := 0; i <= len(s)-len(p); i++ {
-				if s[i:i+len(p)] == p {
-					return true
-				}
-			}
+		if strings.Contains(s, p) {
+			return true
 		}
 	}
 	return false
