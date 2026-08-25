@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/matthewjameswatkins1978-cyber/gary/control"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/batch"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/benchmark"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
@@ -122,6 +123,10 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 	logPrintln(prefix, fmt.Sprintf("Branch     %s", garyBranch))
 
 	submittedAt := time.Now()
+	startedAt := submittedAt.UTC().Format(time.RFC3339)
+
+	// Update snapshot: job is now active
+	snapshotActiveJob(job.ID, "", job.Repo, job.BaseBranch, garyBranch, control.JobRunning, 0, startedAt)
 
 	// Budget check before starting
 	if cfg.MaxCostUSD > 0 {
@@ -167,6 +172,13 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 		}
 
 		logPrint(prefix, "ATTEMPT %d", attempt)
+
+		// Update snapshot: retrying
+		if attempt > 1 {
+			snapshotActiveJob(job.ID, jobName, job.Repo, job.BaseBranch, garyBranch, control.JobRetrying, attempt, startedAt)
+		} else {
+			snapshotActiveJob(job.ID, jobName, job.Repo, job.BaseBranch, garyBranch, control.JobRunning, attempt, startedAt)
+		}
 
 		codingCfg := batch.CodingJobConfig{
 			Project:      cfg.GCPProject,
@@ -274,6 +286,7 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 				}
 				saveResult(cfg, job, jobName, garyBranch, commitSHA, true, duration, len(patchData), attempt, repairCount, escalated, closerUsed, "DONE")
 				writeLedger(cfg, result)
+				snapshotJobComplete(job.ID, result)
 				return result
 			}
 			lastFailure = "Local acceptance failed after Batch success.\n" + lastAcceptance
@@ -386,9 +399,9 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 		TotalCostEstimated:   totalCost,
 	}
 	writeLedger(cfg, result)
+	snapshotJobComplete(job.ID, result)
 	return result
 }
-
 func downloadGCSFile(tmpDir, gcsPath string) string {
 	path := filepath.Join(tmpDir, filepath.Base(gcsPath))
 	cmd := exec.Command("gsutil", "cp", gcsPath, path)
