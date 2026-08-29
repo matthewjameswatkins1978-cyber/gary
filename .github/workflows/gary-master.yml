@@ -1,0 +1,77 @@
+name: GARY master
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "gary/master/pending/**"
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: gary-master
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    env:
+      GARY_GCP_PROJECT: ${{ vars.GARY_GCP_PROJECT }}
+      GARY_GCP_REGION: ${{ vars.GARY_GCP_REGION }}
+      GARY_WIF_PROVIDER: ${{ vars.GARY_WIF_PROVIDER }}
+      GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+      GARY_MASTER_MODEL: ${{ vars.GARY_MASTER_MODEL }}
+    steps:
+      - name: Create short-lived GARY GitHub App token
+        id: gary-app
+        if: vars.GARY_GITHUB_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.GARY_GITHUB_APP_ID }}
+          private-key: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.gary-app.outputs.token || github.token }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Require GCP configuration
+        run: |
+          test -n "$GARY_GCP_PROJECT" && test -n "$GARY_GCP_REGION" && test -n "$GARY_WIF_PROVIDER" && test -n "$GARY_DISPATCH_SERVICE_ACCOUNT"
+
+      - name: Authenticate to Google Cloud with OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GARY_WIF_PROVIDER }}
+          service_account: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Dispatch pending master jobs
+        env:
+          GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token }}
+        run: |
+          shopt -s nullglob
+          manifests=(gary/master/pending/*.json)
+          if [ ${#manifests[@]} -eq 0 ]; then
+            echo "No master manifests."
+            exit 0
+          fi
+          for manifest in "${manifests[@]}"; do
+            go run ./cmd/gary master "$manifest"
+          done
+
+      - name: Record master status
+        if: always()
+        run: |
+          git config user.name "GARY master"
+          git config user.email "gary@agent-yard.local"
+          git add gary/master/status
+          git diff --cached --quiet || git commit -m "GARY: update master status"
+          git push
