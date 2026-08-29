@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/master-yardmaster
+  pull_request:
+    branches:
+      - master
     paths:
       - "cmd/gary/**"
       - "internal/batch/**"
