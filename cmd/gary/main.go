@@ -20,8 +20,10 @@ func main() {
 	case "doctor":
 		cmdDoctor()
 	case "run":
+		requireDirectRunOverride()
 		cmdRun()
 	case "run-many":
+		requireDirectRunOverride()
 		cmdRunMany()
 	case "master":
 		cmdMaster()
@@ -52,14 +54,23 @@ func main() {
 	}
 }
 
+func requireDirectRunOverride() {
+	if os.Getenv("GARY_ALLOW_UNSAFE_DIRECT_RUN") == "1" {
+		return
+	}
+	fmt.Fprintln(os.Stderr, "direct run is temporarily locked because the source-level retry loop can exceed the protected workflow budget")
+	fmt.Fprintln(os.Stderr, "use GARY master/inbox/control for guarded work; set GARY_ALLOW_UNSAFE_DIRECT_RUN=1 only as an explicit break-glass override")
+	os.Exit(2)
+}
+
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: gary <command>")
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  version      Print version information")
 	fmt.Fprintln(os.Stderr, "  doctor       Check environment readiness")
-	fmt.Fprintln(os.Stderr, "  run          Run a coding job against a repository")
-	fmt.Fprintln(os.Stderr, "  run-many     Run multiple coding jobs concurrently")
+	fmt.Fprintln(os.Stderr, "  run          Run one coding job (guarded workflows preferred)")
+	fmt.Fprintln(os.Stderr, "  run-many     Run coding jobs concurrently (guarded workflows preferred)")
 	fmt.Fprintln(os.Stderr, "  master       Run a large objective through the Yardmaster")
 	fmt.Fprintln(os.Stderr, "  inbox        Validate or dispatch repository inbox jobs")
 	fmt.Fprintln(os.Stderr, "  issue        Execute one authenticated GitHub Issue command")
