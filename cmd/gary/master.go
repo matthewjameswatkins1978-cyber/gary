@@ -250,6 +250,9 @@ func buildMasterPlannerPrompt(m *masterManifest, brief, stagingBranch string, wa
 You are NOT the implementation worker. Inspect the repository at the current branch, read the complete master brief below, and decide the smallest useful next wave of work.
 
 Rules:
+- You are the strategic planner, not an implementation or verification worker.
+- Do not install dependencies, run full test/lint/build suites, deploy services, or invoke billable external APIs during planning.
+- Use lightweight read-only repository inspection and existing evidence to understand state, then delegate execution and verification to child jobs.
 - Do not redesign the project unless the master brief explicitly requires it.
 - Prefer finishing and verification over cleanup.
 - Create at most %d independent jobs that can safely start from the same current branch.
