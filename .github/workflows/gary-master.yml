@@ -75,6 +75,9 @@ jobs:
       - name: Dispatch changed master jobs
         env:
           GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token }}
+          GARY_GITHUB_APP_ID: ${{ vars.GARY_GITHUB_APP_ID }}
+          GARY_GITHUB_APP_INSTALLATION_ID: ${{ steps.gary-app.outputs.installation-id }}
+          GARY_GITHUB_APP_PRIVATE_KEY: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
           GARY_PUSH_BEFORE: ${{ github.event.before }}
           GARY_PUSH_AFTER: ${{ github.sha }}
         run: |
@@ -103,10 +106,23 @@ jobs:
             go run ./cmd/gary master "$manifest"
           done
 
+      - name: Refresh short-lived GARY GitHub App token for status publishing
+        id: gary-app-final
+        if: always() && vars.GARY_GITHUB_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.GARY_GITHUB_APP_ID }}
+          private-key: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - name: Record master status
         if: always()
+        env:
+          GARY_GITHUB_TOKEN: ${{ steps.gary-app-final.outputs.token || steps.gary-app.outputs.token }}
         run: |
           set -euo pipefail
+          test -n "$GARY_GITHUB_TOKEN"
+          github_auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GARY_GITHUB_TOKEN" | base64 -w0)"
           git config user.name "GARY master"
           git config user.email "gary@agent-yard.local"
           status_snapshot="$(mktemp -d)"
@@ -128,7 +144,7 @@ jobs:
           # the newer valid UTC timestamp; never resolve that race by taking
           # the local file blindly.
           for attempt in 1 2 3; do
-            git fetch origin master
+            git -c "http.https://github.com/.extraheader=$github_auth_header" fetch origin master
             git clean -fd -- gary/master/status
             git reset --hard origin/master
             publish_paths=()
@@ -171,7 +187,7 @@ jobs:
               exit 0
             fi
             git commit -m "GARY: update master status"
-            if git push origin HEAD:master; then
+            if git -c "http.https://github.com/.extraheader=$github_auth_header" push origin HEAD:master; then
               exit 0
             fi
             echo "Master moved during status publish; retrying ($attempt/3)." >&2

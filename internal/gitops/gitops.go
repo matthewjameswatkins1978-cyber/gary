@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/githubapp"
 )
 
 // Clone clones a repository into the target directory.
@@ -82,7 +84,10 @@ func AbortCherryPick(dir string) error {
 
 // ApplyPatch applies a unified diff patch to the working tree.
 func ApplyPatch(dir, patch string) error {
-	cmd := gitCommand("git", "apply", "--verbose")
+	cmd, err := gitCommand("git", "apply", "--verbose")
+	if err != nil {
+		return err
+	}
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(patch)
 	out, err := cmd.CombinedOutput()
@@ -93,7 +98,10 @@ func ApplyPatch(dir, patch string) error {
 }
 
 func runGit(dir string, args ...string) error {
-	cmd := gitCommand("git", args...)
+	cmd, err := gitCommand("git", args...)
+	if err != nil {
+		return err
+	}
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -101,7 +109,10 @@ func runGit(dir string, args ...string) error {
 }
 
 func runGitCapture(dir string, args ...string) (string, error) {
-	cmd := gitCommand("git", args...)
+	cmd, err := gitCommand("git", args...)
+	if err != nil {
+		return "", err
+	}
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -113,11 +124,15 @@ func runGitCapture(dir string, args ...string) (string, error) {
 // gitCommand supplies a short-lived GitHub App installation token to git
 // without writing it to a remote URL or repository configuration. It is empty
 // outside Actions, so local developer behaviour stays unchanged.
-func gitCommand(name string, args ...string) *exec.Cmd {
+func gitCommand(name string, args ...string) (*exec.Cmd, error) {
 	cmd := exec.Command(name, args...)
-	if token := os.Getenv("GARY_GITHUB_TOKEN"); token != "" {
+	token, err := githubapp.TokenFromEnv()
+	if err != nil {
+		return nil, fmt.Errorf("GitHub authentication: %w", err)
+	}
+	if token != "" {
 		header := "Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte("x-access-token:"+token))
 		cmd.Env = append(os.Environ(), "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=http.https://github.com/.extraheader", "GIT_CONFIG_VALUE_0="+header)
 	}
-	return cmd
+	return cmd, nil
 }

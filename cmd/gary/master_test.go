@@ -80,6 +80,21 @@ func TestMasterRuntimeIDBounded(t *testing.T) {
 	}
 }
 
+func TestPythonAcceptanceEnvironmentAndCommandRouting(t *testing.T) {
+	if !usesPythonAcceptance([]string{"python -m pytest -q"}) {
+		t.Fatal("Python acceptance was not detected")
+	}
+	if hasPythonInstall([]string{"python -m pytest -q"}) {
+		t.Fatal("pytest command was mistaken for dependency installation")
+	}
+	if !hasPythonInstall([]string{"python -m pip install -e .[dev,deploy]"}) {
+		t.Fatal("pip install command was not detected")
+	}
+	parts := acceptanceCommandParts("python -m pytest -q", "/workspace/repo/.venv/bin/python")
+	if strings.Join(parts, " ") != "/workspace/repo/.venv/bin/python -m pytest -q" {
+		t.Fatalf("acceptance command was not routed through venv: %v", parts)
+	}
+}
 
 func TestMasterPlannerPromptIncludesCorrectRoleUniversalRulesAndJobBrief(t *testing.T) {
 	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
