@@ -11,6 +11,8 @@ import argparse
 def require_replace(text: str, old: str, new: str, label: str, count: int = 0) -> str:
     if old not in text:
         raise SystemExit(f"cost guard anchor missing: {label}")
+    if count <= 0:
+        return text.replace(old, new)
     return text.replace(old, new, count)
 
 
