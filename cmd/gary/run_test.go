@@ -8,6 +8,37 @@ import (
 	"testing"
 )
 
+func TestRuntimeBudgets(t *testing.T) {
+	if defaultWorkerMaxRunSec != 600 {
+		t.Fatalf("default worker runtime = %d, want 600", defaultWorkerMaxRunSec)
+	}
+	if yardmasterPlannerMaxRunSec != 900 {
+		t.Fatalf("Yardmaster planner runtime = %d, want 900", yardmasterPlannerMaxRunSec)
+	}
+	if batchSchedulingGraceSec != 300 {
+		t.Fatalf("Batch scheduling grace = %d, want 300", batchSchedulingGraceSec)
+	}
+	if yardmasterPlannerMaxRunSec <= defaultWorkerMaxRunSec {
+		t.Fatal("Yardmaster should have bounded extra planning headroom")
+	}
+}
+
+func TestCompactFailureLogs(t *testing.T) {
+	short := "one\ntwo"
+	if got := compactFailureLogs(short, 100); got != short {
+		t.Fatalf("short logs changed: %q", got)
+	}
+
+	long := strings.Repeat("x", 5000)
+	got := compactFailureLogs(long, 4000)
+	if !strings.HasPrefix(got, "[truncated]\n") {
+		t.Fatalf("expected truncation marker, got prefix %q", got[:12])
+	}
+	if len(got) != len("[truncated]\n")+4000 {
+		t.Fatalf("unexpected compacted length: %d", len(got))
+	}
+}
+
 func TestSummarizeAcceptance(t *testing.T) {
 	tests := []struct {
 		name   string

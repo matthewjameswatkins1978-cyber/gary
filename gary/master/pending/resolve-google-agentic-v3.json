@@ -1,0 +1,18 @@
+{
+  "id": "resolve-google-agentic-v3",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/resolve-ai.git",
+  "base_branch": "hackathon/google-agentic-final",
+  "brief_path": "gary/master/pending/resolve-google-agentic-compact.md",
+  "max_waves": 4,
+  "max_jobs_per_wave": 4,
+  "max_workers": 4,
+  "acceptance": [
+    "test -f README.md",
+    "test -f devpost-submission.md",
+    "test -f docs/resolve-architecture.svg",
+    "test -f docs/resolve-architecture.png",
+    "test -f docs/demo-script.md",
+    "test -f docs/submission-checklist.md",
+    "test -f docs/screenshots/README.md"
+  ]
+}

@@ -24,7 +24,12 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
-const maxAttempts = 3
+const (
+	maxAttempts                = 3
+	defaultWorkerMaxRunSec      = 600
+	yardmasterPlannerMaxRunSec  = 900
+	batchSchedulingGraceSec     = 300
+)
 
 var outputMu sync.Mutex
 
@@ -111,22 +116,22 @@ func cmdRun() {
 
 // RunJob executes a single coding job with retry logic using the normal implementer model.
 func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
-	return runJobWithModelAttempts(cfg, job, prefix, cfg.ImplementerModel, maxAttempts, true)
+	return runJobWithModelAttempts(cfg, job, prefix, cfg.ImplementerModel, maxAttempts, true, defaultWorkerMaxRunSec)
 }
 
 // RunJobWithModel executes a coding job with the normal repair loop and an explicit model.
 func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jobs.RunResult {
-	return runJobWithModelAttempts(cfg, job, prefix, model, maxAttempts, true)
+	return runJobWithModelAttempts(cfg, job, prefix, model, maxAttempts, true, defaultWorkerMaxRunSec)
 }
 
 // RunJobOnceWithModel executes one Batch attempt only. Gemini CLI already has its own
 // transport retries, so Yardmaster planning should fail fast rather than launch
 // repeated implementation-repair cycles for a planning request.
 func RunJobOnceWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jobs.RunResult {
-	return runJobWithModelAttempts(cfg, job, prefix, model, 1, false)
+	return runJobWithModelAttempts(cfg, job, prefix, model, 1, false, yardmasterPlannerMaxRunSec)
 }
 
-func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model string, attemptLimit int, allowCloser bool) jobs.RunResult {
+func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model string, attemptLimit int, allowCloser bool, maxRunDurSec int) jobs.RunResult {
 	if model == "" {
 		model = cfg.ImplementerModel
 	}
@@ -213,7 +218,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			MachineType:  "e2-small",
 			Model:        model,
 			GitHubToken:  os.Getenv("GARY_GITHUB_TOKEN"),
-			MaxRunDurSec: 600,
+			MaxRunDurSec: maxRunDurSec,
 		}
 
 		_, err = batch.SubmitCodingJob(codingCfg)
@@ -228,7 +233,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 		status, _, err := batch.WaitForTerminal(
 			cfg.GCPProject, cfg.GCPRegion, jobName,
-			10*time.Second, 15*time.Minute,
+			10*time.Second, time.Duration(maxRunDurSec+batchSchedulingGraceSec)*time.Second,
 		)
 		if err != nil {
 			logPrint(prefix, "  polling failed: %v", err)
@@ -314,6 +319,15 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		} else {
 			logPrint(prefix, "  BATCH %s", status.State())
 			lastFailure = fmt.Sprintf("Batch job ended with state: %s\n", status.State())
+			if status.UID != "" {
+				if failureLogs, logErr := batch.RecentLogs(cfg.GCPProject, status.UID, 12); logErr == nil {
+					failureLogs = compactFailureLogs(failureLogs, 4000)
+					if failureLogs != "" {
+						logPrint(prefix, "  Batch failure logs:\n%s", failureLogs)
+						lastFailure += "\nBatch failure logs:\n" + failureLogs
+					}
+				}
+			}
 			if lastAcceptance != "" {
 				lastFailure += "\nWorker acceptance output:\n" + lastAcceptance
 			}
@@ -662,6 +676,14 @@ func formatRepairBrief(b *repairBrief) string {
 	sb.WriteString(fmt.Sprintf("  DO NOT CHANGE: %s\n", b.DoNotChange))
 	sb.WriteString(fmt.Sprintf("  NEXT ACTION: %s\n", b.NextAction))
 	return sb.String()
+}
+
+func compactFailureLogs(logs string, maxBytes int) string {
+	logs = strings.TrimSpace(logs)
+	if maxBytes <= 0 || len(logs) <= maxBytes {
+		return logs
+	}
+	return "[truncated]\n" + logs[len(logs)-maxBytes:]
 }
 
 func summarizeAcceptance(output string) string {
