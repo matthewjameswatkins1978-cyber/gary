@@ -1,0 +1,15 @@
+{
+  "id": "r1-planner-canary-v3",
+  "state": "failed",
+  "updated_at": "2026-08-29T13:47:07Z",
+  "staging_branch": "gary/master-r1-planner-canar-ab875c",
+  "wave": 1,
+  "error": "planner failed in wave 1 after 0.7s: yardmaster API 403: {\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"Agent Platform API has not been used in project gary-agent-yard before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/aiplatform.googleapis.com/overview?project=gary-agent-yard then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\",\n    \"status\": \"PERMISSION_DENIED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.ErrorInfo\",\n        \"reason\": \"SERVICE_DISABLED\",\n        \"domain\": \"googleapis.com\",\n        \"metadata\": {\n          \"containerInfo\": \"gary-agent-yard\",\n          \"consumer\": \"projects/gary-agent-yard\",\n          \"service\": \"aiplatform.googleapis.com\",\n          \"serviceTitle\": \"Agent Platform API\",\n          \"activationUrl\": \"https://console.developers.google.com/apis/api/aiplatform.googleapis.com/overview?project=gary-agent-yard\"\n        }\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.LocalizedMessage\",\n        \"locale\": \"en-US\",\n        \"message\": \"Agent Platform API has not been used in project gary-agent-yard before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/aiplatform.googleapis.com/overview?project=gary-agent-yard then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\"\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.Help\",\n        \"links\": [\n          {\n            \"description\": \"Google developers console API activation\",\n            \"url\": \"https://console.developers.google.com/apis/api/aiplatform.googleapis.com/overview?project=gary-agent-yard\"\n          }\n        ]\n      }\n    ]\n  }\n}",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 0.703143587
+    }
+  ]
+}
