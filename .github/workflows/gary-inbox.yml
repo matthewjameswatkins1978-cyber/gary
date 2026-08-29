@@ -58,12 +58,10 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Apply worker cost guard
+      - name: Verify GARY before paid dispatch
         run: |
           set -euo pipefail
-          python3 scripts/apply_runtime_cost_guard.py
-          go test ./cmd/gary ./internal/...
-
+          go test ./...
       - name: Dispatch pending jobs
         id: dispatch
         continue-on-error: true
@@ -78,7 +76,6 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          git checkout -- cmd/gary/run.go
           git config user.name "GARY inbox"
           git config user.email "gary@agent-yard.local"
           mkdir -p gary/inbox/status
