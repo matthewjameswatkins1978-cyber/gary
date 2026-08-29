@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -243,7 +244,9 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		if err != nil {
 			logPrint(prefix, "  submission failed: %v", err)
 			os.RemoveAll(attemptDir)
-			finalStatus = "FAILED"
+			if isServiceEnvironmentBlocker(err.Error()) {
+				finalStatus = "BLOCKED"
+			}
 			break
 		}
 
@@ -256,7 +259,9 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		if err != nil {
 			logPrint(prefix, "  polling failed: %v", err)
 			os.RemoveAll(attemptDir)
-			finalStatus = "FAILED"
+			if isServiceEnvironmentBlocker(err.Error()) {
+				finalStatus = "BLOCKED"
+			}
 			break
 		}
 
@@ -297,8 +302,14 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				}
 			}
 
-			localAccepted := runLocalAcceptance(attemptDir, job, garyBranch, patchData, prefix)
-			if localAccepted {
+			localResult := runLocalAcceptanceClassified(attemptDir, job, garyBranch, patchData, prefix)
+			if localResult.blocker {
+				finalStatus = "BLOCKED"
+				lastFailure = localResult.err.Error()
+				logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
+				break
+			}
+			if localResult.passed {
 				workDir := filepath.Join(attemptDir, "repo")
 				commitSHA, _ := gitops.CommitSHA(workDir)
 				if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
@@ -348,6 +359,11 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			}
 			if lastAcceptance != "" {
 				lastFailure += "\nWorker acceptance output:\n" + lastAcceptance
+			}
+			if isServiceEnvironmentBlocker(lastFailure) {
+				finalStatus = "BLOCKED"
+				logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", strings.TrimSpace(lastFailure))
+				break
 			}
 		}
 
@@ -577,43 +593,162 @@ func extractMarkerFromBatchLogs(entries []batchLogEntry, jobUID, marker string) 
 	return string(decoded)
 }
 
+type localAcceptanceResult struct {
+	passed  bool
+	blocker bool
+	err     error
+}
+
 func runLocalAcceptance(tmpDir string, job *jobs.Job, garyBranch, patchData, prefix string) bool {
+	return runLocalAcceptanceClassified(tmpDir, job, garyBranch, patchData, prefix).passed
+}
+
+func runLocalAcceptanceClassified(tmpDir string, job *jobs.Job, garyBranch, patchData, prefix string) localAcceptanceResult {
+	fail := func(err error, blocker bool) localAcceptanceResult {
+		return localAcceptanceResult{blocker: blocker, err: err}
+	}
 	workDir := filepath.Join(tmpDir, "repo")
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
-		return false
+		return fail(err, true)
 	}
 
 	if err := gitops.Clone(job.Repo, workDir); err != nil {
-		return false
+		return fail(err, isServiceEnvironmentBlocker(err.Error()))
 	}
 	if err := gitops.Checkout(workDir, job.BaseBranch); err != nil {
-		return false
+		return fail(err, isServiceEnvironmentBlocker(err.Error()))
 	}
 	if err := gitops.CreateBranch(workDir, garyBranch); err != nil {
-		return false
+		return fail(err, isServiceEnvironmentBlocker(err.Error()))
 	}
 	if err := gitops.ApplyPatch(workDir, patchData); err != nil {
-		return false
+		return fail(err, false)
 	}
 
+	pythonBin, cleanupPython, err := preparePythonAcceptance(workDir, job.Acceptance)
+	if err != nil {
+		logPrint(prefix, "    LOCAL ENVIRONMENT BLOCKED: %v", err)
+		return fail(err, true)
+	}
+	defer cleanupPython()
+
 	for _, cmd := range job.Acceptance {
-		parts := strings.Fields(cmd)
+		parts := acceptanceCommandParts(cmd, pythonBin)
+		if len(parts) == 0 {
+			err := errors.New("empty acceptance command")
+			logPrint(prefix, "    LOCAL ENVIRONMENT BLOCKED: %v", err)
+			return fail(err, true)
+		}
 		c := exec.Command(parts[0], parts[1:]...)
 		c.Dir = workDir
 		out, err := c.CombinedOutput()
 		if err != nil {
 			logPrint(prefix, "    LOCAL FAIL: %s", strings.TrimSpace(string(out)))
-			return false
+			return fail(fmt.Errorf("local acceptance command %q failed: %w", cmd, err), false)
 		}
 		logPrintln(prefix, "    LOCAL PASS")
 	}
 
 	if err := gitops.CommitAll(workDir, fmt.Sprintf("GARY: %s", job.Task)); err != nil {
 		logPrint(prefix, "    LOCAL COMMIT FAIL: %v", err)
-		return false
+		return fail(err, isServiceEnvironmentBlocker(err.Error()))
 	}
 
-	return true
+	return localAcceptanceResult{passed: true}
+}
+
+func isServiceEnvironmentBlocker(message string) bool {
+	lower := strings.ToLower(message)
+	for _, marker := range []string{
+		"github authentication",
+		"could not read username",
+		"authentication failed",
+		"permission denied",
+		"unauthorized",
+		"no such file or directory",
+		"gcloud authentication",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func preparePythonAcceptance(workDir string, commands []string) (string, func(), error) {
+	if !usesPythonAcceptance(commands) {
+		return "", func() {}, nil
+	}
+	python := "python3"
+	if _, err := exec.LookPath(python); err != nil {
+		python = "python"
+	}
+	venvDir := filepath.Join(workDir, ".venv")
+	if out, err := exec.Command(python, "-m", "venv", venvDir).CombinedOutput(); err != nil {
+		return "", func() {}, fmt.Errorf("create Python virtualenv: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+	pythonBin := filepath.Join(venvDir, "bin", "python")
+	if _, err := os.Stat(pythonBin); err != nil {
+		pythonBin = filepath.Join(venvDir, "Scripts", "python.exe")
+	}
+	if _, err := os.Stat(pythonBin); err != nil {
+		return "", func() {}, errors.New("Python virtualenv did not contain an interpreter")
+	}
+	if !hasPythonInstall(commands) {
+		args := []string{"-m", "pip", "install"}
+		if _, err := os.Stat(filepath.Join(workDir, "pyproject.toml")); err == nil {
+			args = append(args, "-e", ".[dev,deploy]")
+		} else if _, err := os.Stat(filepath.Join(workDir, "setup.py")); err == nil {
+			args = append(args, "-e", ".[dev,deploy]")
+		} else {
+			args = append(args, "pytest", "ruff", "build")
+		}
+		cmd := exec.Command(pythonBin, args...)
+		cmd.Dir = workDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return "", func() {}, fmt.Errorf("install Python development environment: %w\n%s", err, strings.TrimSpace(string(out)))
+		}
+	}
+	return pythonBin, func() { _ = os.RemoveAll(venvDir) }, nil
+}
+
+func usesPythonAcceptance(commands []string) bool {
+	for _, command := range commands {
+		parts := strings.Fields(command)
+		if len(parts) == 0 {
+			continue
+		}
+		switch parts[0] {
+		case "python", "python3", "pytest", "ruff", "build":
+			return true
+		}
+	}
+	return false
+}
+
+func hasPythonInstall(commands []string) bool {
+	for _, command := range commands {
+		parts := strings.Fields(command)
+		if len(parts) >= 4 && (parts[0] == "python" || parts[0] == "python3") && parts[1] == "-m" && parts[2] == "pip" && parts[3] == "install" {
+			return true
+		}
+	}
+	return false
+}
+
+func acceptanceCommandParts(command, pythonBin string) []string {
+	parts := strings.Fields(command)
+	if len(parts) == 0 || pythonBin == "" {
+		return parts
+	}
+	venvBin := filepath.Dir(pythonBin)
+	switch parts[0] {
+	case "python", "python3":
+		parts[0] = pythonBin
+	case "pytest", "ruff", "build":
+		parts[0] = filepath.Join(venvBin, parts[0])
+	}
+	return parts
 }
 
 type repairBrief struct {

@@ -13,7 +13,7 @@ func TestRuntimeDoctrineStaysInDocumentedRulebook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
-	doc := string(data)
+	doc := strings.ReplaceAll(string(data), "\r\n", "\n")
 	for name, rules := range map[string]string{
 		"universal":  UniversalRules,
 		"yardmaster": YardmasterRoleRules,

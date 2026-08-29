@@ -27,6 +27,7 @@ type masterManifest struct {
 	MaxJobsPerWave int      `json:"max_jobs_per_wave,omitempty"`
 	MaxWorkers     int      `json:"max_workers,omitempty"`
 	Acceptance     []string `json:"acceptance,omitempty"`
+	StagingBranch  string   `json:"staging_branch,omitempty"`
 }
 
 type masterPlan struct {
@@ -94,17 +95,32 @@ func cmdMaster() {
 	}
 
 	status := &masterStatus{ID: manifest.ID, State: "starting"}
-	stagingBranch := fmt.Sprintf("gary/master-%s-%s", shortMasterID(manifest.ID, 16), randomSuffix(6))
+	stagingBranch := manifest.StagingBranch
+	if stagingBranch == "" {
+		stagingBranch = fmt.Sprintf("gary/master-%s-%s", shortMasterID(manifest.ID, 16), randomSuffix(6))
+	} else {
+		if err := verifyMasterStagingBranch(manifest.Repo, stagingBranch); err != nil {
+			failMaster(status, fmt.Errorf("verify existing staging branch %s: %w", stagingBranch, err))
+		}
+		if prior, err := readMasterStatus(manifest.ID); err == nil && prior.StagingBranch == stagingBranch {
+			status = prior
+			status.State = "starting"
+			status.Error = ""
+		}
+	}
 	status.StagingBranch = stagingBranch
 	_ = saveMasterStatus(status)
 
-	if err := createMasterStagingBranch(manifest.Repo, manifest.BaseBranch, stagingBranch); err != nil {
-		failMaster(status, fmt.Errorf("create staging branch: %w", err))
+	if manifest.StagingBranch == "" {
+		if err := createMasterStagingBranch(manifest.Repo, manifest.BaseBranch, stagingBranch); err != nil {
+			failMaster(status, fmt.Errorf("create staging branch: %w", err))
+		}
 	}
 
 	fmt.Printf("GARY // MASTER\nJob:       %s\nStaging:   %s\nPlanner:   %s\n", manifest.ID, stagingBranch, cfg.MasterModel)
 
-	for wave := 1; wave <= manifest.MaxWaves; wave++ {
+	startWave := len(status.Waves) + 1
+	for wave := startWave; wave <= manifest.MaxWaves; wave++ {
 		status.State = "planning"
 		status.Wave = wave
 		_ = saveMasterStatus(status)
@@ -200,6 +216,9 @@ func loadMasterManifest(path string) (*masterManifest, string, error) {
 	}
 	if !inboxBranch.MatchString(m.BaseBranch) || strings.Contains(m.BaseBranch, "..") {
 		return nil, "", errors.New("invalid base_branch")
+	}
+	if m.StagingBranch != "" && (!inboxBranch.MatchString(m.StagingBranch) || strings.Contains(m.StagingBranch, "..")) {
+		return nil, "", errors.New("invalid staging_branch")
 	}
 	if strings.TrimSpace(m.BriefPath) == "" {
 		return nil, "", errors.New("brief_path is required")
@@ -357,6 +376,15 @@ func createMasterStagingBranch(repoURL, baseBranch, stagingBranch string) error 
 		return err
 	}
 	return gitops.Push(tmp, "origin", stagingBranch)
+}
+
+func verifyMasterStagingBranch(repoURL, stagingBranch string) error {
+	tmp, err := os.MkdirTemp("", "gary-master-existing-stage-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	return gitops.CloneBranch(repoURL, stagingBranch, tmp)
 }
 
 func integrateMasterResult(repoURL, stagingBranch string, result jobs.RunResult) error {
