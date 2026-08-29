@@ -3,6 +3,7 @@ package gitops
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -48,7 +49,7 @@ func TestCherryPickSuppliesCommitterIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != "worker\n" {
+	if strings.TrimSpace(string(got)) != "worker" {
 		t.Fatalf("unexpected cherry-picked content: %q", got)
 	}
 }

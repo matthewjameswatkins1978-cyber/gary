@@ -109,9 +109,72 @@ jobs:
           set -euo pipefail
           git config user.name "GARY master"
           git config user.email "gary@agent-yard.local"
-          mkdir -p gary/master/status
-          git add -A gary/master/status
-          git diff --cached --quiet || git commit -m "GARY: update master status"
-          git fetch origin master
-          git rebase origin/master
-          git push origin HEAD:master
+          status_snapshot="$(mktemp -d)"
+          mapfile -t status_paths < <(
+            { git diff --name-only HEAD -- gary/master/status; git diff --cached --name-only -- gary/master/status; git ls-files --others --exclude-standard -- gary/master/status; } | sort -u
+          )
+          if [ ${#status_paths[@]} -eq 0 ]; then
+            echo "No local master status changes."
+            exit 0
+          fi
+          for path in "${status_paths[@]}"; do
+            test -f "$path" || continue
+            mkdir -p "$status_snapshot/$(dirname "$path")"
+            cp "$path" "$status_snapshot/$path"
+          done
+
+          # Publish from the newest master without rebasing a status commit.
+          # If another run already wrote the same record, keep the record with
+          # the newer valid UTC timestamp; never resolve that race by taking
+          # the local file blindly.
+          for attempt in 1 2 3; do
+            git fetch origin master
+            git clean -fd -- gary/master/status
+            git reset --hard origin/master
+            publish_paths=()
+            for path in "${status_paths[@]}"; do
+              local_file="$status_snapshot/$path"
+              test -f "$local_file" || continue
+              if [ -f "$path" ]; then
+                if ! remote_updated="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("updated_at", ""))' "$path" 2>/dev/null)"; then
+                  echo "Preserving invalid remote status $path" >&2
+                  continue
+                fi
+                if [ -z "$remote_updated" ]; then
+                  echo "Preserving remote status without updated_at $path" >&2
+                  continue
+                fi
+                if ! local_updated="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("updated_at", ""))' "$local_file" 2>/dev/null)"; then
+                  echo "Invalid local status $local_file" >&2
+                  exit 1
+                fi
+                if [ -z "$local_updated" ]; then
+                  echo "Local status lacks updated_at: $local_file" >&2
+                  exit 1
+                fi
+                if [[ "$remote_updated" > "$local_updated" || "$remote_updated" == "$local_updated" ]]; then
+                  echo "Preserving newer remote status $path"
+                  continue
+                fi
+              fi
+              mkdir -p "$(dirname "$path")"
+              cp "$local_file" "$path"
+              publish_paths+=("$path")
+            done
+            if [ ${#publish_paths[@]} -eq 0 ]; then
+              echo "Remote master already contains the newest status records."
+              exit 0
+            fi
+            git add -- "${publish_paths[@]}"
+            if git diff --cached --quiet; then
+              echo "Remote master already contains the status records."
+              exit 0
+            fi
+            git commit -m "GARY: update master status"
+            if git push origin HEAD:master; then
+              exit 0
+            fi
+            echo "Master moved during status publish; retrying ($attempt/3)." >&2
+          done
+          echo "Unable to publish master status without overwriting newer master changes." >&2
+          exit 1

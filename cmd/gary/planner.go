@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	yardmasterPlannerTimeout = 5 * time.Minute
+	yardmasterPlannerTimeout  = 5 * time.Minute
 	yardmasterContextMaxBytes = 240000
-	yardmasterFileMaxBytes = 48000
+	yardmasterFileMaxBytes    = 48000
 )
 
 func runYardmasterDirect(cfg *config.Config, manifest *masterManifest, brief, stagingBranch string, wave int, history string) (*masterPlan, time.Duration, error) {
@@ -69,20 +69,7 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 	}
 	endpoint := yardmasterVertexEndpoint(cfg.GCPProject, cfg.MasterModel)
 
-	body := map[string]interface{}{
-		"contents": []map[string]interface{}{
-			{
-				"parts": []map[string]string{{"text": prompt}},
-			},
-		},
-		"generationConfig": map[string]interface{}{
-			"thinkingConfig": map[string]interface{}{
-				"thinkingLevel": "MEDIUM",
-			},
-			"responseMimeType": "application/json",
-			"maxOutputTokens":  4096,
-		},
-	}
+	body := yardmasterRequestBody(prompt)
 
 	payload, err := json.Marshal(body)
 	if err != nil {
@@ -146,6 +133,23 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 	return &plan, nil
 }
 
+func yardmasterRequestBody(prompt string) map[string]interface{} {
+	return map[string]interface{}{
+		"contents": []map[string]interface{}{
+			{
+				"role":  "user",
+				"parts": []map[string]string{{"text": prompt}},
+			},
+		},
+		"generationConfig": map[string]interface{}{
+			"thinkingConfig": map[string]interface{}{
+				"thinkingLevel": "MEDIUM",
+			},
+			"responseMimeType": "application/json",
+			"maxOutputTokens":  4096,
+		},
+	}
+}
 
 func yardmasterVertexEndpoint(project, model string) string {
 	return fmt.Sprintf(
