@@ -301,23 +301,30 @@ func readMasterPlan(repoURL, branch, planPath string, maxJobs int) (*masterPlan,
 	if err := dec.Decode(&plan); err != nil {
 		return nil, fmt.Errorf("parse plan: %w", err)
 	}
+	if err := validateMasterPlan(&plan, maxJobs); err != nil {
+		return nil, err
+	}
+	return &plan, nil
+}
+
+func validateMasterPlan(plan *masterPlan, maxJobs int) error {
 	if len(plan.Jobs) > maxJobs {
-		return nil, fmt.Errorf("planner returned %d jobs; max is %d", len(plan.Jobs), maxJobs)
+		return fmt.Errorf("planner returned %d jobs; max is %d", len(plan.Jobs), maxJobs)
 	}
 	for i, child := range plan.Jobs {
 		if strings.TrimSpace(child.Task) == "" || len(child.Task) > 12000 {
-			return nil, fmt.Errorf("job %d task is empty or too large", i+1)
+			return fmt.Errorf("job %d task is empty or too large", i+1)
 		}
 		if len(child.Acceptance) == 0 {
-			return nil, fmt.Errorf("job %d has no acceptance commands", i+1)
+			return fmt.Errorf("job %d has no acceptance commands", i+1)
 		}
 		for _, command := range child.Acceptance {
 			if !inboxCommand.MatchString(command) {
-				return nil, fmt.Errorf("job %d acceptance %q contains unsupported shell syntax", i+1, command)
+				return fmt.Errorf("job %d acceptance %q contains unsupported shell syntax", i+1, command)
 			}
 		}
 	}
-	return &plan, nil
+	return nil
 }
 
 func createMasterStagingBranch(repoURL, baseBranch, stagingBranch string) error {
