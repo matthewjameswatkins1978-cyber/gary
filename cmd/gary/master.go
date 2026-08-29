@@ -239,17 +239,18 @@ func loadMasterManifest(path string) (*masterManifest, string, error) {
 }
 
 func buildMasterPlannerPrompt(m *masterManifest, brief, stagingBranch string, wave int, history string) string {
-	return fmt.Sprintf(`You are GARY Yardmaster, the planning and supervision layer above bounded implementation workers.
+	return fmt.Sprintf(`You are GARY Yardmaster. Read the compact repository snapshot and complete master brief below, then decide the smallest useful next wave of work.
 
-You are NOT the implementation worker. Read the compact repository snapshot and complete master brief below, then decide the smallest useful next wave of work.
+YARDMASTER ROLE
+===============
+%s
 
-UNIVERSAL FOREMAN RULES
-=======================
+UNIVERSAL GARY RULES
+====================
 %s
 
 PLANNER-SPECIFIC RULES
 ======================
-- You are the strategic planner, not an implementation or verification worker.
 - Do not install dependencies, run full test/lint/build suites, deploy services, or invoke billable external APIs during planning.
 - Planning is a single control-plane model call. You cannot run tools or tests. Use the supplied repository snapshot and existing evidence, then delegate execution and verification to child jobs.
 - Do not redesign the project unless the master brief explicitly requires it.
@@ -292,7 +293,7 @@ PREVIOUS WAVE RESULTS:
 
 MASTER BRIEF:
 %s
-`, doctrine.UniversalForemanRules, m.MaxJobsPerWave, m.ID, wave, m.Repo, stagingBranch, history, brief)
+`, doctrine.YardmasterRoleRules, doctrine.UniversalRules, m.MaxJobsPerWave, m.ID, wave, m.Repo, stagingBranch, history, brief)
 }
 
 func readMasterPlan(repoURL, branch, planPath string, maxJobs int) (*masterPlan, error) {
