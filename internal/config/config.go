@@ -52,7 +52,7 @@ func Load() (*Config, error) {
 	}
 
 	if c.MasterModel == "" {
-		c.MasterModel = "gemini-3.5-flash"
+		c.MasterModel = "gemini-3.5-flash-lite"
 	}
 
 	if c.WorkerRuntime == "" {
