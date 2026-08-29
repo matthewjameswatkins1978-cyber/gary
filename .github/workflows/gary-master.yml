@@ -62,13 +62,10 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Load Yardmaster API key
+      - name: Verify control-plane Google identity
         run: |
           set -euo pipefail
-          key="$(gcloud secrets versions access latest --secret=gary-gemini-api-key --project="$GARY_GCP_PROJECT")"
-          test -n "$key"
-          echo "::add-mask::$key"
-          echo "GEMINI_API_KEY=$key" >> "$GITHUB_ENV"
+          gcloud auth print-access-token >/dev/null
 
       - name: Verify GARY before paid dispatch
         run: |
