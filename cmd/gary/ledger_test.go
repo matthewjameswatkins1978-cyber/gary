@@ -248,6 +248,15 @@ func TestEstimateJobCost(t *testing.T) {
 	}
 }
 
+func TestEstimateJobCostForModelPricesYardmasterHigher(t *testing.T) {
+	lite := EstimateJobCostForModel("gemini-3.5-flash-lite", 1)
+	yardmaster := EstimateJobCostForModel("gemini-3.7-flash", 1)
+
+	if yardmaster <= lite {
+		t.Fatalf("expected Gemini 3.7 estimate > Flash Lite, got %f <= %f", yardmaster, lite)
+	}
+}
+
 func TestMakeLedgerEntry(t *testing.T) {
 	result := jobs.RunResult{
 		JobID:                "my-job",
