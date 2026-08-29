@@ -1,6 +1,16 @@
 {
-  "updated_at": "2026-08-29T08:01:16Z",
-  "yard_state": "parked",
+  "updated_at": "2026-08-29T08:23:26Z",
+  "yard_state": "running",
+  "active_jobs": [
+    {
+      "id": "mplan-readycheck-zero-1",
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
+      "base_branch": "gary/master-readycheck-zero-29554a",
+      "result_branch": "gary/mplan-readycheck-zero-1-06ccb517",
+      "started_at": "2026-08-29T08:23:26Z"
+    }
+  ],
   "recent_jobs": [
     {
       "id": "resolve-ai-final-audit",
