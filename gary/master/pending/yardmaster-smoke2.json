@@ -1,0 +1,13 @@
+{
+  "id": "yardmaster-smoke2",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
+  "base_branch": "master",
+  "brief_path": "gary/master/pending/yardmaster-smoke2.md",
+  "max_waves": 2,
+  "max_jobs_per_wave": 2,
+  "max_workers": 2,
+  "acceptance": [
+    "test -f docs/yardmaster-smoke2.txt",
+    "grep -q YARDMASTER_OK_2 docs/yardmaster-smoke2.txt"
+  ]
+}
