@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-29T13:02:44Z",
+  "updated_at": "2026-08-29T13:02:46Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -14,11 +14,13 @@
     },
     {
       "id": "mplan-gary-self-improv-1",
+      "batch_job_id": "gary-run-mplan-gary-self-improv-1-1-20260829-130246",
       "state": "running",
       "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
       "base_branch": "gary/master-gary-self-improv-294755",
       "result_branch": "gary/mplan-gary-self-improv-1-c91ffe76",
-      "started_at": "2026-08-29T13:02:44Z"
+      "started_at": "2026-08-29T13:02:44Z",
+      "attempts": 1
     }
   ],
   "recent_jobs": [
