@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
@@ -286,7 +287,7 @@ PREVIOUS WAVE RESULTS:
 
 MASTER BRIEF:
 %s
-`, m.MaxJobsPerWave, m.ID, wave, m.Repo, stagingBranch, history, brief)
+`, doctrine.UniversalForemanRules, m.MaxJobsPerWave, m.ID, wave, m.Repo, stagingBranch, history, brief)
 }
 
 func readMasterPlan(repoURL, branch, planPath string, maxJobs int) (*masterPlan, error) {
