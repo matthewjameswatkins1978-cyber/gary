@@ -1,0 +1,15 @@
+{
+  "id": "resolve-readycheck",
+  "state": "done",
+  "updated_at": "2026-08-29T08:31:03Z",
+  "staging_branch": "gary/master-resolve-readyche-15a865",
+  "wave": 1,
+  "summary": "README.md and pyproject.toml both exist in the target repository. Readiness probe complete.",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_branch": "gary/mplan-resolve-readyche-1-a1c030e8",
+      "plan_summary": "README.md and pyproject.toml both exist in the target repository. Readiness probe complete."
+    }
+  ]
+}
