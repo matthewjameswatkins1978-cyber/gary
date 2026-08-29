@@ -68,7 +68,11 @@ func FormatPatch(dir, baseBranch string) (string, error) {
 
 // CherryPick applies one accepted worker commit to the current branch.
 func CherryPick(dir, commit string) error {
-	return runGit(dir, "cherry-pick", commit)
+	return runGit(dir,
+		"-c", "user.name=GARY Worker",
+		"-c", "user.email=gary@agent-yard.local",
+		"cherry-pick", commit,
+	)
 }
 
 // AbortCherryPick aborts an in-progress cherry-pick.
