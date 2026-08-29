@@ -256,8 +256,14 @@ Rules:
 - Do not redesign the project unless the master brief explicitly requires it.
 - Prefer finishing and verification over cleanup.
 - Create at most %d independent jobs that can safely start from the same current branch.
+- Every child job runs in its own fresh isolated clone. Sibling jobs do not share virtualenvs, installed packages, untracked files, generated caches, or other filesystem state.
+- Do not create a setup job whose uncommitted/ephemeral state is required by another parallel job. Each child must be independently runnable from the current staging branch.
+- Respect dependency and priority ordering in the master brief. If P0/blocker verification is still unresolved, do not schedule P1/P2 or cosmetic work in the same wave unless it is truly independent and cannot mask or complicate P0.
 - Each job must be bounded and have one or more direct executable acceptance commands.
-- Do not use shell operators such as &&, |, ;, redirects, or command substitution in acceptance commands.
+- Acceptance commands are executed directly without a shell and must contain only letters, digits, spaces, underscore, dot, slash, colon, equals, plus, at-sign, percent, comma, or hyphen.
+- Never put quotes, brackets, parentheses, ampersands, pipes, semicolons, redirects, wildcards, command substitution, or shell operators in acceptance commands.
+- Safe examples include: "python3 -m venv .venv", ".venv/bin/pip install -e .", ".venv/bin/pip install pytest ruff", ".venv/bin/python -m pytest -q", ".venv/bin/ruff check .", "python3 scripts/run_build8_smoke.py", "test -f README.md", and "grep -q ACCEPTED README.md".
+- If a required verification cannot be expressed with safe direct commands, put any necessary setup/exploration in the child task and choose acceptance commands that can be rerun mechanically in a fresh clone. Do not evade the command grammar with escaping.
 - Jobs may inspect or modify the repository as needed, but keep scopes non-overlapping where practical.
 - If prior workers failed, replan around the evidence rather than repeating them blindly.
 - Set done=true only when the master objective is genuinely satisfied in the current repository state.
