@@ -253,6 +253,25 @@ func TestHeartbeatInScript(t *testing.T) {
 	}
 }
 
+func TestCodingWorkerDisablesHiddenGeminiRetries(t *testing.T) {
+	cfg := CodingJobConfig{
+		Project: "p", Region: "r", JobName: "j",
+		RepoURL: "https://example.com/repo.git", BaseBranch: "main",
+		GaryBranch: "gary/test", Task: "do stuff", Acceptance: "echo ok",
+	}
+	script := generateCodingWorkerScript(cfg)
+	for _, required := range []string{
+		"GEMINI_CLI_SYSTEM_SETTINGS_PATH",
+		"\"retryFetchErrors\":false",
+		"\"maxAttempts\":1",
+		"\"modelRouting\":false",
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("worker script missing %q", required)
+		}
+	}
+}
+
 func TestCodingJobAcceptanceUsesExitCode(t *testing.T) {
 	cfg := CodingJobConfig{
 		Project:    "p",

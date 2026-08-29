@@ -23,7 +23,7 @@ jobs:
       GARY_WIF_PROVIDER: ${{ vars.GARY_WIF_PROVIDER }}
       GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
       GARY_MAX_COST_USD: "0.06"
-      GARY_MAX_WORKERS: "3"
+      GARY_MAX_WORKERS: "2"
     steps:
       - name: Create short-lived GARY GitHub App token
         id: gary-app
@@ -62,11 +62,18 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Apply worker cost guard
+      - name: Load Yardmaster API key
         run: |
           set -euo pipefail
-          python3 scripts/apply_runtime_cost_guard.py --master
-          go test ./cmd/gary ./internal/...
+          key="$(gcloud secrets versions access latest --secret=gary-gemini-api-key --project="$GARY_GCP_PROJECT")"
+          test -n "$key"
+          echo "::add-mask::$key"
+          echo "GEMINI_API_KEY=$key" >> "$GITHUB_ENV"
+
+      - name: Verify GARY before paid dispatch
+        run: |
+          set -euo pipefail
+          go test ./...
 
       - name: Dispatch changed master jobs
         env:
@@ -103,7 +110,6 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          git checkout -- cmd/gary/run.go cmd/gary/master.go
           git config user.name "GARY master"
           git config user.email "gary@agent-yard.local"
           mkdir -p gary/master/status

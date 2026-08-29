@@ -6,20 +6,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRuntimeBudgets(t *testing.T) {
 	if defaultWorkerMaxRunSec != 600 {
 		t.Fatalf("default worker runtime = %d, want 600", defaultWorkerMaxRunSec)
 	}
-	if yardmasterPlannerMaxRunSec != 900 {
-		t.Fatalf("Yardmaster planner runtime = %d, want 900", yardmasterPlannerMaxRunSec)
+	if maxAttempts != 2 {
+		t.Fatalf("worker attempts = %d, want 2", maxAttempts)
 	}
 	if batchSchedulingGraceSec != 300 {
 		t.Fatalf("Batch scheduling grace = %d, want 300", batchSchedulingGraceSec)
 	}
-	if yardmasterPlannerMaxRunSec <= defaultWorkerMaxRunSec {
-		t.Fatal("Yardmaster should have bounded extra planning headroom")
+	if yardmasterPlannerTimeout != 5*time.Minute {
+		t.Fatalf("Yardmaster planner timeout = %s, want 5m", yardmasterPlannerTimeout)
 	}
 }
 

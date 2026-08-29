@@ -6,6 +6,19 @@
 
 **Get the best result with the least work, cost, context and machinery.**
 
+## Planning Rule
+
+**Planning is a decision, not a job.**
+
+The Yardmaster runs on the control plane and must return a usable plan within **5 minutes absolute maximum**.
+
+- Default reasoning effort: medium.
+- Prefer a useful plan in 1–3 minutes.
+- Do not put Yardmaster planning in Batch.
+- Do not hide retries inside model clients or CLIs.
+- If planning transport fails, report it as transport failure and stop.
+- If the available context is insufficient, delegate a bounded exploration job instead of staring longer.
+
 ## 1. Keep jobs small
 
 Give workers focused jobs that should usually show useful progress within **10–15 minutes**.
@@ -103,7 +116,7 @@ A retry must change something meaningful:
 
 Do not repeat the same failure.
 
-**Three low-progress attempts trigger mandatory escalation to the Closer.**
+**Two ordinary attempts are the maximum. If the second attempt makes no useful progress, stop and return control for replanning or deliberate escalation.**
 
 ## 11. Protect known-good state
 

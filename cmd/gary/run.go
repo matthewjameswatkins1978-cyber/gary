@@ -25,10 +25,9 @@ import (
 )
 
 const (
-	maxAttempts                = 3
-	defaultWorkerMaxRunSec      = 600
-	yardmasterPlannerMaxRunSec  = 900
-	batchSchedulingGraceSec     = 300
+	maxAttempts            = 2
+	defaultWorkerMaxRunSec = 600
+	batchSchedulingGraceSec = 300
 )
 
 var outputMu sync.Mutex
@@ -116,19 +115,18 @@ func cmdRun() {
 
 // RunJob executes a single coding job with retry logic using the normal implementer model.
 func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
-	return runJobWithModelAttempts(cfg, job, prefix, cfg.ImplementerModel, maxAttempts, true, defaultWorkerMaxRunSec)
+	return runJobWithModelAttempts(cfg, job, prefix, cfg.ImplementerModel, maxAttempts, false, defaultWorkerMaxRunSec)
 }
 
 // RunJobWithModel executes a coding job with the normal repair loop and an explicit model.
 func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jobs.RunResult {
-	return runJobWithModelAttempts(cfg, job, prefix, model, maxAttempts, true, defaultWorkerMaxRunSec)
+	return runJobWithModelAttempts(cfg, job, prefix, model, maxAttempts, false, defaultWorkerMaxRunSec)
 }
 
-// RunJobOnceWithModel executes one Batch attempt only. Gemini CLI already has its own
-// transport retries, so Yardmaster planning should fail fast rather than launch
-// repeated implementation-repair cycles for a planning request.
+// RunJobOnceWithModel executes exactly one Batch worker attempt.
+// Yardmaster planning no longer uses Batch; this remains for bounded diagnostics.
 func RunJobOnceWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jobs.RunResult {
-	return runJobWithModelAttempts(cfg, job, prefix, model, 1, false, yardmasterPlannerMaxRunSec)
+	return runJobWithModelAttempts(cfg, job, prefix, model, 1, false, defaultWorkerMaxRunSec)
 }
 
 func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model string, attemptLimit int, allowCloser bool, maxRunDurSec int) jobs.RunResult {
@@ -159,13 +157,16 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		if !allowed {
 			logPrintln(prefix, "  BUDGET_STOPPED: "+reason)
 			duration := time.Since(submittedAt)
-			return jobs.RunResult{
+			result := jobs.RunResult{
 				JobID:              job.ID,
+				Branch:             garyBranch,
 				FinalStatus:        "BUDGET_STOPPED",
 				DurationSecs:       duration.Seconds(),
 				Attempts:           0,
 				TotalCostEstimated: 0,
 			}
+			snapshotJobComplete(job.ID, result)
+			return result
 		}
 	}
 
@@ -178,10 +179,22 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	escalated := false
 	closerUsed := false
 	finalStatus := "FAILED"
+	actualAttempts := 0
 
 	for attempt := 1; attempt <= attemptLimit; attempt++ {
+		if cfg.MaxCostUSD > 0 {
+			projected := EstimateJobCostForModel(model, attempt)
+			allowed, reason := BudgetCheck(cfg.MaxCostUSD, 0, projected)
+			if !allowed {
+				logPrintln(prefix, "  BUDGET_STOPPED: "+reason)
+				finalStatus = "BUDGET_STOPPED"
+				break
+			}
+		}
+		actualAttempts = attempt
+
 		attemptTask := job.Task
-		if attempt > 1 && lastPatch != "" {
+		if attempt > 1 && lastFailure != "" {
 			attemptTask = job.Task + "\n\n## PREVIOUS ATTEMPT FAILED\n\n" + lastFailure
 		}
 
@@ -352,19 +365,9 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		}
 
 		progressHistory = append(progressHistory, summarizeAcceptance(lastAcceptance))
-
-		logPrintln(prefix, "  GENERATING REPAIR BRIEF")
-		brief, err := generateRepairBrief(cfg, job.Task, acceptanceStr, lastPatch, lastAcceptance, "")
-		if err != nil {
-			logPrint(prefix, "  repair brief failed: %v", err)
-			lastFailure = fmt.Sprintf("Repair brief generation failed: %v\n\nPrevious failure:\n%s", err, lastFailure)
-			continue
+		if attempt < attemptLimit {
+			logPrintln(prefix, "  RETRYING WITH FAILURE EVIDENCE")
 		}
-		repairCount++
-		logPrint(prefix, "  Cause: %s", brief.Cause)
-		logPrint(prefix, "  Next:  %s", brief.NextAction)
-
-		lastFailure = formatRepairBrief(brief)
 	}
 
 	if escalated && allowCloser {
@@ -389,7 +392,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				closerUsed = true
 				finalStatus = "DONE"
 
-				modelCost := estimateModelCost(model, attemptLimit) + estimateModelCost(cfg.CloserModel, 1)
+				modelCost := estimateModelCost(model, actualAttempts) + estimateModelCost(cfg.CloserModel, 1)
 				computeCost := duration.Seconds() * 0.00000575
 				totalCost := modelCost + computeCost
 
@@ -399,7 +402,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 					CommitSHA:            commitSHA,
 					Accepted:             true,
 					DurationSecs:         duration.Seconds(),
-					Attempts:             attemptLimit,
+					Attempts:             actualAttempts,
 					RepairCount:          repairCount,
 					Escalated:            escalated,
 					CloserUsed:           closerUsed,
@@ -419,16 +422,16 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 	duration := time.Since(submittedAt)
 
-	modelCost := estimateModelCost(model, attemptLimit)
+	modelCost := estimateModelCost(model, actualAttempts)
 	computeCost := duration.Seconds() * 0.00000575
 	totalCost := modelCost + computeCost
 
-	saveResult(cfg, job, "", garyBranch, "", false, duration, 0, attemptLimit, repairCount, escalated, closerUsed, finalStatus)
+	saveResult(cfg, job, "", garyBranch, "", false, duration, 0, actualAttempts, repairCount, escalated, closerUsed, finalStatus)
 	result := jobs.RunResult{
 		JobID:                job.ID,
 		Branch:               garyBranch,
 		DurationSecs:         duration.Seconds(),
-		Attempts:             attemptLimit,
+		Attempts:             actualAttempts,
 		RepairCount:          repairCount,
 		Escalated:            escalated,
 		CloserUsed:           closerUsed,

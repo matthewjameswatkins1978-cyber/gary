@@ -2,8 +2,12 @@
 
 **General Agent Routing Yard**
 
-GARY routes small implementation jobs to AI workers, verifies progress,
-controls retries and escalation, and collects cost/performance statistics.
+GARY routes bounded implementation jobs to disposable AI workers, verifies progress,
+controls retries and cost, and keeps planning on a small observable control plane.
+
+Reliability R1 splits coordination from labour: Yardmaster planning is one direct
+Gemini API call on the control plane with a five-minute hard limit; Google Cloud
+Batch is reserved for isolated implementation workers.
 
 ## Quick start
 
@@ -62,9 +66,11 @@ testdata/             stable fixtures for tests
 
 ## Status
 
-Build 2F complete — Batch chosen as default worker. Do not put
-credentials in this repository; copy `.env.example` to `.env` when
-configuration is later introduced.
+Reliability R1: direct control-plane Yardmaster + Batch implementation workers.
+No workflow rewrites GARY source at runtime. See `docs/reliability-r1.md`.
+
+Do not put credentials in this repository; copy `.env.example` to `.env`
+for local development.
 
 ## First Cloud Heartbeat
 

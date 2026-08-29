@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/control"
@@ -10,8 +11,13 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
+var snapshotMutationMu sync.Mutex
+
 // snapshotActiveJob records a job as active in the snapshot.
 func snapshotActiveJob(jobID, batchJobID, repo, baseBranch, resultBranch string, state control.JobState, attempts int, startedAt string) {
+	snapshotMutationMu.Lock()
+	defer snapshotMutationMu.Unlock()
+
 	repoRoot := findRepoRoot()
 	if repoRoot == "" {
 		return
@@ -63,6 +69,9 @@ func snapshotActiveJob(jobID, batchJobID, repo, baseBranch, resultBranch string,
 
 // snapshotJobComplete moves a job from active to recent in the snapshot.
 func snapshotJobComplete(jobID string, result jobs.RunResult) {
+	snapshotMutationMu.Lock()
+	defer snapshotMutationMu.Unlock()
+
 	repoRoot := findRepoRoot()
 	if repoRoot == "" {
 		return
