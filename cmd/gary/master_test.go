@@ -86,3 +86,20 @@ func TestMasterPlannerPromptDelegatesHeavyWork(t *testing.T) {
 		}
 	}
 }
+
+func TestMasterPlannerPromptDefinesParallelIsolationAndSafeAcceptance(t *testing.T) {
+	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
+	prompt := buildMasterPlannerPrompt(m, "P0 before P1", "stage", 1, "[]", ".gary/plan.json")
+	for _, required := range []string{
+		"fresh isolated clone",
+		"Sibling jobs do not share virtualenvs",
+		"If P0/blocker verification is still unresolved",
+		"Acceptance commands are executed directly without a shell",
+		"Never put quotes, brackets",
+		".venv/bin/python -m pytest -q",
+	} {
+		if !strings.Contains(prompt, required) {
+			t.Fatalf("planner prompt missing %q", required)
+		}
+	}
+}
