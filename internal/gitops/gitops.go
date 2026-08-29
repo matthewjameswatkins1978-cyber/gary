@@ -14,6 +14,11 @@ func Clone(repoURL, targetDir string) error {
 	return runGit(targetDir, "clone", repoURL, ".")
 }
 
+// CloneBranch clones one branch into the target directory.
+func CloneBranch(repoURL, branch, targetDir string) error {
+	return runGit(targetDir, "clone", "--branch", branch, "--single-branch", repoURL, ".")
+}
+
 // Checkout checks out an existing branch.
 func Checkout(dir, branch string) error {
 	return runGit(dir, "checkout", branch)
@@ -55,6 +60,16 @@ func FetchBranch(dir, remote, branch string) error {
 // FormatPatch generates a format-patch from baseBranch to HEAD.
 func FormatPatch(dir, baseBranch string) (string, error) {
 	return runGitCapture(dir, "format-patch", baseBranch, "--stdout")
+}
+
+// CherryPick applies one accepted worker commit to the current branch.
+func CherryPick(dir, commit string) error {
+	return runGit(dir, "cherry-pick", commit)
+}
+
+// AbortCherryPick aborts an in-progress cherry-pick.
+func AbortCherryPick(dir string) error {
+	return runGit(dir, "cherry-pick", "--abort")
 }
 
 // ApplyPatch applies a unified diff patch to the working tree.
