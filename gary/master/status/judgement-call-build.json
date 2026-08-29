@@ -1,0 +1,340 @@
+{
+  "id": "judgement-call-build",
+  "state": "failed",
+  "updated_at": "2026-08-29T20:44:12Z",
+  "staging_branch": "gary/master-judgement-call-b-df8065",
+  "wave": 6,
+  "summary": "Core modules, evals, and web UI are implemented and passing tests on staging. Scheduling 3 parallel Wave 6 jobs to complete service tests and AgentCore runtime (JC-05/JC-08), offline demo and replay scripts (JC-09), and judge-facing documentation and architecture diagrams (JC-10).",
+  "error": "master job reached max_waves=6 without completion",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 15.107769849,
+      "plan_summary": "JC-02 and JC-04 are completed. Scheduling independent Wave 1 jobs: JC-03 (workspace management, 6 product tools, verifier, and concurrency fixture) and JC-06 (attention evaluation dataset, evaluation runner, and evaluation tests).",
+      "results": [
+        {
+          "job_id": "judgement-call-b-w1-j1",
+          "batch_job_id": "gary-run-judgement-call-b-w1-j1-2-20260829-193933",
+          "branch": "gary/judgement-call-b-w1-j1-da9f3dee",
+          "commit_sha": "2e862f8",
+          "accepted": true,
+          "duration_seconds": 1054.505344375,
+          "patch_bytes": 26868,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "model_cost_estimated": 0.04662000000000001,
+          "compute_cost_estimated": 0.006063405730156251,
+          "total_cost_estimated": 0.05268340573015626
+        },
+        {
+          "job_id": "judgement-call-b-w1-j2",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w1-j2-5f7050be",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 1018.494628111,
+          "patch_bytes": 0,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.04662000000000001,
+          "compute_cost_estimated": 0.00585634411163825,
+          "total_cost_estimated": 0.05247634411163826
+        }
+      ],
+      "integrated": [
+        "judgement-call-b-w1-j1"
+      ]
+    },
+    {
+      "wave": 2,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 20.843194097,
+      "plan_summary": "JC-02, JC-03, and JC-04 are completed and verified on staging. Scheduling Wave 2 jobs: JC-05 (Worker agent and service lifecycle) and JC-06 (Attention evaluation dataset, runner, docs, and evals tests).",
+      "results": [
+        {
+          "job_id": "judgement-call-b-w2-j1",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w2-j1-90685753",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 325.484970422,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.0018715385799265001,
+          "total_cost_estimated": 0.025181538579926506
+        },
+        {
+          "job_id": "judgement-call-b-w2-j2",
+          "batch_job_id": "gary-run-judgement-call-b-w2-j2-1-20260829-194747",
+          "branch": "gary/judgement-call-b-w2-j2-ce3e966d",
+          "commit_sha": "4a9b8d6",
+          "accepted": true,
+          "duration_seconds": 528.584172003,
+          "patch_bytes": 19321,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.0030393589890172503,
+          "total_cost_estimated": 0.026349358989017253
+        }
+      ],
+      "integrated": [
+        "judgement-call-b-w2-j2"
+      ]
+    },
+    {
+      "wave": 3,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 21.016412529,
+      "plan_summary": "JC-02, JC-03, JC-04, and JC-06 are verified on staging. Scheduling Wave 3 parallel jobs: JC-05 (Worker Agent and service lifecycle), JC-07 (Human-facing demo UI and web server), and JC-08 (AgentCore runtime adapter and deployment pack).",
+      "results": [
+        {
+          "job_id": "judgement-call-b-w3-j1",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w3-j1-39a98918",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 433.593171961,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.00249316073877575,
+          "total_cost_estimated": 0.025803160738775754
+        },
+        {
+          "job_id": "judgement-call-b-w3-j2",
+          "batch_job_id": "gary-run-judgement-call-b-w3-j2-2-20260829-201638",
+          "branch": "gary/judgement-call-b-w3-j2-f34325ba",
+          "commit_sha": "0916c34",
+          "accepted": true,
+          "duration_seconds": 1370.668100044,
+          "patch_bytes": 28296,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "model_cost_estimated": 0.04662000000000001,
+          "compute_cost_estimated": 0.007881341575253,
+          "total_cost_estimated": 0.05450134157525301
+        },
+        {
+          "job_id": "judgement-call-b-w3-j3",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w3-j3-7f189cea",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 524.599354944,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.003016446290928,
+          "total_cost_estimated": 0.026326446290928004
+        }
+      ],
+      "integrated": [
+        "judgement-call-b-w3-j2"
+      ]
+    },
+    {
+      "wave": 4,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 21.69659448,
+      "plan_summary": "JC-02, JC-03, JC-04, JC-06, and JC-07 are completed and verified on staging. Scheduling Wave 4 parallel jobs to implement JC-05 tests \u0026 JC-08 (AgentCore runtime/deployment), JC-09 (offline integration demo and replay scripts), and JC-10 (Judge-facing README, architecture docs, and Mermaid diagrams).",
+      "results": [
+        {
+          "job_id": "judgement-call-b-w4-j1",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w4-j1-34242916",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 178.504598582,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.0010264014418465,
+          "total_cost_estimated": 0.024336401441846504
+        },
+        {
+          "job_id": "judgement-call-b-w4-j2",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w4-j2-090b5160",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 152.331111159,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.00087590388916425,
+          "total_cost_estimated": 0.024185903889164254
+        },
+        {
+          "job_id": "judgement-call-b-w4-j3",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w4-j3-26a265a7",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 152.43386271399999,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.0008764947106054999,
+          "total_cost_estimated": 0.024186494710605504
+        }
+      ]
+    },
+    {
+      "wave": 5,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 23.175911008,
+      "plan_summary": "Core engine, evals, and web frontend are implemented and tested on staging. Scheduling Wave 5 jobs to complete JC-05 service tests \u0026 JC-08 AgentCore runtime adapter/deployment pack, JC-09 offline integration demo \u0026 replay scripts, and JC-10 judge-facing README \u0026 architecture docs.",
+      "results": [
+        {
+          "job_id": "judgement-call-b-w5-j1",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w5-j1-bcf254fc",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 152.586538151,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.0008773725943682501,
+          "total_cost_estimated": 0.024187372594368255
+        },
+        {
+          "job_id": "judgement-call-b-w5-j2",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w5-j2-bda5358c",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 152.257044999,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.00087547800874425,
+          "total_cost_estimated": 0.024185478008744255
+        },
+        {
+          "job_id": "judgement-call-b-w5-j3",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w5-j3-c4efe9f4",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 129.233473902,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.0007430924749365,
+          "total_cost_estimated": 0.024053092474936505
+        }
+      ]
+    },
+    {
+      "wave": 6,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 17.188600091,
+      "plan_summary": "Core modules, evals, and web UI are implemented and passing tests on staging. Scheduling 3 parallel Wave 6 jobs to complete service tests and AgentCore runtime (JC-05/JC-08), offline demo and replay scripts (JC-09), and judge-facing documentation and architecture diagrams (JC-10).",
+      "results": [
+        {
+          "job_id": "judgement-call-b-w6-j1",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w6-j1-1b2fadfa",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 141.65190586,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.000814498458695,
+          "total_cost_estimated": 0.024124498458695003
+        },
+        {
+          "job_id": "judgement-call-b-w6-j2",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w6-j2-a5dc4200",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 230.507936024,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.001325420632138,
+          "total_cost_estimated": 0.024635420632138003
+        },
+        {
+          "job_id": "judgement-call-b-w6-j3",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w6-j3-2fab9c6c",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 176.27005625,
+          "patch_bytes": 0,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BLOCKED",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.0010135528234375,
+          "total_cost_estimated": 0.024323552823437504
+        }
+      ]
+    }
+  ]
+}
