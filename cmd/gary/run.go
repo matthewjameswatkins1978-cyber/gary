@@ -154,7 +154,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 	// Budget check before starting
 	if cfg.MaxCostUSD > 0 {
-		estimated := EstimateJobCost(1)
+		estimated := EstimateJobCostForModel(model, 1)
 		allowed, reason := BudgetCheck(cfg.MaxCostUSD, 0, estimated)
 		if !allowed {
 			logPrintln(prefix, "  BUDGET_STOPPED: "+reason)
@@ -289,7 +289,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				duration := time.Since(submittedAt)
 				os.RemoveAll(attemptDir)
 
-				modelCost := estimateModelCost(attempt)
+				modelCost := estimateModelCost(model, attempt)
 				computeCost := duration.Seconds() * 0.00000575
 				totalCost := modelCost + computeCost
 
@@ -311,7 +311,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 					TotalCostEstimated:   totalCost,
 				}
 				saveResult(cfg, job, jobName, garyBranch, commitSHA, true, duration, len(patchData), attempt, repairCount, escalated, closerUsed, "DONE")
-				writeLedger(cfg, result)
+				writeLedger(cfg, result, model)
 				snapshotJobComplete(job.ID, result)
 				return result
 			}
@@ -389,7 +389,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				closerUsed = true
 				finalStatus = "DONE"
 
-				modelCost := estimateModelCost(attemptLimit)
+				modelCost := estimateModelCost(model, attemptLimit) + estimateModelCost(cfg.CloserModel, 1)
 				computeCost := duration.Seconds() * 0.00000575
 				totalCost := modelCost + computeCost
 
@@ -409,7 +409,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 					TotalCostEstimated:   totalCost,
 				}
 				saveResult(cfg, job, fmt.Sprintf("closer-%s", job.ID), garyBranch, commitSHA, true, duration, 0, attemptLimit, repairCount, escalated, closerUsed, "DONE")
-				writeLedger(cfg, result)
+				writeLedger(cfg, result, model+"+"+cfg.CloserModel)
 				return result
 			} else {
 				finalStatus = "FAILED"
@@ -419,7 +419,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 	duration := time.Since(submittedAt)
 
-	modelCost := estimateModelCost(attemptLimit)
+	modelCost := estimateModelCost(model, attemptLimit)
 	computeCost := duration.Seconds() * 0.00000575
 	totalCost := modelCost + computeCost
 
@@ -437,7 +437,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		ComputeCostEstimated: computeCost,
 		TotalCostEstimated:   totalCost,
 	}
-	writeLedger(cfg, result)
+	writeLedger(cfg, result, model)
 	snapshotJobComplete(job.ID, result)
 	return result
 }
@@ -857,16 +857,16 @@ func saveResult(cfg *config.Config, job *jobs.Job, batchJobID, branch, commitSHA
 	os.WriteFile(path, data, 0o644)
 }
 
-func estimateModelCost(attempts int) float64 {
-	pt := benchmark.DefaultPriceTable()
+func estimateModelCost(model string, attempts int) float64 {
+	pt := benchmark.PriceTableForModel(model)
 	inputPerAttempt := 15000
 	outputPerAttempt := 7500
 	cachedPerAttempt := 2000
 	return benchmark.EstimateCost(pt, inputPerAttempt*attempts, outputPerAttempt*attempts, 0, cachedPerAttempt*attempts)
 }
 
-func writeLedger(cfg *config.Config, result jobs.RunResult) {
-	entry := MakeLedgerEntry(result, cfg.ImplementerModel)
+func writeLedger(cfg *config.Config, result jobs.RunResult, model string) {
+	entry := MakeLedgerEntry(result, model)
 	if err := AppendLedger(cfg.ResultsDir, entry); err != nil {
 		logPrint("", "  ledger write failed: %v", err)
 	}

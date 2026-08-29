@@ -60,6 +60,28 @@ func DefaultPriceTable() PriceTable {
 	}
 }
 
+// PriceTableForModel returns the current standard text-token pricing used by
+// GARY's cost estimator. Gemini 3.7/3.6 Flash promotional pricing is valid
+// through 2026-12-31. Unknown models fall back to the existing Lite table
+// rather than silently returning zero cost.
+func PriceTableForModel(model string) PriceTable {
+	switch model {
+	case "gemini-3.7-flash", "gemini-3.6-flash":
+		return PriceTable{
+			ModelName:   model,
+			InputPrice:  0.00000075,  // $0.75 / 1M
+			OutputPrice: 0.00000375,  // $3.75 / 1M (includes thinking tokens)
+			CachedPrice: 0.000000075, // $0.075 / 1M
+		}
+	case "gemini-2.5-flash", "gemini-3.5-flash-lite":
+		pt := DefaultPriceTable()
+		pt.ModelName = model
+		return pt
+	default:
+		return DefaultPriceTable()
+	}
+}
+
 // EstimateCost calculates estimated model cost in USD.
 // Billed output tokens = outputTokens + thoughtTokens.
 func EstimateCost(pt PriceTable, inputTokens, outputTokens, thoughtTokens, cachedTokens int) float64 {

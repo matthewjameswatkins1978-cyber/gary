@@ -52,3 +52,19 @@ func TestDefaultPriceTable(t *testing.T) {
 		t.Errorf("CachedPrice = %f, want > 0", pt.CachedPrice)
 	}
 }
+
+func TestPriceTableForGemini37Flash(t *testing.T) {
+	pt := PriceTableForModel("gemini-3.7-flash")
+	if pt.ModelName != "gemini-3.7-flash" {
+		t.Fatalf("ModelName = %q, want gemini-3.7-flash", pt.ModelName)
+	}
+	if pt.InputPrice != 0.00000075 {
+		t.Errorf("InputPrice = %f, want 0.00000075", pt.InputPrice)
+	}
+	if pt.OutputPrice != 0.00000375 {
+		t.Errorf("OutputPrice = %f, want 0.00000375", pt.OutputPrice)
+	}
+	if pt.CachedPrice != 0.000000075 {
+		t.Errorf("CachedPrice = %f, want 0.000000075", pt.CachedPrice)
+	}
+}
