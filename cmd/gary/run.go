@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -25,8 +26,8 @@ import (
 )
 
 const (
-	maxAttempts            = 2
-	defaultWorkerMaxRunSec = 600
+	maxAttempts             = 2
+	defaultWorkerMaxRunSec  = 600
 	batchSchedulingGraceSec = 300
 )
 
@@ -458,39 +459,60 @@ func downloadGCSFile(tmpDir, gcsPath string) string {
 	return string(data)
 }
 
-// extractFromBatchLogs retrieves base64-encoded data from Cloud Logging.
-// It looks for GARY_<marker>_B64_START and GARY_<marker>_B64_END markers.
-func extractFromBatchLogs(project, region, jobName, marker string) string {
-	startMarker := marker + "_B64_START"
-	endMarker := marker + "_B64_END"
+type batchLogEntry struct {
+	Labels   map[string]string `json:"labels"`
+	Resource struct {
+		Labels map[string]string `json:"labels"`
+	} `json:"resource"`
+	TextPayload string `json:"textPayload"`
+	Timestamp   string `json:"timestamp"`
+}
 
-	// Scope the marker query to this exact Batch job. Recovery can happen long
-	// after completion, so do not impose an artificial freshness window.
+// extractFromBatchLogs retrieves base64-encoded data from Cloud Logging.
+// It queries the exact Batch job's execution window, then filters structured
+// entries locally because older Batch log entries do not support reliable
+// server-side UID filtering. The marker query must not be applied server-side:
+// the payload lines do not contain the marker text.
+func extractFromBatchLogs(project, region, jobName, marker string) string {
 	status, err := batch.DescribeJob(project, region, jobName)
-	if err != nil || status.UID == "" {
+	if err != nil || status.UID == "" || status.CreateTime == "" || status.UpdateTime == "" {
 		return ""
 	}
 	filter := fmt.Sprintf(
-		`logName="projects/%s/logs/batch_task_logs" AND labels.job_uid="%s" AND textPayload:"%s"`,
-		project, status.UID, startMarker,
+		`logName="projects/%s/logs/batch_task_logs" AND timestamp >= "%s" AND timestamp <= "%s"`,
+		project, status.CreateTime, status.UpdateTime,
 	)
 	cmd := exec.Command("gcloud", "logging", "read", filter,
 		"--project", project,
-		"--format", "value(textPayload)",
-		"--limit", "100",
+		"--format", "json",
+		"--limit", "10000",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return ""
 	}
 
-	logs := string(out)
-	lines := strings.Split(logs, "\n")
+	var entries []batchLogEntry
+	if err := json.Unmarshal(out, &entries); err != nil {
+		return ""
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		return entries[i].Timestamp < entries[j].Timestamp
+	})
 
+	return extractMarkerFromBatchLogs(entries, status.UID, marker)
+}
+
+func extractMarkerFromBatchLogs(entries []batchLogEntry, jobUID, marker string) string {
+	startMarker := marker + "_START"
+	endMarker := marker + "_END"
 	var b64Lines []string
 	capturing := false
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
+	for _, entry := range entries {
+		if entry.Labels["job_uid"] != jobUID && entry.Resource.Labels["job_id"] != jobUID {
+			continue
+		}
+		line := strings.TrimSpace(entry.TextPayload)
 		if strings.Contains(line, startMarker) {
 			capturing = true
 			continue

@@ -26,9 +26,11 @@ type JobConfig struct {
 // JobStatus holds the result of a gcloud batch jobs describe call.
 // Google Batch returns state nested under status.state.
 type JobStatus struct {
-	UID    string        `json:"uid"`
-	Name   string        `json:"name"`
-	Status JobStatusInfo `json:"status"`
+	UID        string        `json:"uid"`
+	Name       string        `json:"name"`
+	CreateTime string        `json:"createTime"`
+	UpdateTime string        `json:"updateTime"`
+	Status     JobStatusInfo `json:"status"`
 }
 
 // JobStatusInfo holds the nested status from a Batch describe response.
