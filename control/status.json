@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-29T14:41:01Z",
+  "updated_at": "2026-08-29T14:44:44Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -14,13 +14,13 @@
     },
     {
       "id": "worker-canary-r1",
-      "batch_job_id": "gary-run-worker-canary-r1-1-20260829-144101",
-      "state": "running",
+      "batch_job_id": "gary-run-worker-canary-r1-2-20260829-144444",
+      "state": "retrying",
       "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
       "base_branch": "main",
       "result_branch": "gary/worker-canary-r1-cf135d46",
       "started_at": "2026-08-29T14:41:00Z",
-      "attempts": 1
+      "attempts": 2
     }
   ],
   "recent_jobs": [
