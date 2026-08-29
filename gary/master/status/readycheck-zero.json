@@ -1,0 +1,15 @@
+{
+  "id": "readycheck-zero",
+  "state": "done",
+  "updated_at": "2026-08-29T08:26:10Z",
+  "staging_branch": "gary/master-readycheck-zero-29554a",
+  "wave": 1,
+  "summary": "docs/yardmaster-smoke2.txt exists and contains YARDMASTER_OK_2; master objective is genuinely satisfied.",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_branch": "gary/mplan-readycheck-zero-1-06ccb517",
+      "plan_summary": "docs/yardmaster-smoke2.txt exists and contains YARDMASTER_OK_2; master objective is genuinely satisfied."
+    }
+  ]
+}
