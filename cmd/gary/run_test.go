@@ -1,13 +1,31 @@
 package main
 
 import (
+	"encoding/base64"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestExtractMarkerFromBatchLogsFiltersUIDAndRestoresOrder(t *testing.T) {
+	jobUID := "job-1"
+	encoded := base64.StdEncoding.EncodeToString([]byte("patch-data"))
+	entries := []batchLogEntry{
+		{Labels: map[string]string{"job_uid": "other"}, TextPayload: encoded, Timestamp: "2026-01-01T00:00:02Z"},
+		{Labels: map[string]string{"job_uid": jobUID}, TextPayload: "GARY_PATCH_B64_END", Timestamp: "2026-01-01T00:00:03Z"},
+		{Labels: map[string]string{"job_uid": jobUID}, TextPayload: encoded, Timestamp: "2026-01-01T00:00:02Z"},
+		{Labels: map[string]string{"job_uid": jobUID}, TextPayload: "GARY_PATCH_B64_START", Timestamp: "2026-01-01T00:00:01Z"},
+	}
+	// Cloud Logging returns newest entries first; extraction sorts before this helper.
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Timestamp < entries[j].Timestamp })
+	if got := extractMarkerFromBatchLogs(entries, jobUID, "GARY_PATCH_B64"); got != "patch-data" {
+		t.Fatalf("extracted marker = %q, want patch-data", got)
+	}
+}
 
 func TestRuntimeBudgets(t *testing.T) {
 	if defaultWorkerMaxRunSec != 600 {
