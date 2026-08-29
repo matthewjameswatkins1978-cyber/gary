@@ -80,13 +80,10 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
         if: steps.idempotency.outputs.already_processed != 'true'
 
-      - name: Apply worker cost guard
-        if: steps.idempotency.outputs.already_processed != 'true'
+      - name: Verify GARY before paid dispatch
         run: |
           set -euo pipefail
-          python3 scripts/apply_runtime_cost_guard.py
-          go test ./cmd/gary ./internal/...
-
+          go test ./...
       - name: Execute bounded GARY command
         id: execute
         if: steps.idempotency.outputs.already_processed != 'true'
