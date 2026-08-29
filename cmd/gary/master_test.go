@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+func TestFailedMasterStateIsRetryable(t *testing.T) {
+	if !isFinalMasterState("done") {
+		t.Fatal("done master job should be terminal")
+	}
+	if isFinalMasterState("failed") {
+		t.Fatal("failed master job should be retryable")
+	}
+}
+
 func TestLoadMasterManifestDefaults(t *testing.T) {
 	dir := t.TempDir()
 	brief := filepath.Join(dir, "brief.md")
