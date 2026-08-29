@@ -1,0 +1,14 @@
+{
+  "done": false,
+  "summary": "Plan wave 1 to create docs/yardmaster-smoke2.txt with YARDMASTER_OK_2 and verify acceptance criteria.",
+  "jobs": [
+    {
+      "id": "create-yardmaster-smoke2-file",
+      "task": "Create docs/yardmaster-smoke2.txt containing exactly YARDMASTER_OK_2 followed by a newline without modifying unrelated product or source files.",
+      "acceptance": [
+        "test -f docs/yardmaster-smoke2.txt",
+        "grep -q YARDMASTER_OK_2 docs/yardmaster-smoke2.txt"
+      ]
+    }
+  ]
+}
