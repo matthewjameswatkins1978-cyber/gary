@@ -1,0 +1,14 @@
+{
+  "id": "resolve-google-agentic-v4",
+  "state": "failed",
+  "updated_at": "2026-08-29T10:09:34Z",
+  "staging_branch": "gary/master-resolve-google-a-c083b4",
+  "wave": 1,
+  "error": "read planner output for wave 1: job 1 acceptance \".venv/bin/pip install -e .[dev]\" contains unsupported shell syntax",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_branch": "gary/mplan-resolve-google-a-1-246a691a"
+    }
+  ]
+}
