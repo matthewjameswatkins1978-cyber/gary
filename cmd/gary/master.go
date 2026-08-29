@@ -70,6 +70,10 @@ func cmdMaster() {
 		fmt.Fprintf(os.Stderr, "master: %v\n", err)
 		os.Exit(1)
 	}
+	if prior, err := readMasterStatus(manifest.ID); err == nil && isFinalMasterState(prior.State) {
+		fmt.Printf("GARY // MASTER ALREADY %s\nJob: %s\nBranch: %s\n", strings.ToUpper(prior.State), prior.ID, prior.StagingBranch)
+		return
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -113,7 +117,7 @@ func cmdMaster() {
 			Acceptance: []string{"python -m json.tool " + planPath},
 		}
 
-		planResult := RunJobWithModel(cfg, planJob, "yardmaster", cfg.MasterModel)
+		planResult := RunJobOnceWithModel(cfg, planJob, "yardmaster", cfg.MasterModel)
 		record := masterWaveRecord{Wave: wave, PlannerBranch: planResult.Branch}
 		if planResult.FinalStatus != "DONE" {
 			status.Waves = append(status.Waves, record)
@@ -404,6 +408,23 @@ func runMasterAcceptance(repoURL, branch string, commands []string) error {
 		}
 	}
 	return nil
+}
+
+func readMasterStatus(id string) (*masterStatus, error) {
+	path := filepath.Join("gary", "master", "status", id+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var status masterStatus
+	if err := json.Unmarshal(data, &status); err != nil {
+		return nil, err
+	}
+	return &status, nil
+}
+
+func isFinalMasterState(state string) bool {
+	return state == "done" || state == "failed"
 }
 
 func saveMasterStatus(status *masterStatus) error {
