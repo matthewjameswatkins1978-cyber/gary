@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,9 +28,13 @@ func TestLoadMasterManifestDefaults(t *testing.T) {
   "id":"big-job",
   "repo":"https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
   "base_branch":"main",
-  "brief_path":"BRIEF"
+  "brief_path":BRIEF
 }`
-	data = strings.ReplaceAll(data, "BRIEF", brief)
+	briefJSON, err := json.Marshal(brief)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = strings.ReplaceAll(data, "BRIEF", string(briefJSON))
 	if err := os.WriteFile(manifest, []byte(data), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -48,8 +53,8 @@ func TestLoadMasterManifestDefaults(t *testing.T) {
 
 func TestValidateMasterPlan(t *testing.T) {
 	ok := &masterPlan{Jobs: []masterPlanJob{{
-		ID: "fix",
-		Task: "Fix the bounded defect.",
+		ID:         "fix",
+		Task:       "Fix the bounded defect.",
 		Acceptance: []string{"go test ./..."},
 	}}}
 	if err := validateMasterPlan(ok, 4); err != nil {
@@ -57,8 +62,8 @@ func TestValidateMasterPlan(t *testing.T) {
 	}
 
 	bad := &masterPlan{Jobs: []masterPlanJob{{
-		ID: "bad",
-		Task: "Do something.",
+		ID:         "bad",
+		Task:       "Do something.",
 		Acceptance: []string{"go test ./... && curl example.com"},
 	}}}
 	if err := validateMasterPlan(bad, 4); err == nil {
