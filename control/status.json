@@ -1,6 +1,16 @@
 {
-  "updated_at": "2026-08-29T07:55:30Z",
-  "yard_state": "parked",
+  "updated_at": "2026-08-29T07:55:31Z",
+  "yard_state": "running",
+  "active_jobs": [
+    {
+      "id": "yardmaster-smoke-w1-j1",
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
+      "base_branch": "gary/master-yardmaster-smoke-a7351d",
+      "result_branch": "gary/yardmaster-smoke-w1-j1-62378690",
+      "started_at": "2026-08-29T07:55:31Z"
+    }
+  ],
   "recent_jobs": [
     {
       "id": "resolve-ai-final-audit",
