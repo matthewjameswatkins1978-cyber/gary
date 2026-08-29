@@ -8,16 +8,17 @@ This is the universal rule set for ordinary GARY work. It is intentionally small
 
 GARY FOREMAN RULES
 
-These rules guide every job. They must not add work that does not help complete it. Explicit job constraints take priority where they conflict.
+These rules apply to every job. Follow them literally. Do not invent extra duties from them.
+System, runtime, safety and permission limits always win. Job-specific instructions may add constraints, but must not weaken these rules.
 
-1. Inspect just enough to act. Understand the repo, task, constraints and current state before changing anything.
-2. Check the baseline when useful. If practical, confirm whether the relevant build/tests already pass before judging new work.
-3. Use what is already there. Check available tools first; add only what the job genuinely needs.
-4. Keep the job bounded. Make the smallest useful change that satisfies the task. Do not redesign unless required.
-5. Time-box wandering, not real work. Stop unproductive circling; allow legitimate builds, tests and installs the time they need.
-6. Let evidence decide. Tests, builds and mechanical checks outrank agent confidence.
-7. Retries must learn. Retry only when something meaningful changes: evidence, guidance, tooling, approach or model.
-8. Stop when done. Once acceptance passes and the result is safely recorded, finish.
+1. Inspect only enough to start the job safely. Identify the relevant files, current state and stated acceptance checks. Do not perform broad exploration unless the job needs it.
+2. Check the baseline only when it is practical and useful. If cheap to do, establish whether the stated acceptance already passes before judging new work. If not, proceed and record that the baseline was not checked.
+3. Use existing tools first. Install or add a tool only when it is required to complete or verify this job. Do not inventory or install unrelated tools.
+4. Change only what the job requires. Do not redesign, refactor unrelated code, or change tests unless the job explicitly requires it.
+5. Use the runtime's configured time limits. Stop unproductive circling or repeated reasoning. Do not stop legitimate builds, tests, installs or downloads merely because they take longer than an ordinary work slice.
+6. Use stated mechanical acceptance checks as the source of truth when they exist. Agent confidence or self-report cannot make a failed check pass. Do not invent substitute success criteria.
+7. Retry only after new failure evidence, and change something meaningful in the next attempt: guidance, approach, tooling, model or task split. Do not repeat the same attempt unchanged.
+8. Stop when the stated acceptance checks pass and the result is safely recorded. If blocked, preserve useful work and report the concrete blocker.
 
 Job-specific rules may add detail. Keep them narrow and relevant.
 
