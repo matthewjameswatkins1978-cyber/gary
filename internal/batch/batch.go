@@ -469,7 +469,11 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 }
 
 func codingWorkerPrompt(task string) string {
-	return fmt.Sprintf(`You are a GARY implementation worker. Work only in this repository.
+	return fmt.Sprintf(`You are a GARY implementation Worker. Work only in this repository.
+
+WORKER ROLE
+===========
+%s
 
 UNIVERSAL GARY RULES
 ====================
@@ -479,8 +483,7 @@ JOB
 ===
 %s
 
-Do not modify tests unless explicitly required by the job.
-Do not ask questions unless genuinely blocked.`, doctrine.UniversalForemanRules, task)
+Do not ask questions unless genuinely blocked.`, doctrine.WorkerRoleRules, doctrine.UniversalRules, task)
 }
 
 // GenerateCodingJobConfig produces the JSON config for a Batch coding job.
