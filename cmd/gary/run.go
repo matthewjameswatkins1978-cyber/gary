@@ -321,6 +321,10 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 		os.RemoveAll(attemptDir)
 
+		if !allowCloser && attempt == attemptLimit {
+			break
+		}
+
 		if attempt > 1 {
 			improved := checkProgress(progressHistory, lastAcceptance)
 			if !improved {
@@ -401,7 +405,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 	duration := time.Since(submittedAt)
 
-	modelCost := estimateModelCost(maxAttempts)
+	modelCost := estimateModelCost(attemptLimit)
 	computeCost := duration.Seconds() * 0.00000575
 	totalCost := modelCost + computeCost
 
@@ -410,7 +414,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		JobID:                job.ID,
 		Branch:               garyBranch,
 		DurationSecs:         duration.Seconds(),
-		Attempts:             maxAttempts,
+		Attempts:             attemptLimit,
 		RepairCount:          repairCount,
 		Escalated:            escalated,
 		CloserUsed:           closerUsed,

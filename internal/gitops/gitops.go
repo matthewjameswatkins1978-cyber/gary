@@ -44,7 +44,11 @@ func CommitAll(dir, message string) error {
 	if err := runGit(dir, "add", "-A"); err != nil {
 		return fmt.Errorf("git add: %w", err)
 	}
-	return runGit(dir, "commit", "-m", message)
+	return runGit(dir,
+		"-c", "user.name=GARY Worker",
+		"-c", "user.email=gary@agent-yard.local",
+		"commit", "-m", message,
+	)
 }
 
 // Push pushes the branch to the remote.
