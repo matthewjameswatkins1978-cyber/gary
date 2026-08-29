@@ -41,11 +41,12 @@ type masterPlanJob struct {
 }
 
 type masterWaveRecord struct {
-	Wave          int              `json:"wave"`
-	PlannerBranch string           `json:"planner_branch,omitempty"`
-	PlanSummary   string           `json:"plan_summary,omitempty"`
-	Results       []jobs.RunResult `json:"results,omitempty"`
-	Integrated    []string         `json:"integrated,omitempty"`
+	Wave                int              `json:"wave"`
+	PlannerMode         string           `json:"planner_mode,omitempty"`
+	PlannerDurationSecs float64          `json:"planner_duration_secs,omitempty"`
+	PlanSummary         string           `json:"plan_summary,omitempty"`
+	Results             []jobs.RunResult `json:"results,omitempty"`
+	Integrated          []string         `json:"integrated,omitempty"`
 }
 
 type masterStatus struct {
@@ -108,27 +109,18 @@ func cmdMaster() {
 		_ = saveMasterStatus(status)
 
 		history, _ := json.Marshal(status.Waves)
-		planPath := fmt.Sprintf(".gary/master/%s-wave-%d.json", manifest.ID, wave)
-		planJob := &jobs.Job{
-			ID:         masterRuntimeID("plan", manifest.ID, wave, 0),
-			Repo:       manifest.Repo,
-			BaseBranch: stagingBranch,
-			Task:       buildMasterPlannerPrompt(manifest, brief, stagingBranch, wave, string(history), planPath),
-			Acceptance: []string{"python -m json.tool " + planPath},
+		fmt.Printf("[yardmaster] PLAN wave=%d mode=control-direct model=%s limit=%s\n", wave, cfg.MasterModel, yardmasterPlannerTimeout)
+		plan, planDuration, err := runYardmasterDirect(cfg, manifest, brief, stagingBranch, wave, string(history))
+		record := masterWaveRecord{
+			Wave:                wave,
+			PlannerMode:         "control-direct",
+			PlannerDurationSecs: planDuration.Seconds(),
 		}
-
-		planResult := RunJobOnceWithModel(cfg, planJob, "yardmaster", cfg.MasterModel)
-		record := masterWaveRecord{Wave: wave, PlannerBranch: planResult.Branch}
-		if planResult.FinalStatus != "DONE" {
-			status.Waves = append(status.Waves, record)
-			failMaster(status, fmt.Errorf("planner failed in wave %d: %s", wave, planResult.FinalStatus))
-		}
-
-		plan, err := readMasterPlan(manifest.Repo, planResult.Branch, planPath, manifest.MaxJobsPerWave)
 		if err != nil {
 			status.Waves = append(status.Waves, record)
-			failMaster(status, fmt.Errorf("read planner output for wave %d: %w", wave, err))
+			failMaster(status, fmt.Errorf("planner failed in wave %d after %.1fs: %w", wave, planDuration.Seconds(), err))
 		}
+		fmt.Printf("[yardmaster] PLAN READY wave=%d duration=%.1fs jobs=%d done=%t\n", wave, planDuration.Seconds(), len(plan.Jobs), plan.Done)
 		record.PlanSummary = plan.Summary
 		status.Summary = plan.Summary
 
@@ -230,8 +222,9 @@ func loadMasterManifest(path string) (*masterManifest, string, error) {
 	if m.MaxJobsPerWave < 1 || m.MaxJobsPerWave > 6 {
 		return nil, "", errors.New("max_jobs_per_wave must be between 1 and 6")
 	}
-	if m.MaxWorkers == 0 {
-		m.MaxWorkers = masterWorkerLimit()
+	workerLimit := masterWorkerLimit()
+	if m.MaxWorkers == 0 || m.MaxWorkers > workerLimit {
+		m.MaxWorkers = workerLimit
 	}
 	if m.MaxWorkers < 1 || m.MaxWorkers > 8 {
 		return nil, "", errors.New("max_workers must be between 1 and 8")
@@ -244,15 +237,15 @@ func loadMasterManifest(path string) (*masterManifest, string, error) {
 	return &m, string(brief), nil
 }
 
-func buildMasterPlannerPrompt(m *masterManifest, brief, stagingBranch string, wave int, history, planPath string) string {
+func buildMasterPlannerPrompt(m *masterManifest, brief, stagingBranch string, wave int, history string) string {
 	return fmt.Sprintf(`You are GARY Yardmaster, the planning and supervision layer above bounded implementation workers.
 
-You are NOT the implementation worker. Inspect the repository at the current branch, read the complete master brief below, and decide the smallest useful next wave of work.
+You are NOT the implementation worker. Read the compact repository snapshot and complete master brief below, then decide the smallest useful next wave of work.
 
 Rules:
 - You are the strategic planner, not an implementation or verification worker.
 - Do not install dependencies, run full test/lint/build suites, deploy services, or invoke billable external APIs during planning.
-- Use lightweight read-only repository inspection and existing evidence to understand state, then delegate execution and verification to child jobs.
+- Planning is a single control-plane model call. You cannot run tools or tests. Use the supplied repository snapshot and existing evidence, then delegate execution and verification to child jobs.
 - Do not redesign the project unless the master brief explicitly requires it.
 - Prefer finishing and verification over cleanup.
 - Create at most %d independent jobs that can safely start from the same current branch.
@@ -267,7 +260,8 @@ Rules:
 - Jobs may inspect or modify the repository as needed, but keep scopes non-overlapping where practical.
 - If prior workers failed, replan around the evidence rather than repeating them blindly.
 - Set done=true only when the master objective is genuinely satisfied in the current repository state.
-- The planning branch is disposable. Do not change product files. Write only the JSON plan file at %s.
+- If the snapshot is insufficient, delegate one bounded exploration/verification job rather than inventing facts.
+- Return only the JSON object below. Do not wrap it in Markdown.
 
 Required JSON schema:
 {
@@ -292,7 +286,7 @@ PREVIOUS WAVE RESULTS:
 
 MASTER BRIEF:
 %s
-`, m.MaxJobsPerWave, planPath, m.ID, wave, m.Repo, stagingBranch, history, brief)
+`, m.MaxJobsPerWave, m.ID, wave, m.Repo, stagingBranch, history, brief)
 }
 
 func readMasterPlan(repoURL, branch, planPath string, maxJobs int) (*masterPlan, error) {
