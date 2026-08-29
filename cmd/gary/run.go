@@ -26,7 +26,8 @@ import (
 )
 
 const (
-	maxAttempts             = 2
+	maxAttempts             = 8
+	maxLowProgressAttempts  = 3
 	defaultWorkerMaxRunSec  = 600
 	batchSchedulingGraceSec = 300
 )
@@ -116,12 +117,12 @@ func cmdRun() {
 
 // RunJob executes a single coding job with retry logic using the normal implementer model.
 func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
-	return runJobWithModelAttempts(cfg, job, prefix, cfg.ImplementerModel, maxAttempts, false, defaultWorkerMaxRunSec)
+	return runJobWithModelAttempts(cfg, job, prefix, cfg.ImplementerModel, maxAttempts, true, defaultWorkerMaxRunSec)
 }
 
 // RunJobWithModel executes a coding job with the normal repair loop and an explicit model.
 func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jobs.RunResult {
-	return runJobWithModelAttempts(cfg, job, prefix, model, maxAttempts, false, defaultWorkerMaxRunSec)
+	return runJobWithModelAttempts(cfg, job, prefix, model, maxAttempts, true, defaultWorkerMaxRunSec)
 }
 
 // RunJobOnceWithModel executes exactly one Batch worker attempt.
@@ -174,8 +175,11 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	var lastPatch string
 	var lastAcceptance string
 	var lastFailure string
+	var lastRepairBrief string
+	var lastProgressState string
 	var prevGCSPatch string
 	progressHistory := make([]string, 0)
+	lowProgressStreak := 0
 	repairCount := 0
 	escalated := false
 	closerUsed := false
@@ -195,8 +199,8 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		actualAttempts = attempt
 
 		attemptTask := job.Task
-		if attempt > 1 && lastFailure != "" {
-			attemptTask = job.Task + "\n\n## PREVIOUS ATTEMPT FAILED\n\n" + lastFailure
+		if attempt > 1 {
+			attemptTask = buildRetryTask(job.Task, acceptanceStr, lastProgressState, lastFailure, lastRepairBrief)
 		}
 
 		jobName := fmt.Sprintf("gary-run-%s-%d-%s", job.ID, attempt, time.Now().Format("20060102-150405"))
@@ -349,26 +353,59 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 		os.RemoveAll(attemptDir)
 
-		if !allowCloser && attempt == attemptLimit {
-			break
-		}
-
-		if attempt > 1 {
+		progressState := "unknown"
+		if lastAcceptance != "" {
 			improved := checkProgress(progressHistory, lastAcceptance)
-			if !improved {
-				logPrintln(prefix, "  LOW PROGRESS — no meaningful change")
-				if attempt == attemptLimit {
-					escalated = true
-					break
-				}
-				continue
+			if improved {
+				lowProgressStreak = 0
+				progressState = "improving"
+				logPrintln(prefix, "  PROGRESS — acceptance evidence moved toward the target")
+			} else {
+				lowProgressStreak++
+				progressState = "stalled"
+				logPrint(prefix, "  LOW PROGRESS — stalled evidence (%d/%d)", lowProgressStreak, maxLowProgressAttempts)
+			}
+			progressHistory = append(progressHistory, summarizeAcceptance(lastAcceptance))
+		} else {
+			progressState = "unknown-no-acceptance-evidence"
+			logPrintln(prefix, "  NO ACCEPTANCE EVIDENCE — not counting this as low progress")
+		}
+		lastProgressState = progressState
+
+		if (lastAcceptance != "" || lastPatch != "") && cfg.GeminiAPIKey != "" && cfg.CloserModel != "" {
+			brief, briefErr := generateRepairBrief(
+				cfg,
+				job.Task,
+				acceptanceStr,
+				lastPatch,
+				lastAcceptance,
+				lastFailure,
+				progressState,
+				lastRepairBrief,
+			)
+			if briefErr != nil {
+				logPrint(prefix, "  repair review unavailable: %v", briefErr)
+			} else {
+				lastRepairBrief = formatRepairBrief(brief)
+				repairCount++
+				logPrint(prefix, "  STRONGER-AGENT GUIDANCE\n%s", lastRepairBrief)
 			}
 		}
 
-		progressHistory = append(progressHistory, summarizeAcceptance(lastAcceptance))
-		if attempt < attemptLimit {
-			logPrintln(prefix, "  RETRYING WITH FAILURE EVIDENCE")
+		if allowCloser && lowProgressStreak >= maxLowProgressAttempts {
+			escalated = true
+			logPrintln(prefix, "  STALLED — escalating after repeated low-progress attempts")
+			break
 		}
+		if attempt == attemptLimit {
+			if allowCloser {
+				escalated = true
+				logPrintln(prefix, "  SAFETY ATTEMPT LIMIT REACHED — handing accumulated evidence to Closer")
+			}
+			break
+		}
+
+		logPrintln(prefix, "  CONTINUING — previous attempt is evidence, not a job verdict")
 	}
 
 	if escalated && allowCloser {
@@ -576,6 +613,8 @@ func runLocalAcceptance(tmpDir string, job *jobs.Job, garyBranch, patchData, pre
 }
 
 type repairBrief struct {
+	Progress    string `json:"progress"`
+	Evidence    string `json:"evidence"`
 	Cause       string `json:"cause"`
 	Keep        string `json:"keep"`
 	Change      string `json:"change"`
@@ -583,8 +622,11 @@ type repairBrief struct {
 	NextAction  string `json:"next_action"`
 }
 
-func generateRepairBrief(cfg *config.Config, task, acceptance, patch, acceptOutput, priorBrief string) (*repairBrief, error) {
-	prompt := fmt.Sprintf(`You are a code review repair assistant. Analyze the failed implementation attempt and produce a concise repair brief.
+func generateRepairBrief(cfg *config.Config, task, acceptance, patch, acceptOutput, failureEvidence, progressState, priorBrief string) (*repairBrief, error) {
+	prompt := fmt.Sprintf(`You are the stronger review agent guiding a smaller implementation worker toward mechanical acceptance.
+
+Do not merely say that the attempt is wrong. Use the evidence to tell the next worker what already works, what remains wrong, what to preserve, and exactly what to try next.
+An unsuccessful attempt that improves acceptance is progress, not a reason to discard useful work or change approach unnecessarily.
 
 ORIGINAL TASK:
 %s
@@ -592,10 +634,16 @@ ORIGINAL TASK:
 ACCEPTANCE CRITERIA:
 %s
 
-WORKER PATCH:
+CURRENT PROGRESS STATUS:
+%s
+
+CURRENT CUMULATIVE PATCH:
 %s
 
 ACCEPTANCE OUTPUT:
+%s
+
+FAILURE EVIDENCE:
 %s
 
 PRIOR REPAIR BRIEF:
@@ -603,12 +651,14 @@ PRIOR REPAIR BRIEF:
 
 Respond with exactly this JSON format:
 {
-  "cause": "root cause of the failure in one sentence",
-  "keep": "what useful work to preserve",
-  "change": "what to change in the next attempt",
-  "do_not_change": "what must remain unchanged",
-  "next_action": "single next concrete action for the worker"
-}`, task, acceptance, patch, acceptOutput, priorBrief)
+  "progress": "improving, stalled, regressed, or unknown",
+  "evidence": "the specific mechanical evidence supporting that judgement",
+  "cause": "most likely remaining cause in one sentence",
+  "keep": "working partial changes that must be preserved",
+  "change": "the smallest concrete change to try next",
+  "do_not_change": "working behavior, scope, tests, or constraints that must remain unchanged",
+  "next_action": "one direct instruction the smaller worker can execute next"
+}`, task, acceptance, progressState, patch, acceptOutput, failureEvidence, priorBrief)
 
 	return callGeminiJSON(cfg, prompt)
 }
@@ -695,11 +745,38 @@ func callGeminiJSON(cfg *config.Config, prompt string) (*repairBrief, error) {
 func formatRepairBrief(b *repairBrief) string {
 	var sb strings.Builder
 	sb.WriteString("REPAIR BRIEF:\n")
+	sb.WriteString(fmt.Sprintf("  PROGRESS: %s\n", b.Progress))
+	sb.WriteString(fmt.Sprintf("  EVIDENCE: %s\n", b.Evidence))
 	sb.WriteString(fmt.Sprintf("  CAUSE: %s\n", b.Cause))
 	sb.WriteString(fmt.Sprintf("  KEEP: %s\n", b.Keep))
 	sb.WriteString(fmt.Sprintf("  CHANGE: %s\n", b.Change))
 	sb.WriteString(fmt.Sprintf("  DO NOT CHANGE: %s\n", b.DoNotChange))
 	sb.WriteString(fmt.Sprintf("  NEXT ACTION: %s\n", b.NextAction))
+	return sb.String()
+}
+
+func buildRetryTask(originalTask, acceptance, progressState, failureEvidence, repairGuidance string) string {
+	var sb strings.Builder
+	sb.WriteString(originalTask)
+	sb.WriteString("\n\n## REPAIR ITERATION\n\n")
+	sb.WriteString("The previous attempt did not yet satisfy acceptance. This is evidence, not a job verdict. Continue from the existing partial work; do not start over unless the evidence specifically requires it.\n\n")
+	if progressState != "" {
+		sb.WriteString(fmt.Sprintf("Progress status: %s\n\n", progressState))
+	}
+	sb.WriteString("### Acceptance still required\n")
+	sb.WriteString(acceptance)
+	sb.WriteString("\n\n")
+	if repairGuidance != "" {
+		sb.WriteString("### Stronger-agent repair guidance\n")
+		sb.WriteString(repairGuidance)
+		sb.WriteString("\n")
+	}
+	if failureEvidence != "" {
+		sb.WriteString("### Raw failure evidence\n")
+		sb.WriteString(failureEvidence)
+		sb.WriteString("\n")
+	}
+	sb.WriteString("\nPreserve what already works. Make the smallest evidence-driven change that moves the stated acceptance closer to passing, then run the stated checks.")
 	return sb.String()
 }
 
