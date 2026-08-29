@@ -31,8 +31,11 @@ func TestRuntimeBudgets(t *testing.T) {
 	if defaultWorkerMaxRunSec != 600 {
 		t.Fatalf("default worker runtime = %d, want 600", defaultWorkerMaxRunSec)
 	}
-	if maxAttempts != 2 {
-		t.Fatalf("worker attempts = %d, want 2", maxAttempts)
+	if maxAttempts != 8 {
+		t.Fatalf("worker safety attempt limit = %d, want 8", maxAttempts)
+	}
+	if maxLowProgressAttempts != 3 {
+		t.Fatalf("low-progress escalation threshold = %d, want 3", maxLowProgressAttempts)
 	}
 	if batchSchedulingGraceSec != 300 {
 		t.Fatalf("Batch scheduling grace = %d, want 300", batchSchedulingGraceSec)
@@ -153,11 +156,13 @@ func TestCheckProgress(t *testing.T) {
 
 func TestFormatRepairBrief(t *testing.T) {
 	brief := &repairBrief{
-		Cause:       "function returns input unchanged",
-		Keep:        "test file and go.mod",
-		Change:      "add clamping logic",
-		DoNotChange: "tests",
-		NextAction:  "implement min/max logic",
+		Progress:    "improving",
+		Evidence:    "one failing assertion remains",
+		Cause:       "function still misses below-min case",
+		Keep:        "working above-max clamp and tests",
+		Change:      "add below-min clamping logic",
+		DoNotChange: "tests or above-max branch",
+		NextAction:  "implement the below-min guard",
 	}
 
 	output := formatRepairBrief(brief)
@@ -165,11 +170,43 @@ func TestFormatRepairBrief(t *testing.T) {
 	if output == "" {
 		t.Fatal("formatRepairBrief returned empty string")
 	}
-	if !contains(output, "CAUSE: function returns input unchanged") {
-		t.Errorf("output missing CAUSE: %s", output)
+	if !contains(output, "PROGRESS: improving") {
+		t.Errorf("output missing PROGRESS: %s", output)
 	}
-	if !contains(output, "NEXT ACTION: implement min/max logic") {
+	if !contains(output, "EVIDENCE: one failing assertion remains") {
+		t.Errorf("output missing EVIDENCE: %s", output)
+	}
+	if !contains(output, "KEEP: working above-max clamp and tests") {
+		t.Errorf("output missing KEEP: %s", output)
+	}
+	if !contains(output, "NEXT ACTION: implement the below-min guard") {
 		t.Errorf("output missing NEXT ACTION: %s", output)
+	}
+}
+
+
+func TestBuildRetryTaskTreatsFailureAsEvidence(t *testing.T) {
+	guidance := "REPAIR BRIEF:\n  KEEP: preserve working ordering logic\n  CHANGE: fix error propagation\n"
+	got := buildRetryTask(
+		"Implement the bounded change.",
+		"python -m pytest -q",
+		"improving",
+		"1 test failed, 9 passed",
+		guidance,
+	)
+
+	for _, want := range []string{
+		"evidence, not a job verdict",
+		"Continue from the existing partial work",
+		"Progress status: improving",
+		"python -m pytest -q",
+		"preserve working ordering logic",
+		"1 test failed, 9 passed",
+		"Preserve what already works",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("retry task missing %q:\n%s", want, got)
+		}
 	}
 }
 
