@@ -262,9 +262,9 @@ func TestCodingWorkerDisablesHiddenGeminiRetries(t *testing.T) {
 	script := generateCodingWorkerScript(cfg)
 	for _, required := range []string{
 		"GEMINI_CLI_SYSTEM_SETTINGS_PATH",
-		"\\\"retryFetchErrors\\\":false",
-		"\\\"maxAttempts\\\":1",
-		"\\\"modelRouting\\\":false",
+		"\"retryFetchErrors\":false",
+		"\"maxAttempts\":1",
+		"\"modelRouting\":false",
 	} {
 		if !strings.Contains(script, required) {
 			t.Fatalf("worker script missing %q", required)
