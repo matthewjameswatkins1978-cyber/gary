@@ -176,8 +176,20 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	escalated := false
 	closerUsed := false
 	finalStatus := "FAILED"
+	actualAttempts := 0
 
 	for attempt := 1; attempt <= attemptLimit; attempt++ {
+		if cfg.MaxCostUSD > 0 {
+			projected := EstimateJobCostForModel(model, attempt)
+			allowed, reason := BudgetCheck(cfg.MaxCostUSD, 0, projected)
+			if !allowed {
+				logPrintln(prefix, "  BUDGET_STOPPED: "+reason)
+				finalStatus = "BUDGET_STOPPED"
+				break
+			}
+		}
+		actualAttempts = attempt
+
 		attemptTask := job.Task
 		if attempt > 1 && lastFailure != "" {
 			attemptTask = job.Task + "\n\n## PREVIOUS ATTEMPT FAILED\n\n" + lastFailure
@@ -407,7 +419,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 	duration := time.Since(submittedAt)
 
-	modelCost := estimateModelCost(model, attemptLimit)
+	modelCost := estimateModelCost(model, actualAttempts)
 	computeCost := duration.Seconds() * 0.00000575
 	totalCost := modelCost + computeCost
 
@@ -416,7 +428,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		JobID:                job.ID,
 		Branch:               garyBranch,
 		DurationSecs:         duration.Seconds(),
-		Attempts:             attemptLimit,
+		Attempts:             actualAttempts,
 		RepairCount:          repairCount,
 		Escalated:            escalated,
 		CloserUsed:           closerUsed,
