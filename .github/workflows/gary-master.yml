@@ -43,13 +43,16 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Require GCP configuration
+      - name: Require GCP configuration and cross-repo token
+        env:
+          GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token }}
         run: |
           set -euo pipefail
           test -n "$GARY_GCP_PROJECT"
           test -n "$GARY_GCP_REGION"
           test -n "$GARY_WIF_PROVIDER"
           test -n "$GARY_DISPATCH_SERVICE_ACCOUNT"
+          test -n "$GARY_GITHUB_TOKEN"
 
       - name: Authenticate to Google Cloud with OIDC
         uses: google-github-actions/auth@v2
@@ -65,22 +68,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("cmd/gary/run.go")
-          src = path.read_text()
-
+          run_path = Path("cmd/gary/run.go")
+          src = run_path.read_text()
           replacements = [
-              (
-                  "maxAttempts                = 3",
-                  "maxAttempts                = 2",
-              ),
-              (
-                  "maxAttempts, true, defaultWorkerMaxRunSec",
-                  "maxAttempts, false, defaultWorkerMaxRunSec",
-              ),
-              (
-                  'if attempt > 1 && lastPatch != "" {',
-                  'if attempt > 1 && lastFailure != "" {',
-              ),
+              ("maxAttempts                = 3", "maxAttempts                = 2"),
+              ("maxAttempts, true, defaultWorkerMaxRunSec", "maxAttempts, false, defaultWorkerMaxRunSec"),
+              ('if attempt > 1 && lastPatch != "" {', 'if attempt > 1 && lastFailure != "" {'),
           ]
           for old, new in replacements:
               if old not in src:
@@ -118,19 +111,33 @@ jobs:
 '''
           if repair_block not in src:
               raise SystemExit("repair brief block anchor missing")
-          src = src.replace(
-              repair_block,
-              '\t\tlogPrintln(prefix, "  RETRYING WITH FAILURE EVIDENCE")\n',
-              1,
-          )
+          src = src.replace(repair_block, '\t\tlogPrintln(prefix, "  RETRYING WITH FAILURE EVIDENCE")\n', 1)
+          run_path.write_text(src)
 
-          path.write_text(src)
+          master_path = Path("cmd/gary/master.go")
+          master = master_path.read_text()
+          worker_block = '''\tif m.MaxWorkers == 0 {
+\t\tm.MaxWorkers = masterWorkerLimit()
+\t}
+\tif m.MaxWorkers < 1 || m.MaxWorkers > 8 {
+'''
+          worker_guard = '''\tworkerLimit := masterWorkerLimit()
+\tif m.MaxWorkers == 0 || m.MaxWorkers > workerLimit {
+\t\tm.MaxWorkers = workerLimit
+\t}
+\tif m.MaxWorkers < 1 || m.MaxWorkers > 8 {
+'''
+          if worker_block not in master:
+              raise SystemExit("master worker-limit anchor missing")
+          master = master.replace(worker_block, worker_guard, 1)
+          master_path.write_text(master)
           PY
 
           grep -q 'maxAttempts                = 2' cmd/gary/run.go
           test "$(grep -c 'maxAttempts, false, defaultWorkerMaxRunSec' cmd/gary/run.go)" -ge 2
           grep -q 'if attempt > 1 && lastFailure != ""' cmd/gary/run.go
           grep -q 'RETRYING WITH FAILURE EVIDENCE' cmd/gary/run.go
+          grep -q 'm.MaxWorkers > workerLimit' cmd/gary/master.go
           if grep -q 'GENERATING REPAIR BRIEF' cmd/gary/run.go; then
             echo "Paid repair-brief path still active" >&2
             exit 1
@@ -139,7 +146,7 @@ jobs:
 
       - name: Dispatch changed master jobs
         env:
-          GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token || github.token }}
+          GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token }}
           GARY_PUSH_BEFORE: ${{ github.event.before }}
           GARY_PUSH_AFTER: ${{ github.sha }}
         run: |
@@ -152,6 +159,18 @@ jobs:
           fi
           for manifest in "${manifests[@]}"; do
             test -f "$manifest" || continue
+            manifest_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$manifest")"
+            status_file="gary/master/status/${manifest_id}.json"
+            if [ -f "$status_file" ]; then
+              state="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("state", ""))' "$status_file")"
+              case "$state" in
+                done|failed) ;;
+                *)
+                  echo "Refusing automatic restart of $manifest_id with existing non-final state: $state" >&2
+                  exit 1
+                  ;;
+              esac
+            fi
             echo "Dispatching $manifest"
             go run ./cmd/gary master "$manifest"
           done
@@ -160,7 +179,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          git checkout -- cmd/gary/run.go
+          git checkout -- cmd/gary/run.go cmd/gary/master.go
           git config user.name "GARY master"
           git config user.email "gary@agent-yard.local"
           mkdir -p gary/master/status
