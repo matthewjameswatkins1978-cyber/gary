@@ -1,4 +1,14 @@
 {
-  "updated_at": "2026-08-25T00:00:00Z",
-  "yard_state": "parked"
+  "updated_at": "2026-08-29T06:55:26Z",
+  "yard_state": "running",
+  "active_jobs": [
+    {
+      "id": "resolve-ai-final-audit",
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/resolve-ai.git",
+      "base_branch": "hackathon/google-agentic-final",
+      "result_branch": "gary/resolve-ai-final-audit-e7477c6e",
+      "started_at": "2026-08-29T06:55:26Z"
+    }
+  ]
 }
