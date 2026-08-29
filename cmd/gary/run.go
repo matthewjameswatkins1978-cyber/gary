@@ -319,6 +319,15 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		} else {
 			logPrint(prefix, "  BATCH %s", status.State())
 			lastFailure = fmt.Sprintf("Batch job ended with state: %s\n", status.State())
+			if status.UID != "" {
+				if failureLogs, logErr := batch.RecentLogs(cfg.GCPProject, status.UID, 12); logErr == nil {
+					failureLogs = compactFailureLogs(failureLogs, 4000)
+					if failureLogs != "" {
+						logPrint(prefix, "  Batch failure logs:\n%s", failureLogs)
+						lastFailure += "\nBatch failure logs:\n" + failureLogs
+					}
+				}
+			}
 			if lastAcceptance != "" {
 				lastFailure += "\nWorker acceptance output:\n" + lastAcceptance
 			}
@@ -667,6 +676,14 @@ func formatRepairBrief(b *repairBrief) string {
 	sb.WriteString(fmt.Sprintf("  DO NOT CHANGE: %s\n", b.DoNotChange))
 	sb.WriteString(fmt.Sprintf("  NEXT ACTION: %s\n", b.NextAction))
 	return sb.String()
+}
+
+func compactFailureLogs(logs string, maxBytes int) string {
+	logs = strings.TrimSpace(logs)
+	if maxBytes <= 0 || len(logs) <= maxBytes {
+		return logs
+	}
+	return "[truncated]\n" + logs[len(logs)-maxBytes:]
 }
 
 func summarizeAcceptance(output string) string {
