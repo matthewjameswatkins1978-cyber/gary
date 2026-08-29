@@ -1,14 +1,16 @@
 {
-  "updated_at": "2026-08-29T08:23:26Z",
+  "updated_at": "2026-08-29T08:23:28Z",
   "yard_state": "running",
   "active_jobs": [
     {
       "id": "mplan-readycheck-zero-1",
+      "batch_job_id": "gary-run-mplan-readycheck-zero-1-1-20260829-082328",
       "state": "running",
       "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
       "base_branch": "gary/master-readycheck-zero-29554a",
       "result_branch": "gary/mplan-readycheck-zero-1-06ccb517",
-      "started_at": "2026-08-29T08:23:26Z"
+      "started_at": "2026-08-29T08:23:26Z",
+      "attempts": 1
     }
   ],
   "recent_jobs": [
