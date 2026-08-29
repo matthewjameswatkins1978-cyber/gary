@@ -424,7 +424,9 @@ func readMasterStatus(id string) (*masterStatus, error) {
 }
 
 func isFinalMasterState(state string) bool {
-	return state == "done" || state == "failed"
+	// Successful completion is idempotently terminal. Failed master jobs are
+	// retryable so a corrected brief, model, or runtime policy can use the same ID.
+	return state == "done"
 }
 
 func saveMasterStatus(status *masterStatus) error {
