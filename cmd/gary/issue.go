@@ -249,7 +249,10 @@ func issueAcceptance(profiles []string) ([]string, error) {
 		"cargo_test":              "cargo test",
 		"cargo_test_all_features": "cargo test --all-features",
 		"npm_test":                "npm test",
-		"python_pytest_q":           "python -m pytest -q",\n\t\t"python_install_dev_deploy": "python -m pip install -e .[dev,deploy]",\n\t\t"ruff_check_all":            "ruff check .",\n\t\t"python_build":              "python -m build",
+		"python_pytest_q":           "python -m pytest -q",
+		"python_install_dev_deploy": "python -m pip install -e .[dev,deploy]",
+		"ruff_check_all":            "ruff check .",
+		"python_build":              "python -m build",
 	}
 	commands := make([]string, 0, len(profiles))
 	seen := make(map[string]bool)
