@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 )
 
 func TestFailedMasterStateIsRetryable(t *testing.T) {
@@ -75,6 +77,19 @@ func TestMasterRuntimeIDBounded(t *testing.T) {
 	id := masterRuntimeID("job", "abcdefghijklmnop", 6, 6)
 	if len(id) > 30 {
 		t.Fatalf("runtime id too long: %q", id)
+	}
+}
+
+
+func TestMasterPlannerPromptIncludesUniversalRulesAndJobSpecificBrief(t *testing.T) {
+	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
+	brief := "EXTRA JOB RULE: preserve the public API."
+	prompt := buildMasterPlannerPrompt(m, brief, "stage", 1, "[]")
+	if !strings.Contains(prompt, doctrine.UniversalForemanRules) {
+		t.Fatal("planner prompt must include the universal foreman rules")
+	}
+	if !strings.Contains(prompt, brief) {
+		t.Fatal("planner prompt must preserve job-specific instructions alongside universal rules")
 	}
 }
 
