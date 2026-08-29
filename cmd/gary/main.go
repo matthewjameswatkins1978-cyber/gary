@@ -23,6 +23,8 @@ func main() {
 		cmdRun()
 	case "run-many":
 		cmdRunMany()
+	case "master":
+		cmdMaster()
 	case "inbox":
 		cmdInbox()
 	case "issue":
@@ -58,6 +60,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  doctor       Check environment readiness")
 	fmt.Fprintln(os.Stderr, "  run          Run a coding job against a repository")
 	fmt.Fprintln(os.Stderr, "  run-many     Run multiple coding jobs concurrently")
+	fmt.Fprintln(os.Stderr, "  master       Run a large objective through the Yardmaster")
 	fmt.Fprintln(os.Stderr, "  inbox        Validate or dispatch repository inbox jobs")
 	fmt.Fprintln(os.Stderr, "  issue        Execute one authenticated GitHub Issue command")
 	fmt.Fprintln(os.Stderr, "  status       Show yard status and cost summary")
