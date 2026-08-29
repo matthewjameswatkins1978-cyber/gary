@@ -79,6 +79,33 @@ func TestLoadIssueCommandProtectsJC01AndJC02(t *testing.T) {
 	}
 }
 
+func TestLoadIssueCommandAllowsOnlyHistoricalJC01Recovery(t *testing.T) {
+	recovery := `{"version":1,"command":"recover","batch_job_id":"gary-run-jc-01-3-20260825-063356","job":{"id":"jc-01","repo":"https://github.com/matthewjameswatkins1978-cyber/judgement-call.git","base_branch":"main","task":"Create the exact five-file scaffold.","acceptance":["python_install_dev_deploy","python_pytest_q","ruff_check_all","python_build"]}}`
+	if _, _, err := loadIssueCommand(validIssueEvent(t, recovery)); err != nil {
+		t.Fatalf("historical JC-01 recovery should be accepted: %v", err)
+	}
+
+	wrongBatch := strings.Replace(recovery, "gary-run-jc-01-3-20260825-063356", "gary-run-jc-01-2-20260825-063356", 1)
+	if _, _, err := loadIssueCommand(validIssueEvent(t, wrongBatch)); err == nil || !strings.Contains(err.Error(), "protected") {
+		t.Fatalf("non-historical JC-01 recovery should remain protected, got %v", err)
+	}
+
+	submit := strings.Replace(recovery, `"command":"recover","batch_job_id":"gary-run-jc-01-3-20260825-063356",`, `"command":"submit",`, 1)
+	if _, _, err := loadIssueCommand(validIssueEvent(t, submit)); err == nil || !strings.Contains(err.Error(), "protected") {
+		t.Fatalf("JC-01 submit should remain protected, got %v", err)
+	}
+}
+
+func TestIssueAcceptanceAllowsFourApprovedProfiles(t *testing.T) {
+	commands, err := issueAcceptance([]string{"python_install_dev_deploy", "python_pytest_q", "ruff_check_all", "python_build"})
+	if err != nil {
+		t.Fatalf("four approved profiles should be accepted: %v", err)
+	}
+	if len(commands) != 4 {
+		t.Fatalf("accepted command count = %d, want 4", len(commands))
+	}
+}
+
 func TestIssueWorkflowHasOpenOnlyIdempotencyGuard(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "gary-control.yml"))
 	if err != nil {
