@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-29T10:58:39Z",
+  "updated_at": "2026-08-29T13:02:44Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -11,6 +11,14 @@
       "result_branch": "gary/mplan-resolve-google-a-2-56d76b26",
       "started_at": "2026-08-29T10:58:38Z",
       "attempts": 1
+    },
+    {
+      "id": "mplan-gary-self-improv-1",
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
+      "base_branch": "gary/master-gary-self-improv-294755",
+      "result_branch": "gary/mplan-gary-self-improv-1-c91ffe76",
+      "started_at": "2026-08-29T13:02:44Z"
     }
   ],
   "recent_jobs": [
