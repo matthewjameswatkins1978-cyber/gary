@@ -33,6 +33,9 @@ jobs:
           app-id: ${{ vars.GARY_GITHUB_APP_ID }}
           private-key: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          repositories: |
+            gary
+            judgement-call
 
       - uses: actions/checkout@v4
         with:
@@ -114,9 +117,6 @@ jobs:
           app-id: ${{ vars.GARY_GITHUB_APP_ID }}
           private-key: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          repositories: |
-            gary
-            judgement-call
           repositories: |
             gary
             judgement-call
