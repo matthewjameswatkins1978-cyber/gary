@@ -25,8 +25,8 @@ const (
 )
 
 func runYardmasterDirect(cfg *config.Config, manifest *masterManifest, brief, stagingBranch string, wave int, history string) (*masterPlan, time.Duration, error) {
-	if cfg.GeminiAPIKey == "" {
-		return nil, 0, fmt.Errorf("yardmaster: GEMINI_API_KEY is required on the control plane")
+	if cfg.GCPProject == "" {
+		return nil, 0, fmt.Errorf("yardmaster: GARY_GCP_PROJECT is required on the control plane")
 	}
 
 	tmp, err := os.MkdirTemp("", "gary-yardmaster-*")
@@ -63,7 +63,11 @@ func runYardmasterDirect(cfg *config.Config, manifest *masterManifest, brief, st
 }
 
 func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, maxJobs int) (*masterPlan, error) {
-	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent", cfg.MasterModel)
+	token, err := vertexAccessToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("yardmaster Vertex auth: %w", err)
+	}
+	endpoint := yardmasterVertexEndpoint(cfg.GCPProject, cfg.MasterModel)
 
 	body := map[string]interface{}{
 		"contents": []map[string]interface{}{
@@ -73,7 +77,7 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 		},
 		"generationConfig": map[string]interface{}{
 			"thinkingConfig": map[string]interface{}{
-				"thinkingLevel": "medium",
+				"thinkingLevel": "MEDIUM",
 			},
 			"responseMimeType": "application/json",
 			"maxOutputTokens":  4096,
@@ -90,7 +94,7 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 		return nil, fmt.Errorf("yardmaster request build: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-goog-api-key", cfg.GeminiAPIKey)
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -140,6 +144,28 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 		return nil, err
 	}
 	return &plan, nil
+}
+
+
+func yardmasterVertexEndpoint(project, model string) string {
+	return fmt.Sprintf(
+		"https://aiplatform.googleapis.com/v1/projects/%s/locations/global/publishers/google/models/%s:generateContent",
+		project,
+		model,
+	)
+}
+
+func vertexAccessToken(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, "gcloud", "auth", "print-access-token")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("gcloud auth print-access-token: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	token := strings.TrimSpace(string(out))
+	if token == "" {
+		return "", fmt.Errorf("gcloud auth print-access-token returned an empty token")
+	}
+	return token, nil
 }
 
 func buildYardmasterRepoContext(repoDir string, maxBytes int) (string, error) {
