@@ -132,10 +132,15 @@ func BudgetCheck(maxCostUSD, currentRunCommitted, estimatedJobCost float64) (boo
 	return true, ""
 }
 
-// EstimateJobCost produces a conservative ESTIMATED cost for one coding job attempt.
-// Uses benchmark price table and typical Gemini CLI token usage.
+// EstimateJobCost produces a conservative ESTIMATED cost for one coding job attempt
+// using the historical default worker model.
 func EstimateJobCost(attempts int) float64 {
-	pt := benchmark.DefaultPriceTable()
+	return EstimateJobCostForModel("gemini-3.5-flash-lite", attempts)
+}
+
+// EstimateJobCostForModel estimates a job using the model actually requested.
+func EstimateJobCostForModel(model string, attempts int) float64 {
+	pt := benchmark.PriceTableForModel(model)
 
 	// Conservative estimate per attempt:
 	// ~15K input tokens, ~7.5K output tokens (incl. thinking), ~2K cached
