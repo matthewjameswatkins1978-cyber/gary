@@ -1,0 +1,35 @@
+{
+  "id": "yardmaster-smoke4",
+  "state": "failed",
+  "updated_at": "2026-08-29T08:01:18Z",
+  "staging_branch": "gary/master-yardmaster-smoke-a7351d",
+  "wave": 1,
+  "summary": "Plan wave 1 to create docs/yardmaster-smoke2.txt with YARDMASTER_OK_2 and verify acceptance criteria.",
+  "error": "integrate yardmaster-smoke-w1-j1: exit status 128",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_branch": "gary/mplan-yardmaster-smoke-1-0236b30c",
+      "plan_summary": "Plan wave 1 to create docs/yardmaster-smoke2.txt with YARDMASTER_OK_2 and verify acceptance criteria.",
+      "results": [
+        {
+          "job_id": "yardmaster-smoke-w1-j1",
+          "batch_job_id": "gary-run-yardmaster-smoke-w1-j1-1-20260829-075536",
+          "branch": "gary/yardmaster-smoke-w1-j1-62378690",
+          "commit_sha": "60c3d70",
+          "accepted": true,
+          "duration_seconds": 344.717049424,
+          "patch_bytes": 509,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.001982123034188,
+          "total_cost_estimated": 0.025292123034188003
+        }
+      ]
+    }
+  ]
+}
