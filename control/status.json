@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-29T19:56:34Z",
+  "updated_at": "2026-08-29T19:56:59Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -31,6 +31,14 @@
       "result_branch": "gary/judgement-call-b-w3-j2-7c6595d4",
       "started_at": "2026-08-29T18:27:24Z",
       "attempts": 1
+    },
+    {
+      "id": "judgement-call-b-w3-j3",
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/judgement-call.git",
+      "base_branch": "gary/master-judgement-call-b-df8065",
+      "result_branch": "gary/judgement-call-b-w3-j3-7f189cea",
+      "started_at": "2026-08-29T19:56:59Z"
     }
   ],
   "recent_jobs": [
@@ -162,15 +170,6 @@
       "attempts": 1,
       "est_cost": 0.024851094295969253,
       "summary": "DONE"
-    },
-    {
-      "id": "judgement-call-b-w3-j3",
-      "state": "failed",
-      "result_branch": "gary/judgement-call-b-w3-j3-f687dfa4",
-      "finished_at": "2026-08-29T18:27:23Z",
-      "attempts": 2,
-      "est_cost": 0.050521050755320755,
-      "summary": "FAILED"
     },
     {
       "id": "judgement-call-b-w1-j2",
