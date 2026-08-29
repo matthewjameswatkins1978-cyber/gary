@@ -1,5 +1,5 @@
 {
-  "id": "reliability-r1-planner-canary",
+  "id": "reliability-r1-planner-canary-v2",
   "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
   "base_branch": "master",
   "brief_path": "gary/master/pending/reliability-r1-planner-canary.md",
