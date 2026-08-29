@@ -95,6 +95,13 @@ func GenerateJobConfig(cfg JobConfig) ([]byte, error) {
 
 	scriptText := "#!/bin/sh\necho \"" + cfg.Heartbeat + "\"\nexit 0\n"
 
+	variables := map[string]string{
+		"PREV_PATCH_GCS": cfg.PrevGCSPath,
+	}
+	if cfg.GitHubToken != "" {
+		variables["GARY_GITHUB_TOKEN"] = cfg.GitHubToken
+	}
+
 	config := map[string]interface{}{
 		"taskGroups": []map[string]interface{}{
 			{
@@ -364,6 +371,7 @@ type CodingJobConfig struct {
 	PrevGCSPath  string
 	MachineType  string
 	Model        string
+	GitHubToken  string
 	MaxRunDurSec int
 }
 
@@ -379,6 +387,13 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		"",
 		"echo \"GARY CODING WORKER STARTING\"",
 		"echo \"Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)\"",
+		"",
+		"# Configure short-lived GitHub App auth for private repositories when supplied",
+		"if [ -n \"$GARY_GITHUB_TOKEN\" ]; then",
+		"  export GIT_CONFIG_COUNT=1",
+		"  export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader",
+		"  export GIT_CONFIG_VALUE_0=\"Authorization: Basic $(printf 'x-access-token:%s' \"$GARY_GITHUB_TOKEN\" | base64 | tr -d '\\n')\"",
+		"fi",
 		"",
 		"# Clone the repository",
 		fmt.Sprintf("echo \"Cloning %s...\"", cfg.RepoURL),
@@ -502,9 +517,7 @@ Do not ask questions unless genuinely blocked.`, cfg.Task)
 					"maxRunDuration": fmt.Sprintf("%ds", cfg.MaxRunDurSec),
 					"maxRetryCount":  0,
 					"environment": map[string]interface{}{
-						"variables": map[string]string{
-							"PREV_PATCH_GCS": cfg.PrevGCSPath,
-						},
+						"variables": variables,
 						"secretVariables": map[string]string{
 							"GEMINI_API_KEY": "projects/418146339023/secrets/gary-gemini-api-key/versions/latest",
 						},
