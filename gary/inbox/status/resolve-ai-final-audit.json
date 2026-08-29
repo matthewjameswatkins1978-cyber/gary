@@ -1,0 +1,25 @@
+{
+  "id": "resolve-ai-final-audit",
+  "manifest": "gary/inbox/pending/resolve-ai-final-audit.json",
+  "state": "failed",
+  "updated_at": "2026-08-29T07:04:29Z",
+  "branch": "gary/resolve-ai-final-audit-e7477c6e",
+  "detail": "GARY finished: FAILED",
+  "transitions": [
+    {
+      "state": "queued",
+      "at": "2026-08-29T06:55:26Z",
+      "detail": "accepted by inbox"
+    },
+    {
+      "state": "running",
+      "at": "2026-08-29T06:55:26Z",
+      "detail": "dispatching through Batch"
+    },
+    {
+      "state": "failed",
+      "at": "2026-08-29T07:04:29Z",
+      "detail": "GARY finished: FAILED"
+    }
+  ]
+}
