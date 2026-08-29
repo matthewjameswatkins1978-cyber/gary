@@ -12,6 +12,8 @@ on:
       - "internal/batch/**"
       - "internal/config/**"
       - "internal/gitops/**"
+      - "internal/doctrine/**"
+      - "GARY_RULEBOOK.md"
       - ".github/workflows/yardmaster-ci.yml"
 
 permissions:
