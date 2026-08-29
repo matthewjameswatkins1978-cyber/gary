@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-29T13:02:46Z",
+  "updated_at": "2026-08-29T13:20:03Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -10,16 +10,6 @@
       "base_branch": "gary/master-resolve-google-a-d1fcf6",
       "result_branch": "gary/mplan-resolve-google-a-2-56d76b26",
       "started_at": "2026-08-29T10:58:38Z",
-      "attempts": 1
-    },
-    {
-      "id": "mplan-gary-self-improv-1",
-      "batch_job_id": "gary-run-mplan-gary-self-improv-1-1-20260829-130246",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
-      "base_branch": "gary/master-gary-self-improv-294755",
-      "result_branch": "gary/mplan-gary-self-improv-1-c91ffe76",
-      "started_at": "2026-08-29T13:02:44Z",
       "attempts": 1
     }
   ],
@@ -122,6 +112,15 @@
       "finished_at": "2026-08-29T10:58:37Z",
       "attempts": 3,
       "est_cost": 0.08387482297417875,
+      "summary": "FAILED"
+    },
+    {
+      "id": "mplan-gary-self-improv-1",
+      "state": "failed",
+      "result_branch": "gary/mplan-gary-self-improv-1-c91ffe76",
+      "finished_at": "2026-08-29T13:20:03Z",
+      "attempts": 1,
+      "est_cost": 0.045495555224535494,
       "summary": "FAILED"
     }
   ]
