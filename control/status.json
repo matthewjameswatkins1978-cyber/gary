@@ -1,14 +1,16 @@
 {
-  "updated_at": "2026-08-29T09:43:52Z",
+  "updated_at": "2026-08-29T09:43:54Z",
   "yard_state": "running",
   "active_jobs": [
     {
       "id": "mplan-resolve-google-a-1",
+      "batch_job_id": "gary-run-mplan-resolve-google-a-1-1-20260829-094354",
       "state": "running",
       "repo": "https://github.com/matthewjameswatkins1978-cyber/resolve-ai.git",
       "base_branch": "gary/master-resolve-google-a-91a4ba",
       "result_branch": "gary/mplan-resolve-google-a-1-917482b3",
-      "started_at": "2026-08-29T09:43:52Z"
+      "started_at": "2026-08-29T09:43:52Z",
+      "attempts": 1
     }
   ],
   "recent_jobs": [
