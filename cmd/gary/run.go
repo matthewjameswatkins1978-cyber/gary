@@ -422,7 +422,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			defer os.RemoveAll(closerDir)
 
 			closerTask := buildCloserTask(job, lastPatch, lastAcceptance, lastFailure, progressHistory)
-			closeResult, err := runCloser(cfg, closerTask, closerDir, job, garyBranch, acceptanceStr, gcsPath, prefix)
+			closeResult, err := runCloser(cfg, closerTask, closerDir, job, garyBranch, acceptanceStr, gcsPath, prevGCSPatch, prefix)
 			if err != nil {
 				logPrint(prefix, "  closer failed: %v", err)
 				finalStatus = "FAILED"
@@ -861,7 +861,7 @@ func buildCloserTask(job *jobs.Job, lastPatch, lastAcceptance, lastFailure strin
 	return sb.String()
 }
 
-func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.Job, garyBranch, acceptanceStr, gcsPath, prefix string) (bool, error) {
+func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.Job, garyBranch, acceptanceStr, gcsPath, prevGCSPatch, prefix string) (bool, error) {
 	logPrintln(prefix, "  Submitting Closer job...")
 
 	jobName := fmt.Sprintf("gary-closer-%s-%s", job.ID, time.Now().Format("20060102-150405"))
@@ -877,8 +877,10 @@ func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.J
 		Task:         closerTask,
 		Acceptance:   acceptanceStr,
 		GCSPath:      attemptGCSPath,
+		PrevGCSPath:  prevGCSPatch,
 		MachineType:  "e2-standard-4",
 		Model:        cfg.CloserModel,
+		GitHubToken:  os.Getenv("GARY_GITHUB_TOKEN"),
 		MaxRunDurSec: 900,
 	}
 
