@@ -72,3 +72,17 @@ func TestMasterRuntimeIDBounded(t *testing.T) {
 		t.Fatalf("runtime id too long: %q", id)
 	}
 }
+
+func TestMasterPlannerPromptDelegatesHeavyWork(t *testing.T) {
+	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
+	prompt := buildMasterPlannerPrompt(m, "finish it", "stage", 1, "[]", ".gary/plan.json")
+	for _, required := range []string{
+		"strategic planner, not an implementation or verification worker",
+		"Do not install dependencies",
+		"delegate execution and verification to child jobs",
+	} {
+		if !strings.Contains(prompt, required) {
+			t.Fatalf("planner prompt missing %q", required)
+		}
+	}
+}
