@@ -1,0 +1,65 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestLoadMasterManifestDefaults(t *testing.T) {
+	dir := t.TempDir()
+	brief := filepath.Join(dir, "brief.md")
+	if err := os.WriteFile(brief, []byte("finish the project"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	manifest := filepath.Join(dir, "master.json")
+	data := `{
+  "id":"big-job",
+  "repo":"https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
+  "base_branch":"main",
+  "brief_path":"BRIEF"
+}`
+	data = strings.ReplaceAll(data, "BRIEF", brief)
+	if err := os.WriteFile(manifest, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, gotBrief, err := loadMasterManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MaxWaves != 4 || got.MaxJobsPerWave != 4 || got.MaxWorkers < 1 {
+		t.Fatalf("unexpected defaults: %#v", got)
+	}
+	if gotBrief != "finish the project" {
+		t.Fatalf("brief mismatch: %q", gotBrief)
+	}
+}
+
+func TestValidateMasterPlan(t *testing.T) {
+	ok := &masterPlan{Jobs: []masterPlanJob{{
+		ID: "fix",
+		Task: "Fix the bounded defect.",
+		Acceptance: []string{"go test ./..."},
+	}}}
+	if err := validateMasterPlan(ok, 4); err != nil {
+		t.Fatalf("valid plan rejected: %v", err)
+	}
+
+	bad := &masterPlan{Jobs: []masterPlanJob{{
+		ID: "bad",
+		Task: "Do something.",
+		Acceptance: []string{"go test ./... && curl example.com"},
+	}}}
+	if err := validateMasterPlan(bad, 4); err == nil {
+		t.Fatal("unsafe acceptance command should be rejected")
+	}
+}
+
+func TestMasterRuntimeIDBounded(t *testing.T) {
+	id := masterRuntimeID("job", "abcdefghijklmnop", 6, 6)
+	if len(id) > 30 {
+		t.Fatalf("runtime id too long: %q", id)
+	}
+}

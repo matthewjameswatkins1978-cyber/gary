@@ -109,9 +109,17 @@ func cmdRun() {
 	}
 }
 
-// RunJob executes a single coding job with retry logic.
-// It returns a RunResult without calling os.Exit.
+// RunJob executes a single coding job with retry logic using the normal implementer model.
 func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
+	return RunJobWithModel(cfg, job, prefix, cfg.ImplementerModel)
+}
+
+// RunJobWithModel executes a single coding job with an explicit worker model.
+func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jobs.RunResult {
+	if model == "" {
+		model = cfg.ImplementerModel
+	}
+
 	suffix := randomSuffix(8)
 	garyBranch := fmt.Sprintf("gary/%s-%s", job.ID, suffix)
 	runID := fmt.Sprintf("%s-%s", job.ID, suffix)
@@ -192,6 +200,8 @@ func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
 			GCSPath:      attemptGCSPath,
 			PrevGCSPath:  prevGCSPatch,
 			MachineType:  "e2-small",
+			Model:        model,
+			GitHubToken:  os.Getenv("GARY_GITHUB_TOKEN"),
 			MaxRunDurSec: 600,
 		}
 

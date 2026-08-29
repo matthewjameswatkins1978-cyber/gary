@@ -19,6 +19,7 @@ type Config struct {
 	GeminiAPIKey     string
 	ImplementerModel string
 	CloserModel      string
+	MasterModel      string
 	WorkerRuntime    string
 	MaxCostUSD       float64
 }
@@ -34,6 +35,7 @@ func Load() (*Config, error) {
 		GeminiAPIKey:     os.Getenv("GEMINI_API_KEY"),
 		ImplementerModel: os.Getenv("GARY_IMPLEMENTER_MODEL"),
 		CloserModel:      os.Getenv("GARY_CLOSER_MODEL"),
+		MasterModel:      os.Getenv("GARY_MASTER_MODEL"),
 		WorkerRuntime:    os.Getenv("GARY_WORKER_RUNTIME"),
 	}
 
@@ -47,6 +49,10 @@ func Load() (*Config, error) {
 
 	if c.CloserModel == "" {
 		c.CloserModel = "gemini-2.5-flash"
+	}
+
+	if c.MasterModel == "" {
+		c.MasterModel = "gemini-3.5-flash"
 	}
 
 	if c.WorkerRuntime == "" {
