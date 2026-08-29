@@ -117,7 +117,7 @@ func cmdMaster() {
 			Acceptance: []string{"python -m json.tool " + planPath},
 		}
 
-		planResult := RunJobWithModel(cfg, planJob, "yardmaster", cfg.MasterModel)
+		planResult := RunJobOnceWithModel(cfg, planJob, "yardmaster", cfg.MasterModel)
 		record := masterWaveRecord{Wave: wave, PlannerBranch: planResult.Branch}
 		if planResult.FinalStatus != "DONE" {
 			status.Waves = append(status.Waves, record)
