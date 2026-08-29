@@ -1,18 +1,6 @@
 {
-  "updated_at": "2026-08-29T10:13:23Z",
-  "yard_state": "running",
-  "active_jobs": [
-    {
-      "id": "mplan-resolve-google-a-1",
-      "batch_job_id": "gary-run-mplan-resolve-google-a-1-1-20260829-101323",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/resolve-ai.git",
-      "base_branch": "gary/master-resolve-google-a-d1fcf6",
-      "result_branch": "gary/mplan-resolve-google-a-1-0eac1942",
-      "started_at": "2026-08-29T10:13:21Z",
-      "attempts": 1
-    }
-  ],
+  "updated_at": "2026-08-29T10:18:09Z",
+  "yard_state": "parked",
   "recent_jobs": [
     {
       "id": "resolve-ai-final-audit",
@@ -65,6 +53,17 @@
       "finished_at": "2026-08-29T08:30:59Z",
       "attempts": 1,
       "est_cost": 0.024316096387916254,
+      "summary": "DONE"
+    },
+    {
+      "id": "mplan-resolve-google-a-1",
+      "batch_job_id": "gary-run-mplan-resolve-google-a-1-1-20260829-101323",
+      "state": "accepted",
+      "result_branch": "gary/mplan-resolve-google-a-1-0eac1942",
+      "result_commit": "6de0eae",
+      "finished_at": "2026-08-29T10:18:09Z",
+      "attempts": 1,
+      "est_cost": 0.04117817548276325,
       "summary": "DONE"
     }
   ]
