@@ -409,7 +409,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 					TotalCostEstimated:   totalCost,
 				}
 				saveResult(cfg, job, fmt.Sprintf("closer-%s", job.ID), garyBranch, commitSHA, true, duration, 0, attemptLimit, repairCount, escalated, closerUsed, "DONE")
-				writeLedger(cfg, result, model)
+				writeLedger(cfg, result, model+"+"+cfg.CloserModel)
 				return result
 			} else {
 				finalStatus = "FAILED"
