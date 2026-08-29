@@ -1,0 +1,14 @@
+{
+  "id": "yardmaster-smoke",
+  "state": "failed",
+  "updated_at": "2026-08-29T07:26:06Z",
+  "staging_branch": "gary/master-yardmaster-smoke-26b20f",
+  "wave": 1,
+  "error": "planner failed in wave 1: FAILED",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_branch": "gary/mplan-yardmaster-smoke-1-3e642488"
+    }
+  ]
+}
