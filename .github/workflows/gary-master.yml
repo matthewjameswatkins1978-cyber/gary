@@ -22,7 +22,6 @@ jobs:
       GARY_GCP_REGION: ${{ vars.GARY_GCP_REGION }}
       GARY_WIF_PROVIDER: ${{ vars.GARY_WIF_PROVIDER }}
       GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
-      GARY_MASTER_MODEL: ${{ vars.GARY_MASTER_MODEL }}
     steps:
       - name: Create short-lived GARY GitHub App token
         id: gary-app
