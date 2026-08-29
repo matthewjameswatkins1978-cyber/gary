@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
@@ -242,7 +243,12 @@ func buildMasterPlannerPrompt(m *masterManifest, brief, stagingBranch string, wa
 
 You are NOT the implementation worker. Read the compact repository snapshot and complete master brief below, then decide the smallest useful next wave of work.
 
-Rules:
+UNIVERSAL FOREMAN RULES
+=======================
+%s
+
+PLANNER-SPECIFIC RULES
+======================
 - You are the strategic planner, not an implementation or verification worker.
 - Do not install dependencies, run full test/lint/build suites, deploy services, or invoke billable external APIs during planning.
 - Planning is a single control-plane model call. You cannot run tools or tests. Use the supplied repository snapshot and existing evidence, then delegate execution and verification to child jobs.
@@ -286,7 +292,7 @@ PREVIOUS WAVE RESULTS:
 
 MASTER BRIEF:
 %s
-`, m.MaxJobsPerWave, m.ID, wave, m.Repo, stagingBranch, history, brief)
+`, doctrine.UniversalForemanRules, m.MaxJobsPerWave, m.ID, wave, m.Repo, stagingBranch, history, brief)
 }
 
 func readMasterPlan(repoURL, branch, planPath string, maxJobs int) (*masterPlan, error) {

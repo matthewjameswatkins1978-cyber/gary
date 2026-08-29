@@ -3,9 +3,10 @@ package batch
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 )
 
 func TestGenerateJobConfig(t *testing.T) {
@@ -361,6 +362,18 @@ func TestCodingJobAcceptancePytestStyle(t *testing.T) {
 	}
 }
 
+
+func TestCodingWorkerPromptIncludesUniversalRulesAndTask(t *testing.T) {
+	task := "Fix one bounded defect."
+	prompt := codingWorkerPrompt(task)
+	if !strings.Contains(prompt, doctrine.UniversalForemanRules) {
+		t.Fatal("worker prompt must include universal GARY rules")
+	}
+	if !strings.Contains(prompt, task) {
+		t.Fatal("worker prompt must preserve the bounded job")
+	}
+}
+
 func TestPromptTransportRoundTrip(t *testing.T) {
 	// B3: Task text must survive base64 encode → shell decode byte-for-byte.
 	specialTask := `Fix "process_items" so it handles:
@@ -384,18 +397,8 @@ func TestPromptTransportRoundTrip(t *testing.T) {
 		Acceptance: "echo ok",
 	}
 
-	// Build the full prompt the same way GenerateCodingJobConfig does
-	prompt := fmt.Sprintf(`You are a GARY implementation worker. Work only in this repository.
-
-Complete only this job:
-
-%s
-
-Do not redesign unrelated code.
-Do not modify tests unless explicitly required by the task.
-
-When the task is complete and checks pass, stop.
-Do not ask questions unless genuinely blocked.`, cfg.Task)
+	// Build the full prompt the same way GenerateCodingJobConfig does.
+	prompt := codingWorkerPrompt(cfg.Task)
 
 	promptB64 := base64.StdEncoding.EncodeToString([]byte(prompt))
 

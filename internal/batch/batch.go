@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 )
 
 // JobConfig holds the parameters needed to submit a Batch smoke job.
@@ -464,6 +466,21 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 	return strings.Join(parts, "\n")
 }
 
+func codingWorkerPrompt(task string) string {
+	return fmt.Sprintf(`You are a GARY implementation worker. Work only in this repository.
+
+UNIVERSAL GARY RULES
+====================
+%s
+
+JOB
+===
+%s
+
+Do not modify tests unless explicitly required by the job.
+Do not ask questions unless genuinely blocked.`, doctrine.UniversalForemanRules, task)
+}
+
 // GenerateCodingJobConfig produces the JSON config for a Batch coding job.
 func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 	if cfg.MachineType == "" {
@@ -476,18 +493,8 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 		cfg.MaxRunDurSec = 600
 	}
 
-	// Build the full prompt for the worker
-	prompt := fmt.Sprintf(`You are a GARY implementation worker. Work only in this repository.
-
-Complete only this job:
-
-%s
-
-Do not redesign unrelated code.
-Do not modify tests unless explicitly required by the task.
-
-When the task is complete and checks pass, stop.
-Do not ask questions unless genuinely blocked.`, cfg.Task)
+	// Build the full prompt for the worker.
+	prompt := codingWorkerPrompt(cfg.Task)
 
 	// Base64 encode prompt for safe shell transport
 	promptB64 := base64.StdEncoding.EncodeToString([]byte(prompt))
