@@ -1,0 +1,14 @@
+{
+  "id": "resolve-google-agentic",
+  "state": "failed",
+  "updated_at": "2026-08-29T08:49:26Z",
+  "staging_branch": "gary/master-resolve-google-a-aa245c",
+  "wave": 1,
+  "error": "planner failed in wave 1: FAILED",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_branch": "gary/mplan-resolve-google-a-1-666b02c6"
+    }
+  ]
+}
