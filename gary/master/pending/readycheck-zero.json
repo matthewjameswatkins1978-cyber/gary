@@ -1,0 +1,13 @@
+{
+  "id": "readycheck-zero",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
+  "base_branch": "gary/yardmaster-smoke-w1-j1-62378690",
+  "brief_path": "gary/master/pending/readycheck-zero.md",
+  "max_waves": 1,
+  "max_jobs_per_wave": 2,
+  "max_workers": 2,
+  "acceptance": [
+    "test -f docs/yardmaster-smoke2.txt",
+    "grep -q YARDMASTER_OK_2 docs/yardmaster-smoke2.txt"
+  ]
+}
