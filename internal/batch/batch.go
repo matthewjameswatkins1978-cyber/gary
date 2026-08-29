@@ -95,13 +95,6 @@ func GenerateJobConfig(cfg JobConfig) ([]byte, error) {
 
 	scriptText := "#!/bin/sh\necho \"" + cfg.Heartbeat + "\"\nexit 0\n"
 
-	variables := map[string]string{
-		"PREV_PATCH_GCS": cfg.PrevGCSPath,
-	}
-	if cfg.GitHubToken != "" {
-		variables["GARY_GITHUB_TOKEN"] = cfg.GitHubToken
-	}
-
 	config := map[string]interface{}{
 		"taskGroups": []map[string]interface{}{
 			{
@@ -498,6 +491,13 @@ Do not ask questions unless genuinely blocked.`, cfg.Task)
 	script := generateCodingWorkerScript(cfg)
 	// Inject the prompt as an environment variable at the top of the script
 	script = "export GARY_PROMPT_B64=\"" + promptB64 + "\"\n" + script
+
+	variables := map[string]string{
+		"PREV_PATCH_GCS": cfg.PrevGCSPath,
+	}
+	if cfg.GitHubToken != "" {
+		variables["GARY_GITHUB_TOKEN"] = cfg.GitHubToken
+	}
 
 	config := map[string]interface{}{
 		"taskGroups": []map[string]interface{}{
