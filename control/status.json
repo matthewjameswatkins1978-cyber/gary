@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-29T10:32:06Z",
+  "updated_at": "2026-08-29T10:33:53Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -14,13 +14,13 @@
     },
     {
       "id": "resolve-google-a-w1-j4",
-      "batch_job_id": "gary-run-resolve-google-a-w1-j4-2-20260829-102131",
+      "batch_job_id": "gary-run-resolve-google-a-w1-j4-3-20260829-103353",
       "state": "retrying",
       "repo": "https://github.com/matthewjameswatkins1978-cyber/resolve-ai.git",
       "base_branch": "gary/master-resolve-google-a-d1fcf6",
       "result_branch": "gary/resolve-google-a-w1-j4-2604bbe3",
       "started_at": "2026-08-29T10:18:11Z",
-      "attempts": 2
+      "attempts": 3
     },
     {
       "id": "resolve-google-a-w1-j3",
