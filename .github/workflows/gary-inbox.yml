@@ -61,53 +61,7 @@ jobs:
       - name: Apply worker cost guard
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("cmd/gary/run.go")
-          src = path.read_text()
-          for old, new in [
-              ("maxAttempts                = 3", "maxAttempts                = 2"),
-              ("maxAttempts, true, defaultWorkerMaxRunSec", "maxAttempts, false, defaultWorkerMaxRunSec"),
-              ('if attempt > 1 && lastPatch != "" {', 'if attempt > 1 && lastFailure != "" {'),
-          ]:
-              if old not in src:
-                  raise SystemExit(f"cost guard anchor missing: {old}")
-              src = src.replace(old, new)
-          loop_anchor = "\tfor attempt := 1; attempt <= attemptLimit; attempt++ {\n"
-          budget_block = '''\tfor attempt := 1; attempt <= attemptLimit; attempt++ {
-\t\tif cfg.MaxCostUSD > 0 {
-\t\t\testimated := EstimateJobCostForModel(model, attempt)
-\t\t\tallowed, reason := BudgetCheck(cfg.MaxCostUSD, 0, estimated)
-\t\t\tif !allowed {
-\t\t\t\tlogPrintln(prefix, "  BUDGET_STOPPED: "+reason)
-\t\t\t\tfinalStatus = "BUDGET_STOPPED"
-\t\t\t\tbreak
-\t\t\t}
-\t\t}
-'''
-          if loop_anchor not in src:
-              raise SystemExit("attempt loop anchor missing")
-          src = src.replace(loop_anchor, budget_block, 1)
-          repair_block = '''\t\tlogPrintln(prefix, "  GENERATING REPAIR BRIEF")
-\t\tbrief, err := generateRepairBrief(cfg, job.Task, acceptanceStr, lastPatch, lastAcceptance, "")
-\t\tif err != nil {
-\t\t\tlogPrint(prefix, "  repair brief failed: %v", err)
-\t\t\tlastFailure = fmt.Sprintf("Repair brief generation failed: %v\\n\\nPrevious failure:\\n%s", err, lastFailure)
-\t\t\tcontinue
-\t\t}
-\t\trepairCount++
-\t\tlogPrint(prefix, "  Cause: %s", brief.Cause)
-\t\tlogPrint(prefix, "  Next:  %s", brief.NextAction)
-
-\t\tlastFailure = formatRepairBrief(brief)
-'''
-          if repair_block not in src:
-              raise SystemExit("repair brief block anchor missing")
-          src = src.replace(repair_block, '\t\tlogPrintln(prefix, "  RETRYING WITH FAILURE EVIDENCE")\n', 1)
-          path.write_text(src)
-          PY
-          grep -q 'maxAttempts                = 2' cmd/gary/run.go
-          grep -q 'RETRYING WITH FAILURE EVIDENCE' cmd/gary/run.go
+          python3 scripts/apply_runtime_cost_guard.py
           go test ./cmd/gary ./internal/...
 
       - name: Dispatch pending jobs
