@@ -109,7 +109,7 @@ func cmdMaster() {
 			ID:         masterRuntimeID("plan", manifest.ID, wave, 0),
 			Repo:       manifest.Repo,
 			BaseBranch: stagingBranch,
-			Task:       buildMasterPlannerPrompt(manifest, brief, wave, string(history), planPath),
+			Task:       buildMasterPlannerPrompt(manifest, brief, stagingBranch, wave, string(history), planPath),
 			Acceptance: []string{"python -m json.tool " + planPath},
 		}
 
@@ -240,7 +240,7 @@ func loadMasterManifest(path string) (*masterManifest, string, error) {
 	return &m, string(brief), nil
 }
 
-func buildMasterPlannerPrompt(m *masterManifest, brief string, wave int, history, planPath string) string {
+func buildMasterPlannerPrompt(m *masterManifest, brief, stagingBranch string, wave int, history, planPath string) string {
 	return fmt.Sprintf(`You are GARY Yardmaster, the planning and supervision layer above bounded implementation workers.
 
 You are NOT the implementation worker. Inspect the repository at the current branch, read the complete master brief below, and decide the smallest useful next wave of work.
@@ -279,7 +279,7 @@ PREVIOUS WAVE RESULTS:
 
 MASTER BRIEF:
 %s
-`, m.MaxJobsPerWave, planPath, m.ID, wave, m.Repo, m.BaseBranch, history, brief)
+`, m.MaxJobsPerWave, planPath, m.ID, wave, m.Repo, stagingBranch, history, brief)
 }
 
 func readMasterPlan(repoURL, branch, planPath string, maxJobs int) (*masterPlan, error) {
