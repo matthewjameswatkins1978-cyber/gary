@@ -78,4 +78,9 @@ jobs:
           mkdir -p gary/master/status
           git add -A gary/master/status
           git diff --cached --quiet || git commit -m "GARY: update master status"
-          git push
+          # A master run can outlive unrelated commits to master. Rebase the
+          # local status/snapshot commits before publishing instead of failing
+          # with a non-fast-forward push.
+          git fetch origin master
+          git rebase origin/master
+          git push origin HEAD:master
