@@ -1,6 +1,16 @@
 {
-  "updated_at": "2026-08-29T08:26:07Z",
-  "yard_state": "parked",
+  "updated_at": "2026-08-29T08:28:04Z",
+  "yard_state": "running",
+  "active_jobs": [
+    {
+      "id": "mplan-resolve-readyche-1",
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/resolve-ai.git",
+      "base_branch": "gary/master-resolve-readyche-15a865",
+      "result_branch": "gary/mplan-resolve-readyche-1-a1c030e8",
+      "started_at": "2026-08-29T08:28:04Z"
+    }
+  ],
   "recent_jobs": [
     {
       "id": "resolve-ai-final-audit",
