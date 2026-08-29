@@ -22,6 +22,7 @@ jobs:
       GARY_GCP_REGION: ${{ vars.GARY_GCP_REGION }}
       GARY_WIF_PROVIDER: ${{ vars.GARY_WIF_PROVIDER }}
       GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+      GARY_MAX_COST_USD: "0.06"
     steps:
       - name: Create short-lived GARY GitHub App token
         id: gary-app
@@ -53,6 +54,13 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      - name: Apply emergency worker cost guard
+        run: |
+          # Temporary runtime clamp until the retry classifier lands in run.go.
+          # Ordinary worker jobs get at most two paid model attempts.
+          sed -i 's/maxAttempts                = 3/maxAttempts                = 2/' cmd/gary/run.go
+          grep -q 'maxAttempts                = 2' cmd/gary/run.go
+
       - name: Dispatch changed master jobs
         env:
           GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token }}
@@ -73,6 +81,7 @@ jobs:
       - name: Record master status
         if: always()
         run: |
+          git checkout -- cmd/gary/run.go
           git config user.name "GARY master"
           git config user.email "gary@agent-yard.local"
           mkdir -p gary/master/status
