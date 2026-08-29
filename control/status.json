@@ -1,18 +1,6 @@
 {
-  "updated_at": "2026-08-29T07:55:36Z",
-  "yard_state": "running",
-  "active_jobs": [
-    {
-      "id": "yardmaster-smoke-w1-j1",
-      "batch_job_id": "gary-run-yardmaster-smoke-w1-j1-1-20260829-075536",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
-      "base_branch": "gary/master-yardmaster-smoke-a7351d",
-      "result_branch": "gary/yardmaster-smoke-w1-j1-62378690",
-      "started_at": "2026-08-29T07:55:31Z",
-      "attempts": 1
-    }
-  ],
+  "updated_at": "2026-08-29T08:01:16Z",
+  "yard_state": "parked",
   "recent_jobs": [
     {
       "id": "resolve-ai-final-audit",
@@ -32,6 +20,17 @@
       "finished_at": "2026-08-29T07:55:30Z",
       "attempts": 1,
       "est_cost": 0.024260923935919006,
+      "summary": "DONE"
+    },
+    {
+      "id": "yardmaster-smoke-w1-j1",
+      "batch_job_id": "gary-run-yardmaster-smoke-w1-j1-1-20260829-075536",
+      "state": "accepted",
+      "result_branch": "gary/yardmaster-smoke-w1-j1-62378690",
+      "result_commit": "60c3d70",
+      "finished_at": "2026-08-29T08:01:16Z",
+      "attempts": 1,
+      "est_cost": 0.025292123034188003,
       "summary": "DONE"
     }
   ]
