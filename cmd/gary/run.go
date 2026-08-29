@@ -354,8 +354,8 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		os.RemoveAll(attemptDir)
 
 		progressState := "unknown"
-		if lastAcceptance != "" {
-			improved := checkProgress(progressHistory, lastAcceptance)
+		if acceptOutput != "" {
+			improved := checkProgress(progressHistory, acceptOutput)
 			if improved {
 				lowProgressStreak = 0
 				progressState = "improving"
@@ -365,20 +365,24 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				progressState = "stalled"
 				logPrint(prefix, "  LOW PROGRESS — stalled evidence (%d/%d)", lowProgressStreak, maxLowProgressAttempts)
 			}
-			progressHistory = append(progressHistory, summarizeAcceptance(lastAcceptance))
+			progressHistory = append(progressHistory, summarizeAcceptance(acceptOutput))
 		} else {
 			progressState = "unknown-no-acceptance-evidence"
 			logPrintln(prefix, "  NO ACCEPTANCE EVIDENCE — not counting this as low progress")
 		}
 		lastProgressState = progressState
 
-		if (lastAcceptance != "" || lastPatch != "") && cfg.GeminiAPIKey != "" && cfg.CloserModel != "" {
+		if (acceptOutput != "" || patchData != "") && cfg.GeminiAPIKey != "" && cfg.CloserModel != "" {
+			patchForReview := patchData
+			if patchForReview == "" {
+				patchForReview = lastPatch
+			}
 			brief, briefErr := generateRepairBrief(
 				cfg,
 				job.Task,
 				acceptanceStr,
-				lastPatch,
-				lastAcceptance,
+				patchForReview,
+				acceptOutput,
 				lastFailure,
 				progressState,
 				lastRepairBrief,
