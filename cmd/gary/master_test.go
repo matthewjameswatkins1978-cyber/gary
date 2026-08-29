@@ -75,11 +75,13 @@ func TestMasterRuntimeIDBounded(t *testing.T) {
 
 func TestMasterPlannerPromptDelegatesHeavyWork(t *testing.T) {
 	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
-	prompt := buildMasterPlannerPrompt(m, "finish it", "stage", 1, "[]", ".gary/plan.json")
+	prompt := buildMasterPlannerPrompt(m, "finish it", "stage", 1, "[]")
 	for _, required := range []string{
 		"strategic planner, not an implementation or verification worker",
 		"Do not install dependencies",
 		"delegate execution and verification to child jobs",
+		"single control-plane model call",
+		"Return only the JSON object",
 	} {
 		if !strings.Contains(prompt, required) {
 			t.Fatalf("planner prompt missing %q", required)
@@ -89,7 +91,7 @@ func TestMasterPlannerPromptDelegatesHeavyWork(t *testing.T) {
 
 func TestMasterPlannerPromptDefinesParallelIsolationAndSafeAcceptance(t *testing.T) {
 	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
-	prompt := buildMasterPlannerPrompt(m, "P0 before P1", "stage", 1, "[]", ".gary/plan.json")
+	prompt := buildMasterPlannerPrompt(m, "P0 before P1", "stage", 1, "[]")
 	for _, required := range []string{
 		"fresh isolated clone",
 		"Sibling jobs do not share virtualenvs",
