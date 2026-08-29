@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-29T14:49:31Z",
+  "updated_at": "2026-08-29T16:19:44Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -11,6 +11,14 @@
       "result_branch": "gary/mplan-resolve-google-a-2-56d76b26",
       "started_at": "2026-08-29T10:58:38Z",
       "attempts": 1
+    },
+    {
+      "id": "worker-canary-r2",
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
+      "base_branch": "main",
+      "result_branch": "gary/worker-canary-r2-e066dcdd",
+      "started_at": "2026-08-29T16:19:44Z"
     }
   ],
   "recent_jobs": [
