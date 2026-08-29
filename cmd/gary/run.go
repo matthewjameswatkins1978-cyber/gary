@@ -157,13 +157,16 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		if !allowed {
 			logPrintln(prefix, "  BUDGET_STOPPED: "+reason)
 			duration := time.Since(submittedAt)
-			return jobs.RunResult{
+			result := jobs.RunResult{
 				JobID:              job.ID,
+				Branch:             garyBranch,
 				FinalStatus:        "BUDGET_STOPPED",
 				DurationSecs:       duration.Seconds(),
 				Attempts:           0,
 				TotalCostEstimated: 0,
 			}
+			snapshotJobComplete(job.ID, result)
+			return result
 		}
 	}
 
