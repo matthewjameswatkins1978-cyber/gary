@@ -1,0 +1,16 @@
+{
+  "id": "r1-planner-canary-v4",
+  "state": "done",
+  "updated_at": "2026-08-29T14:21:47Z",
+  "staging_branch": "gary/master-r1-planner-canar-bc066c",
+  "wave": 1,
+  "summary": "The Reliability R1 planner canary is satisfied: README.md describes Reliability R1 direct control-plane planning and docs/reliability-r1.md exists.",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 5.606134569,
+      "plan_summary": "The Reliability R1 planner canary is satisfied: README.md describes Reliability R1 direct control-plane planning and docs/reliability-r1.md exists."
+    }
+  ]
+}
