@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-29T16:19:46Z",
+  "updated_at": "2026-08-29T16:24:12Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -10,16 +10,6 @@
       "base_branch": "gary/master-resolve-google-a-d1fcf6",
       "result_branch": "gary/mplan-resolve-google-a-2-56d76b26",
       "started_at": "2026-08-29T10:58:38Z",
-      "attempts": 1
-    },
-    {
-      "id": "worker-canary-r2",
-      "batch_job_id": "gary-run-worker-canary-r2-1-20260829-161946",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
-      "base_branch": "main",
-      "result_branch": "gary/worker-canary-r2-e066dcdd",
-      "started_at": "2026-08-29T16:19:44Z",
       "attempts": 1
     }
   ],
@@ -141,6 +131,17 @@
       "attempts": 2,
       "est_cost": 0.049561260651521756,
       "summary": "FAILED"
+    },
+    {
+      "id": "worker-canary-r2",
+      "batch_job_id": "gary-run-worker-canary-r2-1-20260829-161946",
+      "state": "accepted",
+      "result_branch": "gary/worker-canary-r2-e066dcdd",
+      "result_commit": "9983402",
+      "finished_at": "2026-08-29T16:24:12Z",
+      "attempts": 1,
+      "est_cost": 0.024851094295969253,
+      "summary": "DONE"
     }
   ]
 }
