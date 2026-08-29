@@ -1,6 +1,16 @@
 {
-  "updated_at": "2026-08-29T10:18:09Z",
-  "yard_state": "parked",
+  "updated_at": "2026-08-29T10:18:11Z",
+  "yard_state": "running",
+  "active_jobs": [
+    {
+      "id": "resolve-google-a-w1-j1",
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/resolve-ai.git",
+      "base_branch": "gary/master-resolve-google-a-d1fcf6",
+      "result_branch": "gary/resolve-google-a-w1-j1-c6f56161",
+      "started_at": "2026-08-29T10:18:11Z"
+    }
+  ],
   "recent_jobs": [
     {
       "id": "resolve-ai-final-audit",
