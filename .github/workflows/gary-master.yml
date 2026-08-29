@@ -23,6 +23,7 @@ jobs:
       GARY_WIF_PROVIDER: ${{ vars.GARY_WIF_PROVIDER }}
       GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
       GARY_MAX_COST_USD: "0.06"
+      GARY_MAX_WORKERS: "3"
     steps:
       - name: Create short-lived GARY GitHub App token
         id: gary-app
@@ -44,7 +45,11 @@ jobs:
 
       - name: Require GCP configuration
         run: |
-          test -n "$GARY_GCP_PROJECT" && test -n "$GARY_GCP_REGION" && test -n "$GARY_WIF_PROVIDER" && test -n "$GARY_DISPATCH_SERVICE_ACCOUNT"
+          set -euo pipefail
+          test -n "$GARY_GCP_PROJECT"
+          test -n "$GARY_GCP_REGION"
+          test -n "$GARY_WIF_PROVIDER"
+          test -n "$GARY_DISPATCH_SERVICE_ACCOUNT"
 
       - name: Authenticate to Google Cloud with OIDC
         uses: google-github-actions/auth@v2
@@ -54,19 +59,92 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Apply emergency worker cost guard
+      - name: Apply worker cost guard
         run: |
-          # Temporary runtime clamp until the retry classifier lands in run.go.
-          # Ordinary worker jobs get at most two paid model attempts.
-          sed -i 's/maxAttempts                = 3/maxAttempts                = 2/' cmd/gary/run.go
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("cmd/gary/run.go")
+          src = path.read_text()
+
+          replacements = [
+              (
+                  "maxAttempts                = 3",
+                  "maxAttempts                = 2",
+              ),
+              (
+                  "maxAttempts, true, defaultWorkerMaxRunSec",
+                  "maxAttempts, false, defaultWorkerMaxRunSec",
+              ),
+              (
+                  'if attempt > 1 && lastPatch != "" {',
+                  'if attempt > 1 && lastFailure != "" {',
+              ),
+          ]
+          for old, new in replacements:
+              if old not in src:
+                  raise SystemExit(f"cost guard anchor missing: {old}")
+              src = src.replace(old, new)
+
+          loop_anchor = "\tfor attempt := 1; attempt <= attemptLimit; attempt++ {\n"
+          budget_block = '''\tfor attempt := 1; attempt <= attemptLimit; attempt++ {
+\t\tif cfg.MaxCostUSD > 0 {
+\t\t\testimated := EstimateJobCostForModel(model, attempt)
+\t\t\tallowed, reason := BudgetCheck(cfg.MaxCostUSD, 0, estimated)
+\t\t\tif !allowed {
+\t\t\t\tlogPrintln(prefix, "  BUDGET_STOPPED: "+reason)
+\t\t\t\tfinalStatus = "BUDGET_STOPPED"
+\t\t\t\tbreak
+\t\t\t}
+\t\t}
+'''
+          if loop_anchor not in src:
+              raise SystemExit("attempt loop anchor missing")
+          src = src.replace(loop_anchor, budget_block, 1)
+
+          repair_block = '''\t\tlogPrintln(prefix, "  GENERATING REPAIR BRIEF")
+\t\tbrief, err := generateRepairBrief(cfg, job.Task, acceptanceStr, lastPatch, lastAcceptance, "")
+\t\tif err != nil {
+\t\t\tlogPrint(prefix, "  repair brief failed: %v", err)
+\t\t\tlastFailure = fmt.Sprintf("Repair brief generation failed: %v\\n\\nPrevious failure:\\n%s", err, lastFailure)
+\t\t\tcontinue
+\t\t}
+\t\trepairCount++
+\t\tlogPrint(prefix, "  Cause: %s", brief.Cause)
+\t\tlogPrint(prefix, "  Next:  %s", brief.NextAction)
+
+\t\tlastFailure = formatRepairBrief(brief)
+'''
+          if repair_block not in src:
+              raise SystemExit("repair brief block anchor missing")
+          src = src.replace(
+              repair_block,
+              '\t\tlogPrintln(prefix, "  RETRYING WITH FAILURE EVIDENCE")\n',
+              1,
+          )
+
+          path.write_text(src)
+          PY
+
           grep -q 'maxAttempts                = 2' cmd/gary/run.go
+          test "$(grep -c 'maxAttempts, false, defaultWorkerMaxRunSec' cmd/gary/run.go)" -ge 2
+          grep -q 'if attempt > 1 && lastFailure != ""' cmd/gary/run.go
+          grep -q 'RETRYING WITH FAILURE EVIDENCE' cmd/gary/run.go
+          if grep -q 'GENERATING REPAIR BRIEF' cmd/gary/run.go; then
+            echo "Paid repair-brief path still active" >&2
+            exit 1
+          fi
+          go test ./cmd/gary ./internal/...
 
       - name: Dispatch changed master jobs
         env:
-          GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token }}
+          GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token || github.token }}
           GARY_PUSH_BEFORE: ${{ github.event.before }}
           GARY_PUSH_AFTER: ${{ github.sha }}
         run: |
+          set -euo pipefail
+          test -n "$GARY_GITHUB_TOKEN"
           mapfile -t manifests < <(git diff --name-only "$GARY_PUSH_BEFORE" "$GARY_PUSH_AFTER" -- 'gary/master/pending/*.json')
           if [ ${#manifests[@]} -eq 0 ]; then
             echo "No changed master manifests."
@@ -81,15 +159,13 @@ jobs:
       - name: Record master status
         if: always()
         run: |
+          set -euo pipefail
           git checkout -- cmd/gary/run.go
           git config user.name "GARY master"
           git config user.email "gary@agent-yard.local"
           mkdir -p gary/master/status
           git add -A gary/master/status
           git diff --cached --quiet || git commit -m "GARY: update master status"
-          # A master run can outlive unrelated commits to master. Rebase the
-          # local status/snapshot commits before publishing instead of failing
-          # with a non-fast-forward push.
           git fetch origin master
           git rebase origin/master
           git push origin HEAD:master

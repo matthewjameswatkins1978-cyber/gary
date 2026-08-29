@@ -22,8 +22,21 @@ jobs:
       GARY_GCP_REGION: ${{ vars.GARY_GCP_REGION }}
       GARY_WIF_PROVIDER: ${{ vars.GARY_WIF_PROVIDER }}
       GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+      GARY_MAX_COST_USD: "0.06"
     steps:
+      - name: Create short-lived GARY GitHub App token
+        id: gary-app
+        if: vars.GARY_GITHUB_APP_ID != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.GARY_GITHUB_APP_ID }}
+          private-key: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
       - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.gary-app.outputs.token || github.token }}
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
@@ -31,10 +44,11 @@ jobs:
 
       - name: Require GitHub OIDC configuration
         run: |
-          test -n "$GARY_GCP_PROJECT" && test -n "$GARY_GCP_REGION" && test -n "$GARY_WIF_PROVIDER" && test -n "$GARY_DISPATCH_SERVICE_ACCOUNT" || {
-            echo "GARY OIDC dispatch is not configured. Complete docs/github-oidc-setup.md; do not add a service-account key."
-            exit 1
-          }
+          set -euo pipefail
+          test -n "$GARY_GCP_PROJECT"
+          test -n "$GARY_GCP_REGION"
+          test -n "$GARY_WIF_PROVIDER"
+          test -n "$GARY_DISPATCH_SERVICE_ACCOUNT"
 
       - name: Authenticate to Google Cloud with OIDC
         uses: google-github-actions/auth@v2
@@ -44,19 +58,81 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      - name: Apply worker cost guard
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("cmd/gary/run.go")
+          src = path.read_text()
+          for old, new in [
+              ("maxAttempts                = 3", "maxAttempts                = 2"),
+              ("maxAttempts, true, defaultWorkerMaxRunSec", "maxAttempts, false, defaultWorkerMaxRunSec"),
+              ('if attempt > 1 && lastPatch != "" {', 'if attempt > 1 && lastFailure != "" {'),
+          ]:
+              if old not in src:
+                  raise SystemExit(f"cost guard anchor missing: {old}")
+              src = src.replace(old, new)
+          loop_anchor = "\tfor attempt := 1; attempt <= attemptLimit; attempt++ {\n"
+          budget_block = '''\tfor attempt := 1; attempt <= attemptLimit; attempt++ {
+\t\tif cfg.MaxCostUSD > 0 {
+\t\t\testimated := EstimateJobCostForModel(model, attempt)
+\t\t\tallowed, reason := BudgetCheck(cfg.MaxCostUSD, 0, estimated)
+\t\t\tif !allowed {
+\t\t\t\tlogPrintln(prefix, "  BUDGET_STOPPED: "+reason)
+\t\t\t\tfinalStatus = "BUDGET_STOPPED"
+\t\t\t\tbreak
+\t\t\t}
+\t\t}
+'''
+          if loop_anchor not in src:
+              raise SystemExit("attempt loop anchor missing")
+          src = src.replace(loop_anchor, budget_block, 1)
+          repair_block = '''\t\tlogPrintln(prefix, "  GENERATING REPAIR BRIEF")
+\t\tbrief, err := generateRepairBrief(cfg, job.Task, acceptanceStr, lastPatch, lastAcceptance, "")
+\t\tif err != nil {
+\t\t\tlogPrint(prefix, "  repair brief failed: %v", err)
+\t\t\tlastFailure = fmt.Sprintf("Repair brief generation failed: %v\\n\\nPrevious failure:\\n%s", err, lastFailure)
+\t\t\tcontinue
+\t\t}
+\t\trepairCount++
+\t\tlogPrint(prefix, "  Cause: %s", brief.Cause)
+\t\tlogPrint(prefix, "  Next:  %s", brief.NextAction)
+
+\t\tlastFailure = formatRepairBrief(brief)
+'''
+          if repair_block not in src:
+              raise SystemExit("repair brief block anchor missing")
+          src = src.replace(repair_block, '\t\tlogPrintln(prefix, "  RETRYING WITH FAILURE EVIDENCE")\n', 1)
+          path.write_text(src)
+          PY
+          grep -q 'maxAttempts                = 2' cmd/gary/run.go
+          grep -q 'RETRYING WITH FAILURE EVIDENCE' cmd/gary/run.go
+          go test ./cmd/gary ./internal/...
+
       - name: Dispatch pending jobs
         id: dispatch
         continue-on-error: true
-        run: go run ./cmd/gary inbox dispatch gary/inbox/pending
+        env:
+          GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token }}
+        run: |
+          set -euo pipefail
+          test -n "$GARY_GITHUB_TOKEN"
+          go run ./cmd/gary inbox dispatch gary/inbox/pending
 
       - name: Record GARY status
         if: always()
         run: |
+          set -euo pipefail
+          git checkout -- cmd/gary/run.go
           git config user.name "GARY inbox"
           git config user.email "gary@agent-yard.local"
-          git add gary/inbox/status
+          mkdir -p gary/inbox/status
+          git add -A gary/inbox/status
           git diff --cached --quiet || git commit -m "GARY inbox status"
-          git push
+          git fetch origin master
+          git rebase origin/master
+          git push origin HEAD:master
 
       - name: Propagate dispatch failure
         if: steps.dispatch.outcome == 'failure'
