@@ -114,6 +114,12 @@ jobs:
           app-id: ${{ vars.GARY_GITHUB_APP_ID }}
           private-key: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          repositories: |
+            gary
+            judgement-call
+          repositories: |
+            gary
+            judgement-call
 
       - name: Record master status
         if: always()
@@ -123,6 +129,8 @@ jobs:
           set -euo pipefail
           test -n "$GARY_GITHUB_TOKEN"
           github_auth_header="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GARY_GITHUB_TOKEN" | base64 -w0)"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git config --local http.https://github.com/.extraheader "$github_auth_header"
           git config user.name "GARY master"
           git config user.email "gary@agent-yard.local"
           status_snapshot="$(mktemp -d)"
@@ -144,7 +152,7 @@ jobs:
           # the newer valid UTC timestamp; never resolve that race by taking
           # the local file blindly.
           for attempt in 1 2 3; do
-            git -c "http.https://github.com/.extraheader=$github_auth_header" fetch origin master
+            git fetch origin master
             git clean -fd -- gary/master/status
             git reset --hard origin/master
             publish_paths=()
@@ -187,7 +195,7 @@ jobs:
               exit 0
             fi
             git commit -m "GARY: update master status"
-            if git -c "http.https://github.com/.extraheader=$github_auth_header" push origin HEAD:master; then
+            if git push origin HEAD:master; then
               exit 0
             fi
             echo "Master moved during status publish; retrying ($attempt/3)." >&2

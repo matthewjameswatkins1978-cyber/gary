@@ -146,7 +146,7 @@ func yardmasterRequestBody(prompt string) map[string]interface{} {
 				"thinkingLevel": "MEDIUM",
 			},
 			"responseMimeType": "application/json",
-			"maxOutputTokens":  4096,
+			"maxOutputTokens":  8192,
 		},
 	}
 }
