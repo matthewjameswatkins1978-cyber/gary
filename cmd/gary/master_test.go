@@ -81,15 +81,21 @@ func TestMasterRuntimeIDBounded(t *testing.T) {
 }
 
 
-func TestMasterPlannerPromptIncludesUniversalRulesAndJobSpecificBrief(t *testing.T) {
+func TestMasterPlannerPromptIncludesCorrectRoleUniversalRulesAndJobBrief(t *testing.T) {
 	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
 	brief := "EXTRA JOB RULE: preserve the public API."
 	prompt := buildMasterPlannerPrompt(m, brief, "stage", 1, "[]")
-	if !strings.Contains(prompt, doctrine.UniversalForemanRules) {
-		t.Fatal("planner prompt must include the universal foreman rules")
+	if !strings.Contains(prompt, doctrine.YardmasterRoleRules) {
+		t.Fatal("planner prompt must include the Yardmaster role rules")
+	}
+	if strings.Contains(prompt, doctrine.WorkerRoleRules) {
+		t.Fatal("planner prompt must not include the Worker role rules")
+	}
+	if !strings.Contains(prompt, doctrine.UniversalRules) {
+		t.Fatal("planner prompt must include universal GARY rules")
 	}
 	if !strings.Contains(prompt, brief) {
-		t.Fatal("planner prompt must preserve job-specific instructions alongside universal rules")
+		t.Fatal("planner prompt must preserve job-specific instructions")
 	}
 }
 
