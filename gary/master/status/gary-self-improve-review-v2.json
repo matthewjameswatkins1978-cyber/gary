@@ -1,0 +1,14 @@
+{
+  "id": "gary-self-improve-review-v2",
+  "state": "failed",
+  "updated_at": "2026-08-29T13:20:04Z",
+  "staging_branch": "gary/master-gary-self-improv-294755",
+  "wave": 1,
+  "error": "planner failed in wave 1: FAILED",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_branch": "gary/mplan-gary-self-improv-1-c91ffe76"
+    }
+  ]
+}
