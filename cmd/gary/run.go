@@ -111,11 +111,22 @@ func cmdRun() {
 
 // RunJob executes a single coding job with retry logic using the normal implementer model.
 func RunJob(cfg *config.Config, job *jobs.Job, prefix string) jobs.RunResult {
-	return RunJobWithModel(cfg, job, prefix, cfg.ImplementerModel)
+	return runJobWithModelAttempts(cfg, job, prefix, cfg.ImplementerModel, maxAttempts, true)
 }
 
-// RunJobWithModel executes a single coding job with an explicit worker model.
+// RunJobWithModel executes a coding job with the normal repair loop and an explicit model.
 func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jobs.RunResult {
+	return runJobWithModelAttempts(cfg, job, prefix, model, maxAttempts, true)
+}
+
+// RunJobOnceWithModel executes one Batch attempt only. Gemini CLI already has its own
+// transport retries, so Yardmaster planning should fail fast rather than launch
+// repeated implementation-repair cycles for a planning request.
+func RunJobOnceWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jobs.RunResult {
+	return runJobWithModelAttempts(cfg, job, prefix, model, 1, false)
+}
+
+func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model string, attemptLimit int, allowCloser bool) jobs.RunResult {
 	if model == "" {
 		model = cfg.ImplementerModel
 	}
@@ -163,7 +174,7 @@ func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jo
 	closerUsed := false
 	finalStatus := "FAILED"
 
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
+	for attempt := 1; attempt <= attemptLimit; attempt++ {
 		attemptTask := job.Task
 		if attempt > 1 && lastPatch != "" {
 			attemptTask = job.Task + "\n\n## PREVIOUS ATTEMPT FAILED\n\n" + lastFailure
@@ -314,7 +325,7 @@ func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jo
 			improved := checkProgress(progressHistory, lastAcceptance)
 			if !improved {
 				logPrintln(prefix, "  LOW PROGRESS — no meaningful change")
-				if attempt == maxAttempts {
+				if attempt == attemptLimit {
 					escalated = true
 					break
 				}
@@ -338,7 +349,7 @@ func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jo
 		lastFailure = formatRepairBrief(brief)
 	}
 
-	if escalated {
+	if escalated && allowCloser {
 		logPrintln(prefix, "ESCALATING TO CLOSER")
 		closerDir, err := os.MkdirTemp("", fmt.Sprintf("gary-%s-closer-*", job.ID))
 		if err != nil {
@@ -360,7 +371,7 @@ func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jo
 				closerUsed = true
 				finalStatus = "DONE"
 
-				modelCost := estimateModelCost(maxAttempts)
+				modelCost := estimateModelCost(attemptLimit)
 				computeCost := duration.Seconds() * 0.00000575
 				totalCost := modelCost + computeCost
 
@@ -370,7 +381,7 @@ func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jo
 					CommitSHA:            commitSHA,
 					Accepted:             true,
 					DurationSecs:         duration.Seconds(),
-					Attempts:             maxAttempts,
+					Attempts:             attemptLimit,
 					RepairCount:          repairCount,
 					Escalated:            escalated,
 					CloserUsed:           closerUsed,
@@ -379,7 +390,7 @@ func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jo
 					ComputeCostEstimated: computeCost,
 					TotalCostEstimated:   totalCost,
 				}
-				saveResult(cfg, job, fmt.Sprintf("closer-%s", job.ID), garyBranch, commitSHA, true, duration, 0, maxAttempts, repairCount, escalated, closerUsed, "DONE")
+				saveResult(cfg, job, fmt.Sprintf("closer-%s", job.ID), garyBranch, commitSHA, true, duration, 0, attemptLimit, repairCount, escalated, closerUsed, "DONE")
 				writeLedger(cfg, result)
 				return result
 			} else {
@@ -394,7 +405,7 @@ func RunJobWithModel(cfg *config.Config, job *jobs.Job, prefix, model string) jo
 	computeCost := duration.Seconds() * 0.00000575
 	totalCost := modelCost + computeCost
 
-	saveResult(cfg, job, "", garyBranch, "", false, duration, 0, maxAttempts, repairCount, escalated, closerUsed, finalStatus)
+	saveResult(cfg, job, "", garyBranch, "", false, duration, 0, attemptLimit, repairCount, escalated, closerUsed, finalStatus)
 	result := jobs.RunResult{
 		JobID:                job.ID,
 		Branch:               garyBranch,
