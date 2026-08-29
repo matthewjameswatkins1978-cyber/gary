@@ -102,7 +102,7 @@ func TestMasterPlannerPromptDefinesParallelIsolationAndSafeAcceptance(t *testing
 		"Sibling jobs do not share virtualenvs",
 		"If P0/blocker verification is still unresolved",
 		"Acceptance commands are executed directly without a shell",
-		"Never put quotes, brackets",
+		"Never put quotes, parentheses",
 		".venv/bin/python -m pytest -q",
 	} {
 		if !strings.Contains(prompt, required) {

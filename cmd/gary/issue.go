@@ -19,10 +19,11 @@ import (
 )
 
 const (
-	issueCommandTitle   = "GARY COMMAND"
-	trustedGitHubUser   = "matthewjameswatkins1978-cyber"
-	trustedGitHubUserID = 249632099
-	trustedGaryRepo     = "matthewjameswatkins1978-cyber/gary"
+	issueCommandTitle        = "GARY COMMAND"
+	trustedGitHubUser        = "matthewjameswatkins1978-cyber"
+	trustedGitHubUserID      = 249632099
+	trustedGaryRepo          = "matthewjameswatkins1978-cyber/gary"
+	historicalJC01BatchJobID = "gary-run-jc-01-3-20260825-063356"
 )
 
 var garyBatchJobID = regexp.MustCompile(`^gary-(?:run|closer|smoke|benchmark)-[a-z0-9][a-z0-9-]{0,61}$`)
@@ -202,14 +203,15 @@ func validateIssueCommand(command *issueCommand) error {
 		if command.Job == nil {
 			return errors.New("command requires a bounded job manifest")
 		}
-		if err := validateIssueJob(command.Job); err != nil {
+		allowHistoricalJC01 := command.Command == "recover" && command.BatchJobID == historicalJC01BatchJobID && command.Job.ID == "jc-01"
+		if err := validateIssueJob(command.Job, allowHistoricalJC01); err != nil {
 			return err
 		}
 		if command.Command == "recover" {
 			if !garyBatchJobID.MatchString(command.BatchJobID) {
 				return errors.New("recover requires one exact GARY batch_job_id")
 			}
-			if protectedJob(command.BatchJobID) {
+			if protectedJob(command.BatchJobID) && command.BatchJobID != historicalJC01BatchJobID {
 				return errors.New("JC-01 and JC-02 are protected from control-plane recovery")
 			}
 		} else if command.BatchJobID != "" {
@@ -228,8 +230,8 @@ func protectedJob(id string) bool {
 	return strings.Contains(id, "-jc-01-") || strings.Contains(id, "-jc-02-")
 }
 
-func validateIssueJob(job *issueJob) error {
-	if job.ID == "jc-01" || job.ID == "jc-02" {
+func validateIssueJob(job *issueJob, allowHistoricalJC01 bool) error {
+	if (job.ID == "jc-01" && !allowHistoricalJC01) || job.ID == "jc-02" {
 		return errors.New("JC-01 and JC-02 are protected from issue submission")
 	}
 	acceptance, err := issueAcceptance(job.Acceptance)
@@ -240,15 +242,15 @@ func validateIssueJob(job *issueJob) error {
 }
 
 func issueAcceptance(profiles []string) ([]string, error) {
-	if len(profiles) == 0 || len(profiles) > 3 {
-		return nil, errors.New("acceptance must contain one to three approved profiles")
+	if len(profiles) == 0 || len(profiles) > 4 {
+		return nil, errors.New("acceptance must contain one to four approved profiles")
 	}
 	allowed := map[string]string{
-		"go_test_all":             "go test ./...",
-		"go_test_all_count_1":     "go test ./... -count=1",
-		"cargo_test":              "cargo test",
-		"cargo_test_all_features": "cargo test --all-features",
-		"npm_test":                "npm test",
+		"go_test_all":               "go test ./...",
+		"go_test_all_count_1":       "go test ./... -count=1",
+		"cargo_test":                "cargo test",
+		"cargo_test_all_features":   "cargo test --all-features",
+		"npm_test":                  "npm test",
 		"python_pytest_q":           "python -m pytest -q",
 		"python_install_dev_deploy": "python -m pip install -e .[dev,deploy]",
 		"ruff_check_all":            "ruff check .",
