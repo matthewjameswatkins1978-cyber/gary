@@ -363,10 +363,16 @@ func TestCodingJobAcceptancePytestStyle(t *testing.T) {
 }
 
 
-func TestCodingWorkerPromptIncludesUniversalRulesAndTask(t *testing.T) {
+func TestCodingWorkerPromptIncludesCorrectRoleUniversalRulesAndTask(t *testing.T) {
 	task := "Fix one bounded defect."
 	prompt := codingWorkerPrompt(task)
-	if !strings.Contains(prompt, doctrine.UniversalForemanRules) {
+	if !strings.Contains(prompt, doctrine.WorkerRoleRules) {
+		t.Fatal("worker prompt must include Worker role rules")
+	}
+	if strings.Contains(prompt, doctrine.YardmasterRoleRules) {
+		t.Fatal("worker prompt must not include Yardmaster role rules")
+	}
+	if !strings.Contains(prompt, doctrine.UniversalRules) {
 		t.Fatal("worker prompt must include universal GARY rules")
 	}
 	if !strings.Contains(prompt, task) {
