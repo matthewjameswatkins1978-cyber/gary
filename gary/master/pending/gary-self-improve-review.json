@@ -1,0 +1,13 @@
+{
+  "id": "gary-self-improve-review",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
+  "base_branch": "master",
+  "brief_path": "gary/master/pending/gary-self-improve-review.md",
+  "max_waves": 3,
+  "max_jobs_per_wave": 3,
+  "max_workers": 2,
+  "acceptance": [
+    "go test ./...",
+    "test -f docs/gary-theoretical-improvements.md"
+  ]
+}
