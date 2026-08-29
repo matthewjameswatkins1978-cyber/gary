@@ -14,7 +14,9 @@ GARY control plane
   - reads master brief
   - clones current staging branch
   - builds a bounded repository snapshot
-  - one direct Gemini API planning request
+  - one direct Vertex AI GenerateContent planning request
+  - authenticated with the existing Google OIDC service-account identity
+  - no Gemini API key copied into the control plane
   - gemini-3.7-flash
   - thinking level: medium
   - hard wall-clock limit: 5 minutes
@@ -67,6 +69,11 @@ The control plane is deliberately observable from GitHub:
 This is the supported intervention path for Lucy or a human. Debugging should not require entering a disposable worker VM.
 
 ## Failure policy
+
+Planner authentication or Vertex permission error:
+- fail before worker dispatch
+- preserve the exact API error in master status
+- do not fall back to copied API keys
 
 Planner transport error:
 - fail the wave immediately
