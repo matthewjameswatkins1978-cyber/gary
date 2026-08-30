@@ -1,0 +1,15 @@
+{
+  "id": "calle-tethers-gate0-20260830",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/tethers-lang.git",
+  "base_branch": "portable-release-linux",
+  "brief_path": "gary/master/pending/calle-tethers-gate0-20260830.md",
+  "max_waves": 3,
+  "max_jobs_per_wave": 2,
+  "max_workers": 2,
+  "acceptance": [
+    "test -f docs/gate0-calle.md",
+    "test -f docs/gate0-tethers.md",
+    "test -f docs/calle-tethers-gate0-report.md",
+    "test -f spikes/calle-gate0/package.json"
+  ]
+}
