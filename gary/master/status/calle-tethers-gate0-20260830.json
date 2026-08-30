@@ -1,0 +1,106 @@
+{
+  "id": "calle-tethers-gate0-20260830",
+  "state": "failed",
+  "updated_at": "2026-08-30T13:46:17Z",
+  "staging_branch": "gary/master-calle-tethers-ga-68a3ef",
+  "wave": 3,
+  "summary": "Workstream A is integrated (docs/gate0-calle.md and spikes/calle-gate0). Dispatching focused Workstream B to audit and prove the Tethers machine interface in tethers-0.1/portable-rust, implement the appointment authority fixtures, verify determinism and fail-closed behavior, and write docs/gate0-tethers.md.",
+  "error": "master job exhausted this run's wave budget (3 waves, through wave 3) without completion",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 22.401909293,
+      "plan_summary": "Dispatching Wave 1 parallel spikes: Workstream A (CALL-E SDK spike, tests, and evidence) and Workstream B (Tethers deterministic machine interface, appointment fixtures, and evidence).",
+      "results": [
+        {
+          "job_id": "calle-tethers-ga-w1-j1",
+          "batch_job_id": "gary-run-calle-tethers-ga-w1-j1-1-20260830-125818",
+          "branch": "gary/calle-tethers-ga-w1-j1-c52b9842",
+          "commit_sha": "b6afa52",
+          "accepted": true,
+          "duration_seconds": 272.540175645,
+          "patch_bytes": 22645697,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.00156710600995875,
+          "total_cost_estimated": 0.024877106009958756
+        },
+        {
+          "job_id": "calle-tethers-ga-w1-j2",
+          "batch_job_id": "",
+          "branch": "gary/calle-tethers-ga-w1-j2-d47b9d19",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 1040.643159451,
+          "patch_bytes": 0,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BUDGET_STOPPED",
+          "model_cost_estimated": 0.04662000000000001,
+          "compute_cost_estimated": 0.00598369816684325,
+          "total_cost_estimated": 0.05260369816684326
+        }
+      ],
+      "integrated": [
+        "calle-tethers-ga-w1-j1"
+      ]
+    },
+    {
+      "wave": 2,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 19.36208541,
+      "plan_summary": "Workstream A completed and integrated in Wave 1. Scheduling Workstream B to audit and prove the Tethers machine interface, implement appointment policy fixtures, verify determinism and fail-closed behavior, and write docs/gate0-tethers.md.",
+      "results": [
+        {
+          "job_id": "calle-tethers-ga-w2-j1",
+          "batch_job_id": "",
+          "branch": "gary/calle-tethers-ga-w2-j1-dd8ccd8c",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 594.153679777,
+          "patch_bytes": 0,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BUDGET_STOPPED",
+          "model_cost_estimated": 0.04662000000000001,
+          "compute_cost_estimated": 0.00341638365871775,
+          "total_cost_estimated": 0.05003638365871776
+        }
+      ]
+    },
+    {
+      "wave": 3,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 20.140597504,
+      "plan_summary": "Workstream A is integrated (docs/gate0-calle.md and spikes/calle-gate0). Dispatching focused Workstream B to audit and prove the Tethers machine interface in tethers-0.1/portable-rust, implement the appointment authority fixtures, verify determinism and fail-closed behavior, and write docs/gate0-tethers.md.",
+      "results": [
+        {
+          "job_id": "calle-tethers-ga-w3-j1",
+          "batch_job_id": "",
+          "branch": "gary/calle-tethers-ga-w3-j1-5bed2311",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 1196.006562912,
+          "patch_bytes": 0,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BUDGET_STOPPED",
+          "model_cost_estimated": 0.04662000000000001,
+          "compute_cost_estimated": 0.006877037736744,
+          "total_cost_estimated": 0.05349703773674401
+        }
+      ]
+    }
+  ]
+}
