@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-30T13:02:48Z",
+  "updated_at": "2026-08-30T13:03:25Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -44,13 +44,13 @@
     },
     {
       "id": "calle-tethers-ga-w1-j2",
-      "batch_job_id": "gary-run-calle-tethers-ga-w1-j2-1-20260830-125816",
-      "state": "running",
+      "batch_job_id": "gary-run-calle-tethers-ga-w1-j2-2-20260830-130325",
+      "state": "retrying",
       "repo": "https://github.com/matthewjameswatkins1978-cyber/tethers-lang.git",
       "base_branch": "gary/master-calle-tethers-ga-68a3ef",
       "result_branch": "gary/calle-tethers-ga-w1-j2-d47b9d19",
       "started_at": "2026-08-30T12:58:15Z",
-      "attempts": 1
+      "attempts": 2
     }
   ],
   "recent_jobs": [
