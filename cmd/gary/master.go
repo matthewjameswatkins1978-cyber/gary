@@ -119,8 +119,9 @@ func cmdMaster() {
 
 	fmt.Printf("GARY // MASTER\nJob:       %s\nStaging:   %s\nPlanner:   %s\n", manifest.ID, stagingBranch, cfg.MasterModel)
 
-	startWave := len(status.Waves) + 1
-	for wave := startWave; wave <= manifest.MaxWaves; wave++ {
+	resuming := manifest.StagingBranch != "" && len(status.Waves) > 0
+	startWave, endWave := masterWaveBounds(len(status.Waves), manifest.MaxWaves, resuming)
+	for wave := startWave; wave <= endWave; wave++ {
 		status.State = "planning"
 		status.Wave = wave
 		_ = saveMasterStatus(status)
@@ -194,7 +195,7 @@ func cmdMaster() {
 		_ = saveMasterStatus(status)
 	}
 
-	failMaster(status, fmt.Errorf("master job reached max_waves=%d without completion", manifest.MaxWaves))
+	failMaster(status, fmt.Errorf("master job exhausted this run's wave budget (%d waves, through wave %d) without completion", manifest.MaxWaves, endWave))
 }
 
 func loadMasterManifest(path string) (*masterManifest, string, error) {
@@ -496,6 +497,15 @@ func masterWorkerLimit() int {
 		}
 	}
 	return 4
+}
+
+func masterWaveBounds(existingWaves, waveBudget int, resuming bool) (int, int) {
+	start := existingWaves + 1
+	end := waveBudget
+	if resuming && existingWaves > 0 {
+		end = existingWaves + waveBudget
+	}
+	return start, end
 }
 
 func shortMasterID(id string, max int) string {
