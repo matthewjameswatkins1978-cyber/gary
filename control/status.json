@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-30T02:32:08Z",
+  "updated_at": "2026-08-30T02:35:52Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -33,16 +33,6 @@
       "attempts": 1
     },
     {
-      "id": "judgement-call-b-w7-j3",
-      "batch_job_id": "gary-run-judgement-call-b-w7-j3-1-20260830-023206",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/judgement-call.git",
-      "base_branch": "gary/master-judgement-call-b-df8065",
-      "result_branch": "gary/judgement-call-b-w7-j3-a9741e01",
-      "started_at": "2026-08-30T02:32:04Z",
-      "attempts": 1
-    },
-    {
       "id": "judgement-call-b-w7-j1",
       "batch_job_id": "gary-run-judgement-call-b-w7-j1-1-20260830-023208",
       "state": "running",
@@ -54,15 +44,6 @@
     }
   ],
   "recent_jobs": [
-    {
-      "id": "resolve-ai-final-audit",
-      "state": "failed",
-      "result_branch": "gary/resolve-ai-final-audit-e7477c6e",
-      "finished_at": "2026-08-29T07:04:28Z",
-      "attempts": 3,
-      "est_cost": 0.07304514201851525,
-      "summary": "FAILED"
-    },
     {
       "id": "mplan-yardmaster-smoke-1",
       "batch_job_id": "gary-run-mplan-yardmaster-smoke-1-1-20260829-075245",
@@ -250,6 +231,17 @@
       "finished_at": "2026-08-29T20:27:05Z",
       "attempts": 2,
       "est_cost": 0.05450134157525301,
+      "summary": "DONE"
+    },
+    {
+      "id": "judgement-call-b-w7-j3",
+      "batch_job_id": "gary-run-judgement-call-b-w7-j3-1-20260830-023206",
+      "state": "accepted",
+      "result_branch": "gary/judgement-call-b-w7-j3-a9741e01",
+      "result_commit": "50a76a6",
+      "finished_at": "2026-08-30T02:35:52Z",
+      "attempts": 1,
+      "est_cost": 0.024618376928763504,
       "summary": "DONE"
     }
   ]
