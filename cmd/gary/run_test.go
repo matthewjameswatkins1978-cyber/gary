@@ -45,6 +45,43 @@ func TestRuntimeBudgets(t *testing.T) {
 	}
 }
 
+func TestBatchGitHubTokenSourceIsConsultedForEachSubmissionBoundary(t *testing.T) {
+	original := batchGitHubTokenSource
+	defer func() { batchGitHubTokenSource = original }()
+
+	calls := 0
+	batchGitHubTokenSource = func() (string, error) {
+		calls++
+		if calls == 1 {
+			return "token-one", nil
+		}
+		return "token-two", nil
+	}
+
+	first, err := currentBatchGitHubToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := currentBatchGitHubToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || first != "token-one" || second != "token-two" {
+		t.Fatalf("token source calls=%d first=%q second=%q", calls, first, second)
+	}
+}
+
+func TestServiceEnvironmentBlockerUsesStrongInfrastructureSignatures(t *testing.T) {
+	codingFailure := "TypeError: CedarAuthorization.__init__() got an unexpected keyword argument 'policy'\ncat: /workspace/acceptance_output.txt: No such file or directory"
+	if isServiceEnvironmentBlocker(codingFailure) {
+		t.Fatal("coding/API mismatch with incidental missing file must remain repair evidence")
+	}
+	authFailure := "fatal: could not read Username for 'https://github.com': No such device or address"
+	if !isServiceEnvironmentBlocker(authFailure) {
+		t.Fatal("GitHub clone authentication failure must be classified as infrastructure blocked")
+	}
+}
+
 func TestCompactFailureLogs(t *testing.T) {
 	short := "one\ntwo"
 	if got := compactFailureLogs(short, 100); got != short {
