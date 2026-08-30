@@ -23,6 +23,7 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/benchmark"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/githubapp"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
@@ -34,6 +35,12 @@ const (
 )
 
 var outputMu sync.Mutex
+
+var batchGitHubTokenSource = githubapp.TokenFromEnv
+
+func currentBatchGitHubToken() (string, error) {
+	return batchGitHubTokenSource()
+}
 
 func logPrint(prefix, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
@@ -223,6 +230,15 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			snapshotActiveJob(job.ID, jobName, job.Repo, job.BaseBranch, garyBranch, control.JobRunning, attempt, startedAt)
 		}
 
+		githubToken, tokenErr := currentBatchGitHubToken()
+		if tokenErr != nil {
+			logPrint(prefix, "  GitHub authentication refresh failed before Batch submission: %v", tokenErr)
+			os.RemoveAll(attemptDir)
+			actualAttempts = attempt - 1
+			finalStatus = "BLOCKED"
+			break
+		}
+
 		codingCfg := batch.CodingJobConfig{
 			Project:      cfg.GCPProject,
 			Region:       cfg.GCPRegion,
@@ -236,7 +252,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			PrevGCSPath:  prevGCSPatch,
 			MachineType:  "e2-small",
 			Model:        model,
-			GitHubToken:  os.Getenv("GARY_GITHUB_TOKEN"),
+			GitHubToken:  githubToken,
 			MaxRunDurSec: maxRunDurSec,
 		}
 
@@ -244,9 +260,8 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		if err != nil {
 			logPrint(prefix, "  submission failed: %v", err)
 			os.RemoveAll(attemptDir)
-			if isServiceEnvironmentBlocker(err.Error()) {
-				finalStatus = "BLOCKED"
-			}
+			actualAttempts = attempt - 1
+			finalStatus = "BLOCKED"
 			break
 		}
 
@@ -259,9 +274,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		if err != nil {
 			logPrint(prefix, "  polling failed: %v", err)
 			os.RemoveAll(attemptDir)
-			if isServiceEnvironmentBlocker(err.Error()) {
-				finalStatus = "BLOCKED"
-			}
+			finalStatus = "BLOCKED"
 			break
 		}
 
@@ -348,9 +361,10 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		} else {
 			logPrint(prefix, "  BATCH %s", status.State())
 			lastFailure = fmt.Sprintf("Batch job ended with state: %s\n", status.State())
+			failureLogs := ""
 			if status.UID != "" {
-				if failureLogs, logErr := batch.RecentLogs(cfg.GCPProject, status.UID, 12); logErr == nil {
-					failureLogs = compactFailureLogs(failureLogs, 4000)
+				if logs, logErr := batch.RecentLogs(cfg.GCPProject, status.UID, 12); logErr == nil {
+					failureLogs = compactFailureLogs(logs, 4000)
 					if failureLogs != "" {
 						logPrint(prefix, "  Batch failure logs:\n%s", failureLogs)
 						lastFailure += "\nBatch failure logs:\n" + failureLogs
@@ -360,9 +374,14 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			if lastAcceptance != "" {
 				lastFailure += "\nWorker acceptance output:\n" + lastAcceptance
 			}
-			if isServiceEnvironmentBlocker(lastFailure) {
+			// Only strong infrastructure/auth signatures in the worker execution logs
+			// stop the reasoning loop. Test/API failures remain repair evidence.
+			if isServiceEnvironmentBlocker(failureLogs) {
 				finalStatus = "BLOCKED"
-				logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", strings.TrimSpace(lastFailure))
+				if actualAttempts > 0 {
+					actualAttempts--
+				}
+				logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", strings.TrimSpace(failureLogs))
 				break
 			}
 		}
@@ -441,7 +460,11 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			closeResult, err := runCloser(cfg, closerTask, closerDir, job, garyBranch, acceptanceStr, gcsPath, prevGCSPatch, prefix)
 			if err != nil {
 				logPrint(prefix, "  closer failed: %v", err)
-				finalStatus = "FAILED"
+				if isServiceEnvironmentBlocker(err.Error()) {
+					finalStatus = "BLOCKED"
+				} else {
+					finalStatus = "FAILED"
+				}
 			} else if closeResult {
 				workDir := filepath.Join(closerDir, "repo")
 				commitSHA, _ := gitops.CommitSHA(workDir)
@@ -661,12 +684,13 @@ func isServiceEnvironmentBlocker(message string) bool {
 	lower := strings.ToLower(message)
 	for _, marker := range []string{
 		"github authentication",
-		"could not read username",
-		"authentication failed",
-		"permission denied",
-		"unauthorized",
-		"no such file or directory",
+		"could not read username for 'https://github.com'",
+		"authentication failed for 'https://github.com",
+		"remote: invalid username or password",
+		"http 401",
+		"http 403",
 		"gcloud authentication",
+		"could not load the default credentials",
 	} {
 		if strings.Contains(lower, marker) {
 			return true
@@ -981,7 +1005,7 @@ func checkProgress(history []string, current string) bool {
 func buildCloserTask(job *jobs.Job, lastPatch, lastAcceptance, lastFailure string, progress []string) string {
 	var sb strings.Builder
 	sb.WriteString("## CLOSER TASK\n\n")
-	sb.WriteString("Complete this bounded implementation job. Previous attempts failed.\n\n")
+	sb.WriteString("Complete this bounded implementation job. Previous attempts did not yet satisfy acceptance. Preserve useful partial work and use the accumulated evidence.\n\n")
 	sb.WriteString(fmt.Sprintf("### Original Task\n%s\n\n", job.Task))
 	sb.WriteString(fmt.Sprintf("### Acceptance\n%s\n\n", strings.Join(job.Acceptance, " && ")))
 	sb.WriteString(fmt.Sprintf("### Attempt History\n%s\n\n", strings.Join(progress, "\n---\n")))
@@ -1002,6 +1026,11 @@ func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.J
 	jobName := fmt.Sprintf("gary-closer-%s-%s", job.ID, time.Now().Format("20060102-150405"))
 	attemptGCSPath := fmt.Sprintf("%s/closer", gcsPath)
 
+	githubToken, err := currentBatchGitHubToken()
+	if err != nil {
+		return false, fmt.Errorf("GitHub authentication refresh before Closer submission: %w", err)
+	}
+
 	codingCfg := batch.CodingJobConfig{
 		Project:      cfg.GCPProject,
 		Region:       cfg.GCPRegion,
@@ -1015,11 +1044,11 @@ func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.J
 		PrevGCSPath:  prevGCSPatch,
 		MachineType:  "e2-standard-4",
 		Model:        cfg.CloserModel,
-		GitHubToken:  os.Getenv("GARY_GITHUB_TOKEN"),
+		GitHubToken:  githubToken,
 		MaxRunDurSec: 900,
 	}
 
-	_, err := batch.SubmitCodingJob(codingCfg)
+	_, err = batch.SubmitCodingJob(codingCfg)
 	if err != nil {
 		return false, fmt.Errorf("submit closer: %w", err)
 	}
