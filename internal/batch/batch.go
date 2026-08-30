@@ -35,6 +35,24 @@ type JobStatus struct {
 	Status     JobStatusInfo `json:"status"`
 }
 
+// ObservedRuntimeSeconds returns the Batch job lifetime from provider
+// timestamps, falling back to the caller's measured interval when older
+// responses omit usable timestamps. The result is used only for the explicit
+// estimated compute component; GARY does not claim it is invoice data.
+func ObservedRuntimeSeconds(status *JobStatus, fallbackStart, fallbackFinish time.Time) float64 {
+	if status != nil {
+		start, startErr := time.Parse(time.RFC3339Nano, status.CreateTime)
+		finish, finishErr := time.Parse(time.RFC3339Nano, status.UpdateTime)
+		if startErr == nil && finishErr == nil && finish.After(start) {
+			return finish.Sub(start).Seconds()
+		}
+	}
+	if fallbackFinish.After(fallbackStart) {
+		return fallbackFinish.Sub(fallbackStart).Seconds()
+	}
+	return 0
+}
+
 // JobStatusInfo holds the nested status from a Batch describe response.
 type JobStatusInfo struct {
 	State string `json:"state"`
@@ -420,9 +438,14 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		"# Decode base64 prompt to file (transport-safe, no shell interpolation)",
 		"echo \"$GARY_PROMPT_B64\" | base64 -d > /workspace/gary_prompt.txt",
 		"",
-		"# Run Gemini CLI from prompt file via stdin",
+		"# Run the pinned Gemini CLI in machine-readable streaming mode.",
+		": > /workspace/usage.jsonl",
 		"echo \"Running Gemini CLI...\"",
-		fmt.Sprintf("cat /workspace/gary_prompt.txt | gemini -m %s --yolo || true", cfg.Model),
+		"set +e",
+		fmt.Sprintf("cat /workspace/gary_prompt.txt | gemini -m %s --yolo --output-format stream-json 2>&1 | tee /workspace/usage.jsonl", cfg.Model),
+		"GEMINI_EXIT=${PIPESTATUS[0]}",
+		"set -e",
+		"echo \"Gemini CLI exit code: $GEMINI_EXIT\"",
 		"",
 		"# Run acceptance checks using exit code as truth",
 		"echo \"Running acceptance checks...\"",
@@ -458,11 +481,15 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		"echo \"GARY_ACCEPTANCE_B64_START\"",
 		"base64 /workspace/acceptance_output.txt",
 		"echo \"GARY_ACCEPTANCE_B64_END\"",
+		"echo \"GARY_USAGE_B64_START\"",
+		"base64 /workspace/usage.jsonl",
+		"echo \"GARY_USAGE_B64_END\"",
 		"",
 		"# Upload to GCS (gcloud storage primary, python3 -m gsutil fallback)",
 		fmt.Sprintf("echo \"Uploading result to %s...\"", cfg.GCSPath),
 		fmt.Sprintf("gcloud storage cp /workspace/result.patch %s/result.patch 2>/dev/null || python3 -m gsutil cp /workspace/result.patch %s/result.patch || true", cfg.GCSPath, cfg.GCSPath),
 		fmt.Sprintf("gcloud storage cp /workspace/acceptance_output.txt %s/acceptance_output.txt 2>/dev/null || python3 -m gsutil cp /workspace/acceptance_output.txt %s/acceptance_output.txt || true", cfg.GCSPath, cfg.GCSPath),
+		fmt.Sprintf("gcloud storage cp /workspace/usage.jsonl %s/usage.jsonl 2>/dev/null || python3 -m gsutil cp /workspace/usage.jsonl %s/usage.jsonl || true", cfg.GCSPath, cfg.GCSPath),
 		"",
 		"# Only now return the mechanical acceptance exit code.",
 		"if [ $ACCEPTANCE_EXIT -ne 0 ]; then",

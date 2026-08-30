@@ -39,12 +39,12 @@ func cmdStatus() {
 	if costs.LastRunSet {
 		fmt.Printf("Last run: %s (%s)\n", costs.LastRun.JobID, costs.LastRun.Status)
 		fmt.Printf("Last result: %s\n", costs.LastRun.Status)
-		fmt.Printf("Estimated last run cost: $%.4f\n", costs.LastRun.TotalCostEstimated)
+		fmt.Printf("Last run cost: $%.4f (%s)\n", costs.LastRun.TotalCost(), ledgerCostQuality(costs.LastRun))
 	} else {
 		fmt.Println("Last run: none")
 	}
-	fmt.Printf("Estimated month-to-date cost: $%.4f\n", costs.MonthCost)
-	fmt.Printf("Estimated lifetime cost: $%.4f\n", costs.LifeCost)
+	fmt.Printf("Month-to-date cost: $%.4f\n", costs.MonthCost)
+	fmt.Printf("Lifetime cost: $%.4f\n", costs.LifeCost)
 
 	// Workers
 	maxWorkers := 4
@@ -57,17 +57,24 @@ func cmdStatus() {
 
 	// Budget
 	if cfg.MaxCostUSD > 0 {
-		fmt.Printf("Budget: $%.2f ESTIMATED\n", cfg.MaxCostUSD)
+		fmt.Printf("Budget: $%.2f (pre-dispatch estimate)\n", cfg.MaxCostUSD)
 	} else {
 		fmt.Println("Budget: unlimited")
 	}
 
 	// Parked state
 	if len(activeJobs) == 0 {
-		fmt.Println("Cloud yard: PARKED")
+		fmt.Println("Cloud yard: IDLE")
 	} else {
 		fmt.Println("Cloud yard: ACTIVE")
 	}
+}
+
+func ledgerCostQuality(entry LedgerEntry) string {
+	if entry.Cost != nil {
+		return entry.Cost.PricingStatus
+	}
+	return "LEGACY_ESTIMATE"
 }
 
 func checkActiveBatchJobs(cfg *config.Config) []string {

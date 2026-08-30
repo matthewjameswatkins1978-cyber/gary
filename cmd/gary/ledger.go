@@ -9,22 +9,24 @@ import (
 	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/benchmark"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
 // LedgerEntry is one line in the JSONL cost ledger.
 type LedgerEntry struct {
-	Timestamp            string  `json:"timestamp"`
-	JobID                string  `json:"job_id"`
-	Status               string  `json:"status"`
-	Attempts             int     `json:"attempts"`
-	Model                string  `json:"model"`
-	ModelCostEstimated   float64 `json:"model_cost_estimated"`
-	ComputeCostEstimated float64 `json:"compute_cost_estimated"`
-	TotalCostEstimated   float64 `json:"total_cost_estimated"`
-	DurationSecs         float64 `json:"duration_seconds"`
-	Branch               string  `json:"branch"`
-	Commit               string  `json:"commit"`
+	Timestamp            string        `json:"timestamp"`
+	JobID                string        `json:"job_id"`
+	Status               string        `json:"status"`
+	Attempts             int           `json:"attempts"`
+	Model                string        `json:"model"`
+	ModelCostEstimated   float64       `json:"model_cost_estimated"`
+	ComputeCostEstimated float64       `json:"compute_cost_estimated"`
+	TotalCostEstimated   float64       `json:"total_cost_estimated"`
+	DurationSecs         float64       `json:"duration_seconds"`
+	Branch               string        `json:"branch"`
+	Commit               string        `json:"commit"`
+	Cost                 *cost.Summary `json:"cost,omitempty"`
 }
 
 // CostSummary holds cumulative cost totals.
@@ -99,14 +101,15 @@ func SummarizeCosts(resultsDir, runID string) CostSummary {
 	var s CostSummary
 
 	for _, e := range entries {
-		s.LifeCost += e.TotalCostEstimated
+		total := e.TotalCost()
+		s.LifeCost += total
 
 		if len(e.Timestamp) >= 7 && e.Timestamp[:7] == monthPrefix {
-			s.MonthCost += e.TotalCostEstimated
+			s.MonthCost += total
 		}
 
 		if runID != "" && len(e.Timestamp) >= len(runID) && e.Timestamp[:len(runID)] == runID {
-			s.RunCost += e.TotalCostEstimated
+			s.RunCost += total
 		}
 
 		s.LastRun = e
@@ -114,6 +117,15 @@ func SummarizeCosts(resultsDir, runID string) CostSummary {
 	}
 
 	return s
+}
+
+// TotalCost returns the structured total for new entries, or the legacy
+// heuristic total for old entries. The latter remains an estimate by schema.
+func (e LedgerEntry) TotalCost() float64 {
+	if e.Cost != nil {
+		return e.Cost.TotalCostUSD
+	}
+	return e.TotalCostEstimated
 }
 
 // BudgetCheck reports whether a new job can start within the per-run cost limit.
@@ -150,9 +162,9 @@ func EstimateJobCostForModel(model string, attempts int) float64 {
 
 	modelCost := benchmark.EstimateCost(pt, inputPerAttempt*attempts, outputPerAttempt*attempts, 0, cachedPerAttempt*attempts)
 
-	// Compute: e2-small ≈ $0.0207/hr ≈ $0.00000575/sec
-	// Typical attempt: ~270s wall time
-	computeCost := float64(attempts) * 270.0 * 0.00000575
+	// Pre-dispatch compute estimate: typical attempt is ~270s. The rate itself
+	// comes from the shared versioned compute table.
+	computeCost, _ := cost.ComputeCost("e2-small", "STANDARD", float64(attempts)*270.0)
 
 	return modelCost + computeCost
 }
@@ -171,5 +183,6 @@ func MakeLedgerEntry(result jobs.RunResult, model string) LedgerEntry {
 		DurationSecs:         result.DurationSecs,
 		Branch:               result.Branch,
 		Commit:               result.CommitSHA,
+		Cost:                 result.Cost,
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 )
@@ -316,7 +317,11 @@ func TestCodingJobPreservesFailedAcceptanceEvidenceBeforeExit(t *testing.T) {
 		"ACCEPTANCE_EXIT=$?",
 		"set -e",
 		"GARY_ACCEPTANCE_B64_START",
+		"/workspace/usage.jsonl",
+		"--output-format stream-json",
+		"GARY_USAGE_B64_START",
 		"gcloud storage cp /workspace/acceptance_output.txt",
+		"gcloud storage cp /workspace/usage.jsonl",
 		"if [ $ACCEPTANCE_EXIT -ne 0 ]; then",
 	} {
 		if !strings.Contains(script, required) {
@@ -371,6 +376,20 @@ func TestCodingJobCommitMessageIsShort(t *testing.T) {
 	}
 }
 
+func TestObservedRuntimeSecondsUsesProviderTimesThenFallback(t *testing.T) {
+	status := &JobStatus{CreateTime: "2026-08-30T10:00:00Z", UpdateTime: "2026-08-30T10:02:30Z"}
+	if got := ObservedRuntimeSeconds(status, time.Time{}, time.Time{}); got != 150 {
+		t.Fatalf("provider runtime = %.0f, want 150", got)
+	}
+
+	start := time.Date(2026, 8, 30, 10, 0, 0, 0, time.UTC)
+	finish := start.Add(42 * time.Second)
+	status = &JobStatus{CreateTime: "not-a-time", UpdateTime: "not-a-time"}
+	if got := ObservedRuntimeSeconds(status, start, finish); got != 42 {
+		t.Fatalf("fallback runtime = %.0f, want 42", got)
+	}
+}
+
 func TestCodingJobAcceptancePytestStyle(t *testing.T) {
 	// Pytest outputs lowercase "passed" — must NOT affect acceptance.
 	// Only exit code matters.
@@ -392,7 +411,6 @@ func TestCodingJobAcceptancePytestStyle(t *testing.T) {
 		t.Error("coding job must not grep for PASS/PASS in acceptance output")
 	}
 }
-
 
 func TestCodingWorkerPromptIncludesCorrectRoleUniversalRulesAndTask(t *testing.T) {
 	task := "Fix one bounded defect."

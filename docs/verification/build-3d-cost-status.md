@@ -4,21 +4,26 @@
 
 - `GARY_MAX_COST_USD` optional per-run budget limit
 - JSONL cost ledger at `results/cost-ledger.jsonl`
-- `gary status` command with cost totals + PARKED detection
+- `gary status` command with cost totals + IDLE detection
 - Cumulative tracking: run, month-to-date, lifetime
 - Budget check prevents new work when limit exceeded
 - Running spend printed during run-many
-- All costs labelled ESTIMATED
+- New records distinguish PROVIDER_REPORTED, MIXED, ESTIMATED, and legacy estimates
 
-## Cost Estimation
+## Cost Accounting
 
-- Model: ~15K input + 7.5K output tokens per attempt (Gemini flash-lite pricing)
-- Compute: e2-small at $0.0207/hr
-- Conservative, labelled ESTIMATED
+- Workers preserve the pinned Gemini CLI 0.56.0 `stream-json` JSONL result as
+  `usage.jsonl` and calculate model cost from provider-reported token counts.
+- Yardmaster and repair responses record Vertex/Gemini `usageMetadata`, model
+  version, response ID, and `x-goog-request-id` when present.
+- Batch compute uses observed job runtime and the configured machine type, but
+  remains estimated because GARY does not query Cloud Billing.
+- Missing telemetry is explicit `ESTIMATED`; it is never silently recorded as
+  zero or presented as actual provider usage.
 
 ## Ledger Format
 
-Each line: timestamp, job_id, status, attempts, model, model/compute/total cost, duration, branch, commit
+Each line: timestamp, job_id, status, attempts, model, legacy-compatible model/compute/total fields, structured cost, duration, branch, commit
 
 ## Live Check
 
@@ -26,9 +31,9 @@ Each line: timestamp, job_id, status, attempts, model, model/compute/total cost,
 - **Branch:** gary/fix-clamp-a91bfef5
 - **Commit:** bb24e02
 - **Duration:** 303s
-- **Estimated cost:** $0.0251
+- **Legacy estimate:** $0.0251
 - **Ledger:** results/cost-ledger.jsonl written
-- **Status:** PARKED
+- **Status:** IDLE
 - **Active jobs:** 0
 
 ## Unit Tests
@@ -38,5 +43,5 @@ Each line: timestamp, job_id, status, attempts, model, model/compute/total cost,
 - Running work not killed by budget
 - BUDGET_STOPPED status
 - Cost summarization (run/month/lifetime)
-- Cost estimation
+- Structured usage parsing, pricing, aggregation, and legacy cost compatibility
 - Ledger entry creation

@@ -1,48 +1,7 @@
 {
   "updated_at": "2026-08-30T03:30:10Z",
-  "yard_state": "running",
-  "active_jobs": [
-    {
-      "id": "mplan-resolve-google-a-2",
-      "batch_job_id": "gary-run-mplan-resolve-google-a-2-1-20260829-105839",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/resolve-ai.git",
-      "base_branch": "gary/master-resolve-google-a-d1fcf6",
-      "result_branch": "gary/mplan-resolve-google-a-2-56d76b26",
-      "started_at": "2026-08-29T10:58:38Z",
-      "attempts": 1
-    },
-    {
-      "id": "judgement-call-b-w4-j3",
-      "batch_job_id": "gary-run-judgement-call-b-w4-j3-1-20260829-202732",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/judgement-call.git",
-      "base_branch": "gary/master-judgement-call-b-df8065",
-      "result_branch": "gary/judgement-call-b-w4-j3-26a265a7",
-      "started_at": "2026-08-29T20:27:31Z",
-      "attempts": 1
-    },
-    {
-      "id": "judgement-call-b-w4-j1",
-      "batch_job_id": "gary-run-judgement-call-b-w4-j1-1-20260829-202734",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/judgement-call.git",
-      "base_branch": "gary/master-judgement-call-b-df8065",
-      "result_branch": "gary/judgement-call-b-w4-j1-34242916",
-      "started_at": "2026-08-29T20:27:31Z",
-      "attempts": 1
-    },
-    {
-      "id": "judgement-call-b-w10-j1",
-      "batch_job_id": "gary-run-judgement-call-b-w10-j1-2-20260830-033010",
-      "state": "retrying",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/judgement-call.git",
-      "base_branch": "gary/master-judgement-call-b-df8065",
-      "result_branch": "gary/judgement-call-b-w10-j1-a9ff29c1",
-      "started_at": "2026-08-30T03:22:32Z",
-      "attempts": 2
-    }
-  ],
+  "yard_state": "idle",
+  "active_jobs": [],
   "recent_jobs": [
     {
       "id": "mplan-resolve-google-a-1",

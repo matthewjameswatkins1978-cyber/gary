@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
@@ -233,6 +234,24 @@ func TestSummarizeCosts(t *testing.T) {
 	}
 	if summary.LastRun.JobID != "job2" {
 		t.Errorf("expected last run job2, got %s", summary.LastRun.JobID)
+	}
+}
+
+func TestSummarizeCostsPrefersStructuredCost(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().UTC().Format(time.RFC3339)
+	entry := LedgerEntry{
+		Timestamp:          now,
+		JobID:              "structured",
+		TotalCostEstimated: 99,
+		Cost:               &cost.Summary{TotalCostUSD: 0.125, PricingStatus: cost.Mixed},
+	}
+	if err := AppendLedger(dir, entry); err != nil {
+		t.Fatal(err)
+	}
+	got := SummarizeCosts(dir, "")
+	if got.LifeCost != 0.125 || got.MonthCost != 0.125 || got.LastRun.TotalCost() != 0.125 {
+		t.Fatalf("structured ledger total = %#v", got)
 	}
 }
 

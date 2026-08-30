@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
 func TestFailedMasterStateIsRetryable(t *testing.T) {
@@ -16,6 +18,19 @@ func TestFailedMasterStateIsRetryable(t *testing.T) {
 	}
 	if isFinalMasterState("failed") {
 		t.Fatal("failed master job should be retryable")
+	}
+}
+
+func TestEnsureMasterCostLabelsOldWaveTotalsLegacy(t *testing.T) {
+	status := &masterStatus{
+		ID: "old",
+		Waves: []masterWaveRecord{{Results: []jobs.RunResult{{
+			ModelCostEstimated: 0.05, ComputeCostEstimated: 0.01, TotalCostEstimated: 0.06,
+		}}}},
+	}
+	ensureMasterCost(status)
+	if status.Cost.PricingStatus != cost.LegacyEstimate || status.Cost.TotalCostUSD != 0.06 {
+		t.Fatalf("legacy master cost = %#v", status.Cost)
 	}
 }
 

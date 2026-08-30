@@ -206,6 +206,27 @@ func TestReadSnapshotNotExist(t *testing.T) {
 	}
 }
 
+func TestUpdateSnapshotFiltersTerminalActiveJobsAndIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	active := []JobEntry{
+		{ID: "running", State: JobRunning},
+		{ID: "done", State: JobAccepted},
+	}
+	if err := UpdateSnapshot(dir, active, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := UpdateSnapshot(dir, []JobEntry{{ID: "done", State: JobAccepted}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := ReadSnapshot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.ActiveJobs) != 0 || snap.YardState != YardIdle {
+		t.Fatalf("terminal cleanup = %#v", snap)
+	}
+}
+
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
