@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-30T03:14:09Z",
+  "updated_at": "2026-08-30T03:22:18Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -31,30 +31,9 @@
       "result_branch": "gary/judgement-call-b-w4-j1-34242916",
       "started_at": "2026-08-29T20:27:31Z",
       "attempts": 1
-    },
-    {
-      "id": "judgement-call-b-w9-j1",
-      "batch_job_id": "gary-run-judgement-call-b-w9-j1-2-20260830-031409",
-      "state": "retrying",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/judgement-call.git",
-      "base_branch": "gary/master-judgement-call-b-df8065",
-      "result_branch": "gary/judgement-call-b-w9-j1-26b5a160",
-      "started_at": "2026-08-30T03:04:07Z",
-      "attempts": 2
     }
   ],
   "recent_jobs": [
-    {
-      "id": "mplan-resolve-readyche-1",
-      "batch_job_id": "gary-run-mplan-resolve-readyche-1-1-20260829-082805",
-      "state": "accepted",
-      "result_branch": "gary/mplan-resolve-readyche-1-a1c030e8",
-      "result_commit": "0d7db03",
-      "finished_at": "2026-08-29T08:30:59Z",
-      "attempts": 1,
-      "est_cost": 0.024316096387916254,
-      "summary": "DONE"
-    },
     {
       "id": "mplan-resolve-google-a-1",
       "batch_job_id": "gary-run-mplan-resolve-google-a-1-1-20260829-101323",
@@ -238,6 +217,15 @@
       "finished_at": "2026-08-30T03:03:52Z",
       "attempts": 2,
       "est_cost": 0.05085886612862451,
+      "summary": "BUDGET_STOPPED"
+    },
+    {
+      "id": "judgement-call-b-w9-j1",
+      "state": "failed",
+      "result_branch": "gary/judgement-call-b-w9-j1-26b5a160",
+      "finished_at": "2026-08-30T03:22:18Z",
+      "attempts": 2,
+      "est_cost": 0.05289201573830401,
       "summary": "BUDGET_STOPPED"
     }
   ]
