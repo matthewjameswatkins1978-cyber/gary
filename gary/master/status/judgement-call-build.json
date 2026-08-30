@@ -1,11 +1,10 @@
 {
   "id": "judgement-call-build",
-  "state": "failed",
-  "updated_at": "2026-08-29T20:44:12Z",
+  "state": "done",
+  "updated_at": "2026-08-30T03:38:01Z",
   "staging_branch": "gary/master-judgement-call-b-df8065",
-  "wave": 6,
-  "summary": "Core modules, evals, and web UI are implemented and passing tests on staging. Scheduling 3 parallel Wave 6 jobs to complete service tests and AgentCore runtime (JC-05/JC-08), offline demo and replay scripts (JC-09), and judge-facing documentation and architecture diagrams (JC-10).",
-  "error": "master job reached max_waves=6 without completion",
+  "wave": 11,
+  "summary": "All master requirements (JC-01 through JC-10) are completed, verified, and integrated into staging. Core contracts, workspace tools, Cedar policies, Attention Governor, Gate decider, Worker agent, service lifecycle, AgentCore runtime adapter, web frontend, offline evaluation suite (0 false suppressions), local demo \u0026 replay scripts, live/offline demo tests, and judge-facing documentation and architecture diagrams are fully implemented.",
   "waves": [
     {
       "wave": 1,
@@ -335,6 +334,153 @@
           "total_cost_estimated": 0.024323552823437504
         }
       ]
+    },
+    {
+      "wave": 7,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 15.596315128,
+      "plan_summary": "Core contracts, engine, governor, evals, and web frontend are implemented on staging. Scheduling 3 parallel Wave 7 jobs: (1) Service lifecycle tests and AgentCore runtime adapter (JC-05 \u0026 JC-08), (2) offline demo and replay flow scripts (JC-09), and (3) judge-facing documentation and architecture diagrams (JC-10).",
+      "results": [
+        {
+          "job_id": "judgement-call-b-w7-j1",
+          "batch_job_id": "gary-run-judgement-call-b-w7-j1-2-20260830-024054",
+          "branch": "gary/judgement-call-b-w7-j1-27013607",
+          "commit_sha": "e834fde",
+          "accepted": true,
+          "duration_seconds": 1020.672272549,
+          "patch_bytes": 21391,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "model_cost_estimated": 0.04662000000000001,
+          "compute_cost_estimated": 0.00586886556715675,
+          "total_cost_estimated": 0.05248886556715676
+        },
+        {
+          "job_id": "judgement-call-b-w7-j2",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w7-j2-84f6d109",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 919.899504253,
+          "patch_bytes": 0,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BUDGET_STOPPED",
+          "model_cost_estimated": 0.04662000000000001,
+          "compute_cost_estimated": 0.00528942214945475,
+          "total_cost_estimated": 0.05190942214945476
+        },
+        {
+          "job_id": "judgement-call-b-w7-j3",
+          "batch_job_id": "gary-run-judgement-call-b-w7-j3-1-20260830-023206",
+          "branch": "gary/judgement-call-b-w7-j3-a9741e01",
+          "commit_sha": "50a76a6",
+          "accepted": true,
+          "duration_seconds": 227.543813698,
+          "patch_bytes": 17580,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "model_cost_estimated": 0.023310000000000004,
+          "compute_cost_estimated": 0.0013083769287635001,
+          "total_cost_estimated": 0.024618376928763504
+        }
+      ],
+      "integrated": [
+        "judgement-call-b-w7-j1",
+        "judgement-call-b-w7-j3"
+      ]
+    },
+    {
+      "wave": 8,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 16.230702092,
+      "plan_summary": "Core contracts, tools, governor, evals, web UI, service lifecycle, AgentCore runtime, and judge docs are implemented. Scheduling JC-09 (scripts/demo_local.py, scripts/replay_demo.py, tests/live/test_demo_flow.py, and docs/demo.md).",
+      "results": [
+        {
+          "job_id": "judgement-call-b-w8-j1",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w8-j1-197659b1",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 737.194109326,
+          "patch_bytes": 0,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BUDGET_STOPPED",
+          "model_cost_estimated": 0.04662000000000001,
+          "compute_cost_estimated": 0.0042388661286245,
+          "total_cost_estimated": 0.05085886612862451
+        }
+      ]
+    },
+    {
+      "wave": 9,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 12.35137962,
+      "plan_summary": "Core contracts, tools, governor, evals, web UI, runtime adapter, and docs are completed on staging. Scheduling JC-09 to implement offline/live demo flows, demo scripts, and demo documentation.",
+      "results": [
+        {
+          "job_id": "judgement-call-b-w9-j1",
+          "batch_job_id": "",
+          "branch": "gary/judgement-call-b-w9-j1-26b5a160",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 1090.785345792,
+          "patch_bytes": 0,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BUDGET_STOPPED",
+          "model_cost_estimated": 0.04662000000000001,
+          "compute_cost_estimated": 0.006272015738304,
+          "total_cost_estimated": 0.05289201573830401
+        }
+      ]
+    },
+    {
+      "wave": 10,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 12.318839259,
+      "plan_summary": "Core engine, evals, web UI, runtime adapter, and judge documentation are complete and passing tests on staging. Scheduling JC-09 to implement scripts/demo_local.py, scripts/replay_demo.py, tests/live/test_demo_flow.py, and docs/demo.md.",
+      "results": [
+        {
+          "job_id": "judgement-call-b-w10-j1",
+          "batch_job_id": "gary-run-judgement-call-b-w10-j1-2-20260830-033010",
+          "branch": "gary/judgement-call-b-w10-j1-a9ff29c1",
+          "commit_sha": "29ce0af",
+          "accepted": true,
+          "duration_seconds": 880.0095667,
+          "patch_bytes": 22632,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "model_cost_estimated": 0.04662000000000001,
+          "compute_cost_estimated": 0.005060055008525,
+          "total_cost_estimated": 0.05168005500852501
+        }
+      ],
+      "integrated": [
+        "judgement-call-b-w10-j1"
+      ]
+    },
+    {
+      "wave": 11,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 8.608653043,
+      "plan_summary": "All master requirements (JC-01 through JC-10) are completed, verified, and integrated into staging. Core contracts, workspace tools, Cedar policies, Attention Governor, Gate decider, Worker agent, service lifecycle, AgentCore runtime adapter, web frontend, offline evaluation suite (0 false suppressions), local demo \u0026 replay scripts, live/offline demo tests, and judge-facing documentation and architecture diagrams are fully implemented."
     }
   ]
 }
