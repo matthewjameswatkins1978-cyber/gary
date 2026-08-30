@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-30T02:44:04Z",
+  "updated_at": "2026-08-30T02:49:05Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -33,16 +33,6 @@
       "attempts": 1
     },
     {
-      "id": "judgement-call-b-w7-j1",
-      "batch_job_id": "gary-run-judgement-call-b-w7-j1-2-20260830-024054",
-      "state": "retrying",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/judgement-call.git",
-      "base_branch": "gary/master-judgement-call-b-df8065",
-      "result_branch": "gary/judgement-call-b-w7-j1-27013607",
-      "started_at": "2026-08-30T02:32:04Z",
-      "attempts": 2
-    },
-    {
       "id": "judgement-call-b-w7-j2",
       "batch_job_id": "gary-run-judgement-call-b-w7-j2-2-20260830-024404",
       "state": "retrying",
@@ -54,17 +44,6 @@
     }
   ],
   "recent_jobs": [
-    {
-      "id": "mplan-yardmaster-smoke-1",
-      "batch_job_id": "gary-run-mplan-yardmaster-smoke-1-1-20260829-075245",
-      "state": "accepted",
-      "result_branch": "gary/mplan-yardmaster-smoke-1-0236b30c",
-      "result_commit": "1d4a663",
-      "finished_at": "2026-08-29T07:55:30Z",
-      "attempts": 1,
-      "est_cost": 0.024260923935919006,
-      "summary": "DONE"
-    },
     {
       "id": "yardmaster-smoke-w1-j1",
       "batch_job_id": "gary-run-yardmaster-smoke-w1-j1-1-20260829-075536",
@@ -252,6 +231,17 @@
       "finished_at": "2026-08-30T02:35:52Z",
       "attempts": 1,
       "est_cost": 0.024618376928763504,
+      "summary": "DONE"
+    },
+    {
+      "id": "judgement-call-b-w7-j1",
+      "batch_job_id": "gary-run-judgement-call-b-w7-j1-2-20260830-024054",
+      "state": "accepted",
+      "result_branch": "gary/judgement-call-b-w7-j1-27013607",
+      "result_commit": "e834fde",
+      "finished_at": "2026-08-30T02:49:05Z",
+      "attempts": 2,
+      "est_cost": 0.05248886556715676,
       "summary": "DONE"
     }
   ]
