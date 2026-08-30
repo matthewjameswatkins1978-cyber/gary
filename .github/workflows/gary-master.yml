@@ -36,6 +36,7 @@ jobs:
           repositories: |
             gary
             judgement-call
+            tethers-lang
 
       - uses: actions/checkout@v4
         with:
@@ -120,6 +121,7 @@ jobs:
           repositories: |
             gary
             judgement-call
+            tethers-lang
 
       - name: Record master status
         if: always()
