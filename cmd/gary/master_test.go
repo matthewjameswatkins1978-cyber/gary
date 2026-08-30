@@ -73,6 +73,17 @@ func TestValidateMasterPlan(t *testing.T) {
 	}
 }
 
+func TestMasterWaveBoundsGiveResumeAFreshBoundedBudget(t *testing.T) {
+	start, end := masterWaveBounds(6, 5, true)
+	if start != 7 || end != 11 {
+		t.Fatalf("resume bounds = %d..%d, want 7..11", start, end)
+	}
+	start, end = masterWaveBounds(0, 5, false)
+	if start != 1 || end != 5 {
+		t.Fatalf("fresh bounds = %d..%d, want 1..5", start, end)
+	}
+}
+
 func TestMasterRuntimeIDBounded(t *testing.T) {
 	id := masterRuntimeID("job", "abcdefghijklmnop", 6, 6)
 	if len(id) > 30 {
