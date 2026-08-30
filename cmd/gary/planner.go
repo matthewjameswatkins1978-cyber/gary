@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
 )
 
@@ -24,24 +25,25 @@ const (
 	yardmasterFileMaxBytes    = 48000
 )
 
-func runYardmasterDirect(cfg *config.Config, manifest *masterManifest, brief, stagingBranch string, wave int, history string) (*masterPlan, time.Duration, error) {
+func runYardmasterDirect(cfg *config.Config, manifest *masterManifest, brief, stagingBranch string, wave int, history string) (*masterPlan, time.Duration, cost.Component, error) {
+	component := estimatedComponent("yardmaster", cfg.MasterModel, "planner request did not return provider usage")
 	if cfg.GCPProject == "" {
-		return nil, 0, fmt.Errorf("yardmaster: GARY_GCP_PROJECT is required on the control plane")
+		return nil, 0, component, fmt.Errorf("yardmaster: GARY_GCP_PROJECT is required on the control plane")
 	}
 
 	tmp, err := os.MkdirTemp("", "gary-yardmaster-*")
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, component, err
 	}
 	defer os.RemoveAll(tmp)
 
 	if err := gitops.CloneBranch(manifest.Repo, stagingBranch, tmp); err != nil {
-		return nil, 0, fmt.Errorf("yardmaster clone: %w", err)
+		return nil, 0, component, fmt.Errorf("yardmaster clone: %w", err)
 	}
 
 	repoContext, err := buildYardmasterRepoContext(tmp, yardmasterContextMaxBytes)
 	if err != nil {
-		return nil, 0, fmt.Errorf("yardmaster context: %w", err)
+		return nil, 0, component, fmt.Errorf("yardmaster context: %w", err)
 	}
 
 	prompt := buildMasterPlannerPrompt(manifest, brief, stagingBranch, wave, history)
@@ -51,21 +53,22 @@ func runYardmasterDirect(cfg *config.Config, manifest *masterManifest, brief, st
 	defer cancel()
 
 	started := time.Now()
-	plan, err := callYardmasterAPI(ctx, cfg, prompt, manifest.MaxJobsPerWave)
+	plan, component, err := callYardmasterAPI(ctx, cfg, prompt, manifest.MaxJobsPerWave)
 	duration := time.Since(started)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, duration, fmt.Errorf("yardmaster exceeded hard planning limit of %s", yardmasterPlannerTimeout)
+			return nil, duration, component, fmt.Errorf("yardmaster exceeded hard planning limit of %s", yardmasterPlannerTimeout)
 		}
-		return nil, duration, err
+		return nil, duration, component, err
 	}
-	return plan, duration, nil
+	return plan, duration, component, nil
 }
 
-func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, maxJobs int) (*masterPlan, error) {
+func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, maxJobs int) (*masterPlan, cost.Component, error) {
+	component := estimatedComponent("yardmaster", cfg.MasterModel, "planner request did not return provider usage")
 	token, err := vertexAccessToken(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("yardmaster Vertex auth: %w", err)
+		return nil, component, fmt.Errorf("yardmaster Vertex auth: %w", err)
 	}
 	endpoint := yardmasterVertexEndpoint(cfg.GCPProject, cfg.MasterModel)
 
@@ -73,28 +76,36 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 
 	payload, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("yardmaster request encode: %w", err)
+		return nil, component, fmt.Errorf("yardmaster request encode: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
-		return nil, fmt.Errorf("yardmaster request build: %w", err)
+		return nil, component, fmt.Errorf("yardmaster request build: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("yardmaster transport: %w", err)
+		return nil, component, fmt.Errorf("yardmaster transport: %w", err)
 	}
 	defer resp.Body.Close()
+	component.ProviderRequestID = resp.Header.Get("x-goog-request-id")
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, fmt.Errorf("yardmaster response read: %w", err)
+		return nil, component, fmt.Errorf("yardmaster response read: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("yardmaster API %d: %s", resp.StatusCode, compactPlannerError(string(respBody), 2000))
+		component.UnmeteredReason = fmt.Sprintf("yardmaster HTTP %d returned no usable usage record", resp.StatusCode)
+		return nil, component, fmt.Errorf("yardmaster API %d: %s", resp.StatusCode, compactPlannerError(string(respBody), 2000))
+	}
+	if usage, usageErr := cost.ParseVertexUsage(json.RawMessage(respBody), cfg.MasterModel, "", component.ProviderRequestID); usageErr == nil {
+		component = componentFromUsage("yardmaster", usage)
+		component.ProviderRequestID = resp.Header.Get("x-goog-request-id")
+	} else {
+		component.UnmeteredReason = "yardmaster response lacked complete usageMetadata: " + usageErr.Error()
 	}
 
 	var apiResp struct {
@@ -108,10 +119,10 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 		} `json:"candidates"`
 	}
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
-		return nil, fmt.Errorf("yardmaster response parse: %w", err)
+		return nil, component, fmt.Errorf("yardmaster response parse: %w", err)
 	}
 	if len(apiResp.Candidates) == 0 {
-		return nil, fmt.Errorf("yardmaster returned no candidates")
+		return nil, component, fmt.Errorf("yardmaster returned no candidates")
 	}
 
 	var raw strings.Builder
@@ -125,12 +136,53 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 	dec := json.NewDecoder(strings.NewReader(text))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&plan); err != nil {
-		return nil, fmt.Errorf("yardmaster plan JSON: %w; output=%s", err, compactPlannerError(text, 2000))
+		return nil, component, fmt.Errorf("yardmaster plan JSON: %w; output=%s", err, compactPlannerError(text, 2000))
 	}
 	if err := validateMasterPlan(&plan, maxJobs); err != nil {
-		return nil, err
+		return nil, component, err
 	}
-	return &plan, nil
+	return &plan, component, nil
+}
+
+func estimatedComponent(kind, model, reason string) cost.Component {
+	return cost.Component{
+		Kind:                 kind,
+		ModelRequested:       model,
+		UsageSource:          cost.Estimated,
+		PricingVersion:       cost.PricingVersion,
+		PricingEffectiveDate: cost.PricingEffectiveDate,
+		PricingSource:        cost.PricingSource,
+		UnmeteredReason:      reason,
+	}
+}
+
+func componentFromUsage(kind string, usage cost.Usage) cost.Component {
+	pt := cost.PriceForModel(usage.ModelRequested)
+	c := cost.Component{
+		Kind:                 kind,
+		ModelRequested:       usage.ModelRequested,
+		ModelVersion:         usage.ModelVersion,
+		UsageSource:          usage.UsageSource,
+		InputTokens:          usage.InputTokens,
+		CachedInputTokens:    usage.CachedInputTokens,
+		FreshInputTokens:     usage.FreshInputTokens,
+		OutputTokens:         usage.OutputTokens,
+		ThinkingTokens:       usage.ThinkingTokens,
+		TotalTokens:          usage.TotalTokens,
+		PricingVersion:       pt.Version,
+		PricingEffectiveDate: pt.EffectiveDate,
+		PricingSource:        pt.Source,
+		ProviderResponseID:   usage.ProviderResponseID,
+		ProviderRequestID:    usage.ProviderRequestID,
+	}
+	if !pt.Known {
+		c.UsageSource = cost.Estimated
+		c.UnmeteredReason = "no versioned price for requested model " + usage.ModelRequested
+		return c
+	}
+	c.ModelCostUSD = cost.ModelCost(pt, usage.FreshInputTokens, usage.CachedInputTokens, usage.OutputTokens)
+	c.TotalCostUSD = c.ModelCostUSD
+	return c
 }
 
 func yardmasterRequestBody(prompt string) map[string]interface{} {

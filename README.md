@@ -69,6 +69,19 @@ testdata/             stable fixtures for tests
 Reliability R1: direct control-plane Yardmaster + Batch implementation workers.
 No workflow rewrites GARY source at runtime. See `docs/reliability-r1.md`.
 
+Terminal runs persist a structured cost record. Provider token usage is labelled
+`PROVIDER_REPORTED`; Batch VM runtime is priced from the observed runtime and
+labelled estimated because GARY does not query the final Cloud Billing invoice.
+Historical records retain their legacy estimate semantics.
+
+```powershell
+go run ./cmd/gary cost <job-or-master-id>
+```
+
+Ordinary results are stored under `results/runs/<job-id>.json`; master results
+are stored under `gary/master/status/<master-id>.json`. The GitHub-readable yard
+snapshot is `control/status.json` and reports `idle` when no jobs remain active.
+
 Do not put credentials in this repository; copy `.env.example` to `.env`
 for local development.
 

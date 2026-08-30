@@ -7,12 +7,11 @@ import (
 func TestEstimateCost(t *testing.T) {
 	pt := DefaultPriceTable()
 
-	// 100K input, 5K output, 2K thought, 50K cached
+	// 100K prompt, 5K provider output (already inclusive of reasoning), 50K cached
 	cost := EstimateCost(pt, 100000, 5000, 2000, 50000)
 
-	// Billed output = output + thought = 7000
-	inputExpected := float64(100000) * 0.0000003
-	outputExpected := float64(7000) * 0.0000025
+	inputExpected := float64(100000-50000) * 0.0000003
+	outputExpected := float64(5000) * 0.0000025
 	cachedExpected := float64(50000) * 0.00000003
 	expected := inputExpected + outputExpected + cachedExpected
 
@@ -27,7 +26,7 @@ func TestEstimateCostZeroThought(t *testing.T) {
 	// Zero thought tokens
 	cost := EstimateCost(pt, 100000, 5000, 0, 50000)
 
-	inputExpected := float64(100000) * 0.0000003
+	inputExpected := float64(100000-50000) * 0.0000003
 	outputExpected := float64(5000) * 0.0000025
 	cachedExpected := float64(50000) * 0.00000003
 	expected := inputExpected + outputExpected + cachedExpected

@@ -9,13 +9,17 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 )
 
 // YardState represents the overall yard status.
 type YardState string
 
 const (
-	YardParked  YardState = "parked"
+	YardIdle YardState = "idle"
+	// YardParked is retained as a source-compatible name for older callers.
+	YardParked  YardState = YardIdle
 	YardRunning YardState = "running"
 	YardBlocked YardState = "blocked"
 )
@@ -35,18 +39,19 @@ const (
 
 // JobEntry is a concise snapshot of one job.
 type JobEntry struct {
-	ID           string   `json:"id"`
-	BatchJobID   string   `json:"batch_job_id,omitempty"`
-	State        JobState `json:"state"`
-	Repo         string   `json:"repo,omitempty"`
-	BaseBranch   string   `json:"base_branch,omitempty"`
-	ResultBranch string   `json:"result_branch,omitempty"`
-	ResultCommit string   `json:"result_commit,omitempty"`
-	StartedAt    string   `json:"started_at,omitempty"`
-	FinishedAt   string   `json:"finished_at,omitempty"`
-	Attempts     int      `json:"attempts,omitempty"`
-	EstCost      float64  `json:"est_cost,omitempty"`
-	Summary      string   `json:"summary,omitempty"`
+	ID           string        `json:"id"`
+	BatchJobID   string        `json:"batch_job_id,omitempty"`
+	State        JobState      `json:"state"`
+	Repo         string        `json:"repo,omitempty"`
+	BaseBranch   string        `json:"base_branch,omitempty"`
+	ResultBranch string        `json:"result_branch,omitempty"`
+	ResultCommit string        `json:"result_commit,omitempty"`
+	StartedAt    string        `json:"started_at,omitempty"`
+	FinishedAt   string        `json:"finished_at,omitempty"`
+	Attempts     int           `json:"attempts,omitempty"`
+	EstCost      float64       `json:"est_cost,omitempty"` // legacy compatibility
+	Cost         *cost.Summary `json:"cost,omitempty"`
+	Summary      string        `json:"summary,omitempty"`
 }
 
 // Snapshot is the full status file written to control/status.json.
@@ -74,14 +79,23 @@ func UpdateSnapshot(repoRoot string, activeJobs []JobEntry, recentJobs []JobEntr
 	mu.Lock()
 	defer mu.Unlock()
 
+	// Callers may retry a terminal transition or race with a final worker
+	// update. Never persist a terminal job in active_jobs.
+	active := activeJobs[:0]
+	for _, job := range activeJobs {
+		if !isTerminalJobState(job.State) {
+			active = append(active, job)
+		}
+	}
+
 	if len(recentJobs) > maxRecentJobs {
 		recentJobs = recentJobs[len(recentJobs)-maxRecentJobs:]
 	}
 
 	snapshot = Snapshot{
 		UpdatedAt:  time.Now().UTC().Format(time.RFC3339),
-		YardState:  computeYardState(activeJobs),
-		ActiveJobs: activeJobs,
+		YardState:  computeYardState(active),
+		ActiveJobs: active,
 		RecentJobs: recentJobs,
 	}
 
@@ -141,7 +155,7 @@ func ReadSnapshot(repoRoot string) (*Snapshot, error) {
 	data, err := os.ReadFile(StatusPath(repoRoot))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &Snapshot{YardState: YardParked}, nil
+			return &Snapshot{YardState: YardIdle}, nil
 		}
 		return nil, err
 	}
@@ -156,7 +170,7 @@ func ReadSnapshot(repoRoot string) (*Snapshot, error) {
 
 func computeYardState(active []JobEntry) YardState {
 	if len(active) == 0 {
-		return YardParked
+		return YardIdle
 	}
 	for _, j := range active {
 		if j.State == JobBlocked {
@@ -164,6 +178,17 @@ func computeYardState(active []JobEntry) YardState {
 		}
 	}
 	return YardRunning
+}
+
+func isTerminalJobState(state JobState) bool {
+	switch state {
+	case JobAccepted, JobFailed, JobBlocked, JobCancelled:
+		return true
+	case JobState("done"), JobState("budget_stopped"):
+		return true
+	default:
+		return false
+	}
 }
 
 // ResetSnapshot clears the in-memory snapshot.

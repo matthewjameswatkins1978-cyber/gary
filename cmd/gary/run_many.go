@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
@@ -119,7 +120,7 @@ func cmdRunMany() {
 
 			results[idx] = RunJob(cfg, e.job, e.job.ID)
 
-			cost := int64(results[idx].TotalCostEstimated * 10000)
+			cost := int64(runResultTotalCost(results[idx]) * 10000)
 			newTotal := runSpend.Add(cost)
 			printRunSpend(e.job.ID, float64(newTotal)/10000)
 		}(i, entry)
@@ -139,6 +140,7 @@ func cmdRunMany() {
 	human := 0
 	budgetStoppedCount := 0
 	totalCost := 0.0
+	quality := cost.ProviderReported
 	for _, r := range results {
 		status := r.FinalStatus
 		branch := r.Branch
@@ -148,7 +150,12 @@ func cmdRunMany() {
 		attempts := fmt.Sprintf("%d", r.Attempts)
 		fmt.Printf("%-20s %-10s %-10s %s\n", r.JobID, status, attempts, branch)
 
-		totalCost += r.TotalCostEstimated
+		totalCost += runResultTotalCost(r)
+		if r.Cost == nil {
+			quality = cost.LegacyEstimate
+		} else if quality != cost.ProviderReported && quality != r.Cost.PricingStatus || quality == cost.ProviderReported && r.Cost.PricingStatus != cost.ProviderReported {
+			quality = cost.Mixed
+		}
 		switch r.FinalStatus {
 		case "DONE":
 			done++
@@ -168,7 +175,15 @@ func cmdRunMany() {
 	if budgetStoppedCount > 0 {
 		fmt.Printf("Budget stopped: %d\n", budgetStoppedCount)
 	}
-	fmt.Printf("Estimated total cost: $%.4f\n", totalCost)
+	fmt.Printf("Total cost: $%.4f USD\n", totalCost)
+	fmt.Printf("Cost quality: %s\n", quality)
+}
+
+func runResultTotalCost(result jobs.RunResult) float64 {
+	if result.Cost != nil {
+		return result.Cost.TotalCostUSD
+	}
+	return result.TotalCostEstimated
 }
 
 func printRunSpend(jobID string, spend float64) {

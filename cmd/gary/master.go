@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
@@ -60,6 +61,7 @@ type masterStatus struct {
 	Summary       string             `json:"summary,omitempty"`
 	Error         string             `json:"error,omitempty"`
 	Waves         []masterWaveRecord `json:"waves,omitempty"`
+	Cost          *cost.Summary      `json:"cost,omitempty"`
 }
 
 func cmdMaster() {
@@ -94,7 +96,7 @@ func cmdMaster() {
 		cfg.GCPRegion = "europe-west2"
 	}
 
-	status := &masterStatus{ID: manifest.ID, State: "starting"}
+	status := &masterStatus{ID: manifest.ID, State: "starting", Cost: cost.NewSummary()}
 	stagingBranch := manifest.StagingBranch
 	if stagingBranch == "" {
 		stagingBranch = fmt.Sprintf("gary/master-%s-%s", shortMasterID(manifest.ID, 16), randomSuffix(6))
@@ -106,8 +108,10 @@ func cmdMaster() {
 			status = prior
 			status.State = "starting"
 			status.Error = ""
+			ensureMasterCost(status)
 		}
 	}
+	ensureMasterCost(status)
 	status.StagingBranch = stagingBranch
 	_ = saveMasterStatus(status)
 
@@ -128,12 +132,13 @@ func cmdMaster() {
 
 		history, _ := json.Marshal(status.Waves)
 		fmt.Printf("[yardmaster] PLAN wave=%d mode=control-direct model=%s limit=%s\n", wave, cfg.MasterModel, yardmasterPlannerTimeout)
-		plan, planDuration, err := runYardmasterDirect(cfg, manifest, brief, stagingBranch, wave, string(history))
+		plan, planDuration, plannerCost, err := runYardmasterDirect(cfg, manifest, brief, stagingBranch, wave, string(history))
 		record := masterWaveRecord{
 			Wave:                wave,
 			PlannerMode:         "control-direct",
 			PlannerDurationSecs: planDuration.Seconds(),
 		}
+		status.Cost.Add(plannerCost)
 		if err != nil {
 			status.Waves = append(status.Waves, record)
 			failMaster(status, fmt.Errorf("planner failed in wave %d after %.1fs: %w", wave, planDuration.Seconds(), err))
@@ -154,7 +159,7 @@ func cmdMaster() {
 			status.State = "done"
 			status.Summary = plan.Summary
 			_ = saveMasterStatus(status)
-			fmt.Printf("GARY // MASTER COMPLETE\nBranch: %s\nWaves: %d\n", stagingBranch, wave)
+			printMasterComplete(status, stagingBranch, wave)
 			return
 		}
 		if len(plan.Jobs) == 0 {
@@ -177,6 +182,25 @@ func cmdMaster() {
 
 		results := runMasterWave(cfg, childJobs, manifest.MaxWorkers)
 		record.Results = results
+		for _, result := range results {
+			if result.Cost != nil {
+				for _, component := range result.Cost.Components {
+					status.Cost.Add(component)
+				}
+			} else {
+				status.Cost.Add(cost.Component{
+					Kind:                 "worker",
+					UsageSource:          cost.LegacyEstimate,
+					ModelCostUSD:         result.ModelCostEstimated,
+					ComputeCostUSD:       result.ComputeCostEstimated,
+					TotalCostUSD:         result.TotalCostEstimated,
+					PricingVersion:       cost.PricingVersion,
+					PricingEffectiveDate: cost.PricingEffectiveDate,
+					PricingSource:        cost.PricingSource,
+					UnmeteredReason:      "worker result had no structured cost record",
+				})
+			}
+		}
 		status.State = "integrating"
 		_ = saveMasterStatus(status)
 
@@ -470,6 +494,7 @@ func isFinalMasterState(state string) bool {
 }
 
 func saveMasterStatus(status *masterStatus) error {
+	ensureMasterCost(status)
 	status.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	path := filepath.Join("gary", "master", "status", status.ID+".json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -480,6 +505,43 @@ func saveMasterStatus(status *masterStatus) error {
 		return err
 	}
 	return os.WriteFile(path, append(data, '\n'), 0o644)
+}
+
+func ensureMasterCost(status *masterStatus) {
+	if status.Cost != nil {
+		return
+	}
+	status.Cost = cost.NewSummary()
+	for _, wave := range status.Waves {
+		for _, result := range wave.Results {
+			status.Cost.Add(cost.Component{
+				Kind:                 "worker",
+				UsageSource:          cost.LegacyEstimate,
+				ModelCostUSD:         result.ModelCostEstimated,
+				ComputeCostUSD:       result.ComputeCostEstimated,
+				TotalCostUSD:         result.TotalCostEstimated,
+				PricingVersion:       "legacy",
+				PricingEffectiveDate: "legacy",
+				UnmeteredReason:      "migrated from legacy fixed-token estimate",
+			})
+		}
+	}
+	if len(status.Cost.Components) > 0 {
+		status.Cost.PricingStatus = cost.LegacyEstimate
+	}
+}
+
+func printMasterComplete(status *masterStatus, branch string, wave int) {
+	ensureMasterCost(status)
+	fmt.Printf("GARY // MASTER COMPLETE\nBranch: %s\nWaves: %d\n", branch, wave)
+	fmt.Printf("Yardmaster: $%.4f\nWorkers: $%.4f\nCloser/repair: $%.4f\nBatch compute: $%.4f\nTOTAL: $%.4f\nCost quality: %s\nPricing: %s\n",
+		status.Cost.YardmasterModelCostUSD,
+		status.Cost.WorkerModelCostUSD,
+		status.Cost.CloserRepairCostUSD,
+		status.Cost.ComputeCostUSD,
+		status.Cost.TotalCostUSD,
+		status.Cost.PricingStatus,
+		status.Cost.PricingVersion)
 }
 
 func failMaster(status *masterStatus, err error) {

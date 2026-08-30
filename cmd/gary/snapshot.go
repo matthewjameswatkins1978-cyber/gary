@@ -107,7 +107,8 @@ func snapshotJobComplete(jobID string, result jobs.RunResult) {
 		ResultBranch: result.Branch,
 		ResultCommit: result.CommitSHA,
 		Attempts:     result.Attempts,
-		EstCost:      result.TotalCostEstimated,
+		EstCost:      result.TotalCostEstimated, // legacy compatibility
+		Cost:         result.Cost,
 		Summary:      summary,
 		FinishedAt:   time.Now().UTC().Format(time.RFC3339),
 	})

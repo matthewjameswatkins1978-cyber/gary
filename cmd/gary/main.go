@@ -33,6 +33,8 @@ func main() {
 		cmdIssue()
 	case "status":
 		cmdStatus()
+	case "cost":
+		cmdCost()
 	case "snapshot":
 		cmdSnapshot()
 	case "smoke":
@@ -75,6 +77,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  inbox        Validate or dispatch repository inbox jobs")
 	fmt.Fprintln(os.Stderr, "  issue        Execute one authenticated GitHub Issue command")
 	fmt.Fprintln(os.Stderr, "  status       Show yard status and cost summary")
+	fmt.Fprintln(os.Stderr, "  cost         Show the terminal cost for one job or master")
 	fmt.Fprintln(os.Stderr, "  snapshot     Show GitHub-readable status snapshot")
 	fmt.Fprintln(os.Stderr, "  worker       Show default worker configuration")
 	fmt.Fprintln(os.Stderr, "  smoke        Run Google Cloud Batch heartbeat smoke test")
@@ -106,6 +109,10 @@ func cmdSnapshot() {
 	}
 	fmt.Printf("Recent:   %d\n", len(snap.RecentJobs))
 	for _, j := range snap.RecentJobs {
-		fmt.Printf("  [%s] %s cost=$%.4f\n", j.State, j.ID, j.EstCost)
+		if j.Cost != nil {
+			fmt.Printf("  [%s] %s cost=$%.4f (%s)\n", j.State, j.ID, j.Cost.TotalCostUSD, j.Cost.PricingStatus)
+		} else {
+			fmt.Printf("  [%s] %s cost=$%.4f (LEGACY_ESTIMATE)\n", j.State, j.ID, j.EstCost)
+		}
 	}
 }

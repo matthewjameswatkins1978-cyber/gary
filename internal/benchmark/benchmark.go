@@ -1,5 +1,7 @@
 package benchmark
 
+import "github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
+
 // Route identifies which execution route was used.
 type Route string
 
@@ -40,53 +42,28 @@ type Result struct {
 	Records     []Record `json:"records"`
 }
 
-// PriceTable is a configurable local price table for model cost estimation.
-// Prices are in USD per token.
-type PriceTable struct {
-	ModelName   string  `json:"model_name"`
-	InputPrice  float64 `json:"input_per_token"`
-	OutputPrice float64 `json:"output_per_token"`
-	CachedPrice float64 `json:"cached_per_token"`
-}
+// PriceTable is retained as an alias for compatibility. Pricing now lives in
+// the shared cost package so every GARY path uses the same versioned table.
+type PriceTable = cost.PriceTable
 
 // DefaultPriceTable returns the current Gemini Developer API standard pricing
 // for gemini-3.5-flash-lite.
 func DefaultPriceTable() PriceTable {
-	return PriceTable{
-		ModelName:   "gemini-3.5-flash-lite",
-		InputPrice:  0.0000003,  // $0.30 / 1M
-		OutputPrice: 0.0000025,  // $2.50 / 1M (includes thinking tokens)
-		CachedPrice: 0.00000003, // $0.03 / 1M
-	}
+	return cost.PriceForModel("gemini-3.5-flash-lite")
 }
 
 // PriceTableForModel returns the current standard text-token pricing used by
-// GARY's cost estimator. Gemini 3.7/3.6 Flash promotional pricing is valid
-// through 2026-12-31. Unknown models fall back to the existing Lite table
-// rather than silently returning zero cost.
+// GARY's pre-dispatch cost estimator. Unknown models are explicitly unknown;
+// callers must not silently substitute another model's price.
 func PriceTableForModel(model string) PriceTable {
-	switch model {
-	case "gemini-3.7-flash", "gemini-3.6-flash":
-		return PriceTable{
-			ModelName:   model,
-			InputPrice:  0.00000075,  // $0.75 / 1M
-			OutputPrice: 0.00000375,  // $3.75 / 1M (includes thinking tokens)
-			CachedPrice: 0.000000075, // $0.075 / 1M
-		}
-	case "gemini-2.5-flash", "gemini-3.5-flash-lite":
-		pt := DefaultPriceTable()
-		pt.ModelName = model
-		return pt
-	default:
-		return DefaultPriceTable()
-	}
+	return cost.PriceForModel(model)
 }
 
-// EstimateCost calculates estimated model cost in USD.
-// Billed output tokens = outputTokens + thoughtTokens.
+// EstimateCost calculates estimated model cost in USD. The thoughtTokens
+// argument remains for source compatibility; provider output counts already
+// include reasoning tokens and must not be double-counted.
 func EstimateCost(pt PriceTable, inputTokens, outputTokens, thoughtTokens, cachedTokens int) float64 {
-	input := float64(inputTokens) * pt.InputPrice
-	output := float64(outputTokens+thoughtTokens) * pt.OutputPrice
-	cached := float64(cachedTokens) * pt.CachedPrice
-	return input + output + cached
+	// thoughtTokens is intentionally ignored: provider output counts already
+	// include reasoning tokens. Keep the argument for source compatibility.
+	return cost.ModelCost(pt, inputTokens-cachedTokens, cachedTokens, outputTokens)
 }

@@ -20,10 +20,10 @@ import (
 
 	"github.com/matthewjameswatkins1978-cyber/gary/control"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/batch"
-	"github.com/matthewjameswatkins1978-cyber/gary/internal/benchmark"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
-	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/githubapp"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
@@ -121,6 +121,9 @@ func cmdRun() {
 	} else {
 		fmt.Printf("final_status=%s\n", result.FinalStatus)
 	}
+	if result.Cost != nil {
+		fmt.Printf("Cost: $%.4f USD (%s)\n", result.Cost.TotalCostUSD, result.Cost.PricingStatus)
+	}
 }
 
 // RunJob executes a single coding job with retry logic using the normal implementer model.
@@ -174,7 +177,9 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				DurationSecs:       duration.Seconds(),
 				Attempts:           0,
 				TotalCostEstimated: 0,
+				Cost:               cost.NewSummary(),
 			}
+			saveRunResult(cfg, result)
 			snapshotJobComplete(job.ID, result)
 			return result
 		}
@@ -193,6 +198,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	closerUsed := false
 	finalStatus := "FAILED"
 	actualAttempts := 0
+	runCost := cost.NewSummary()
 
 	for attempt := 1; attempt <= attemptLimit; attempt++ {
 		if cfg.MaxCostUSD > 0 {
@@ -267,16 +273,24 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 		logPrintln(prefix, "  SUBMITTED")
 
-		status, _, err := batch.WaitForTerminal(
+		status, finishedAt, err := batch.WaitForTerminal(
 			cfg.GCPProject, cfg.GCPRegion, jobName,
 			10*time.Second, time.Duration(maxRunDurSec+batchSchedulingGraceSec)*time.Second,
 		)
 		if err != nil {
 			logPrint(prefix, "  polling failed: %v", err)
+			runCost.Add(batchCostComponent(model, "", time.Since(submittedAt).Seconds(), "e2-small"))
 			os.RemoveAll(attemptDir)
 			finalStatus = "BLOCKED"
 			break
 		}
+		attemptRuntime := batch.ObservedRuntimeSeconds(status, submittedAt, finishedAt)
+		usageText := downloadGCSFile(attemptDir, attemptGCSPath+"/usage.jsonl")
+		if usageText == "" {
+			usageText = extractFromBatchLogs(cfg.GCPProject, cfg.GCPRegion, jobName, "GARY_USAGE_B64")
+		}
+		attemptCost := workerCostComponent(model, usageText, attemptRuntime)
+		runCost.Add(attemptCost)
 
 		batchSucceeded := status.State() == "SUCCEEDED"
 
@@ -331,10 +345,6 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				duration := time.Since(submittedAt)
 				os.RemoveAll(attemptDir)
 
-				modelCost := estimateModelCost(model, attempt)
-				computeCost := duration.Seconds() * 0.00000575
-				totalCost := modelCost + computeCost
-
 				result := jobs.RunResult{
 					JobID:                job.ID,
 					BatchJobID:           jobName,
@@ -348,11 +358,12 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 					Escalated:            escalated,
 					CloserUsed:           closerUsed,
 					FinalStatus:          "DONE",
-					ModelCostEstimated:   modelCost,
-					ComputeCostEstimated: computeCost,
-					TotalCostEstimated:   totalCost,
+					ModelCostEstimated:   runCost.ModelCostUSD,
+					ComputeCostEstimated: runCost.ComputeCostUSD,
+					TotalCostEstimated:   runCost.TotalCostUSD,
+					Cost:                 runCost,
 				}
-				saveResult(cfg, job, jobName, garyBranch, commitSHA, true, duration, len(patchData), attempt, repairCount, escalated, closerUsed, "DONE")
+				saveRunResult(cfg, result)
 				writeLedger(cfg, result, model)
 				snapshotJobComplete(job.ID, result)
 				return result
@@ -412,7 +423,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			if patchForReview == "" {
 				patchForReview = lastPatch
 			}
-			brief, briefErr := generateRepairBrief(
+			brief, repairCost, briefErr := generateRepairBrief(
 				cfg,
 				job.Task,
 				acceptanceStr,
@@ -422,6 +433,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				progressState,
 				lastRepairBrief,
 			)
+			runCost.Add(repairCost)
 			if briefErr != nil {
 				logPrint(prefix, "  repair review unavailable: %v", briefErr)
 			} else {
@@ -457,7 +469,8 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			defer os.RemoveAll(closerDir)
 
 			closerTask := buildCloserTask(job, lastPatch, lastAcceptance, lastFailure, progressHistory)
-			closeResult, err := runCloser(cfg, closerTask, closerDir, job, garyBranch, acceptanceStr, gcsPath, prevGCSPatch, prefix)
+			closeResult, closerCost, err := runCloser(cfg, closerTask, closerDir, job, garyBranch, acceptanceStr, gcsPath, prevGCSPatch, prefix)
+			runCost.Add(closerCost)
 			if err != nil {
 				logPrint(prefix, "  closer failed: %v", err)
 				if isServiceEnvironmentBlocker(err.Error()) {
@@ -473,10 +486,6 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				closerUsed = true
 				finalStatus = "DONE"
 
-				modelCost := estimateModelCost(model, actualAttempts) + estimateModelCost(cfg.CloserModel, 1)
-				computeCost := duration.Seconds() * 0.00000575
-				totalCost := modelCost + computeCost
-
 				result := jobs.RunResult{
 					JobID:                job.ID,
 					Branch:               garyBranch,
@@ -488,12 +497,14 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 					Escalated:            escalated,
 					CloserUsed:           closerUsed,
 					FinalStatus:          "DONE",
-					ModelCostEstimated:   modelCost,
-					ComputeCostEstimated: computeCost,
-					TotalCostEstimated:   totalCost,
+					ModelCostEstimated:   runCost.ModelCostUSD,
+					ComputeCostEstimated: runCost.ComputeCostUSD,
+					TotalCostEstimated:   runCost.TotalCostUSD,
+					Cost:                 runCost,
 				}
-				saveResult(cfg, job, fmt.Sprintf("closer-%s", job.ID), garyBranch, commitSHA, true, duration, 0, attemptLimit, repairCount, escalated, closerUsed, "DONE")
+				saveRunResult(cfg, result)
 				writeLedger(cfg, result, model+"+"+cfg.CloserModel)
+				snapshotJobComplete(job.ID, result)
 				return result
 			} else {
 				finalStatus = "FAILED"
@@ -503,11 +514,6 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 	duration := time.Since(submittedAt)
 
-	modelCost := estimateModelCost(model, actualAttempts)
-	computeCost := duration.Seconds() * 0.00000575
-	totalCost := modelCost + computeCost
-
-	saveResult(cfg, job, "", garyBranch, "", false, duration, 0, actualAttempts, repairCount, escalated, closerUsed, finalStatus)
 	result := jobs.RunResult{
 		JobID:                job.ID,
 		Branch:               garyBranch,
@@ -517,10 +523,12 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		Escalated:            escalated,
 		CloserUsed:           closerUsed,
 		FinalStatus:          finalStatus,
-		ModelCostEstimated:   modelCost,
-		ComputeCostEstimated: computeCost,
-		TotalCostEstimated:   totalCost,
+		ModelCostEstimated:   runCost.ModelCostUSD,
+		ComputeCostEstimated: runCost.ComputeCostUSD,
+		TotalCostEstimated:   runCost.TotalCostUSD,
+		Cost:                 runCost,
 	}
+	saveRunResult(cfg, result)
 	writeLedger(cfg, result, model)
 	snapshotJobComplete(job.ID, result)
 	return result
@@ -785,7 +793,7 @@ type repairBrief struct {
 	NextAction  string `json:"next_action"`
 }
 
-func generateRepairBrief(cfg *config.Config, task, acceptance, patch, acceptOutput, failureEvidence, progressState, priorBrief string) (*repairBrief, error) {
+func generateRepairBrief(cfg *config.Config, task, acceptance, patch, acceptOutput, failureEvidence, progressState, priorBrief string) (*repairBrief, cost.Component, error) {
 	prompt := fmt.Sprintf(`You are the stronger review agent guiding a smaller implementation worker toward mechanical acceptance.
 
 Do not merely say that the attempt is wrong. Use the evidence to tell the next worker what already works, what remains wrong, what to preserve, and exactly what to try next.
@@ -826,7 +834,8 @@ Respond with exactly this JSON format:
 	return callGeminiJSON(cfg, prompt)
 }
 
-func callGeminiJSON(cfg *config.Config, prompt string) (*repairBrief, error) {
+func callGeminiJSON(cfg *config.Config, prompt string) (*repairBrief, cost.Component, error) {
+	component := estimatedComponent("repair", cfg.CloserModel, "repair response did not return provider usage")
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", cfg.CloserModel, cfg.GeminiAPIKey)
 
 	body := map[string]interface{}{
@@ -844,22 +853,35 @@ func callGeminiJSON(cfg *config.Config, prompt string) (*repairBrief, error) {
 
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+		return nil, component, fmt.Errorf("marshal request: %w", err)
 	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewReader(jsonBody))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
-		return nil, fmt.Errorf("gemini request: %w", err)
+		return nil, component, fmt.Errorf("gemini request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, component, fmt.Errorf("gemini request: %w", err)
 	}
 	defer resp.Body.Close()
+	component.ProviderRequestID = resp.Header.Get("x-goog-request-id")
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
+		return nil, component, fmt.Errorf("read response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("gemini API %d: %s", resp.StatusCode, string(respBody))
+		component.UnmeteredReason = fmt.Sprintf("repair HTTP %d returned no usable usage record", resp.StatusCode)
+		return nil, component, fmt.Errorf("gemini API %d: %s", resp.StatusCode, string(respBody))
+	}
+	if usage, usageErr := cost.ParseVertexUsage(json.RawMessage(respBody), cfg.CloserModel, "", component.ProviderRequestID); usageErr == nil {
+		component = componentFromUsage("repair", usage)
+		component.ProviderRequestID = resp.Header.Get("x-goog-request-id")
+	} else {
+		component.UnmeteredReason = "repair response lacked complete usageMetadata: " + usageErr.Error()
 	}
 
 	var apiResp struct {
@@ -873,11 +895,11 @@ func callGeminiJSON(cfg *config.Config, prompt string) (*repairBrief, error) {
 	}
 
 	if err := json.Unmarshal(respBody, &apiResp); err != nil {
-		return nil, fmt.Errorf("parse response: %w", err)
+		return nil, component, fmt.Errorf("parse response: %w", err)
 	}
 
 	if len(apiResp.Candidates) == 0 || len(apiResp.Candidates[0].Content.Parts) == 0 {
-		return nil, fmt.Errorf("no candidates in response")
+		return nil, component, fmt.Errorf("no candidates in response")
 	}
 
 	rawText := apiResp.Candidates[0].Content.Parts[0].Text
@@ -899,10 +921,10 @@ func callGeminiJSON(cfg *config.Config, prompt string) (*repairBrief, error) {
 
 	var brief repairBrief
 	if err := json.Unmarshal([]byte(rawText), &brief); err != nil {
-		return nil, fmt.Errorf("parse repair brief JSON: %w (raw: %s)", err, rawText)
+		return nil, component, fmt.Errorf("parse repair brief JSON: %w (raw: %s)", err, rawText)
 	}
 
-	return &brief, nil
+	return &brief, component, nil
 }
 
 func formatRepairBrief(b *repairBrief) string {
@@ -1020,15 +1042,17 @@ func buildCloserTask(job *jobs.Job, lastPatch, lastAcceptance, lastFailure strin
 	return sb.String()
 }
 
-func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.Job, garyBranch, acceptanceStr, gcsPath, prevGCSPatch, prefix string) (bool, error) {
+func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.Job, garyBranch, acceptanceStr, gcsPath, prevGCSPatch, prefix string) (bool, cost.Component, error) {
 	logPrintln(prefix, "  Submitting Closer job...")
+	closerCost := batchCostComponent(cfg.CloserModel, "", 0, "e2-standard-4")
+	startedAt := time.Now()
 
 	jobName := fmt.Sprintf("gary-closer-%s-%s", job.ID, time.Now().Format("20060102-150405"))
 	attemptGCSPath := fmt.Sprintf("%s/closer", gcsPath)
 
 	githubToken, err := currentBatchGitHubToken()
 	if err != nil {
-		return false, fmt.Errorf("GitHub authentication refresh before Closer submission: %w", err)
+		return false, closerCost, fmt.Errorf("GitHub authentication refresh before Closer submission: %w", err)
 	}
 
 	codingCfg := batch.CodingJobConfig{
@@ -1050,29 +1074,37 @@ func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.J
 
 	_, err = batch.SubmitCodingJob(codingCfg)
 	if err != nil {
-		return false, fmt.Errorf("submit closer: %w", err)
+		return false, closerCost, fmt.Errorf("submit closer: %w", err)
 	}
 
 	logPrintln(prefix, "  SUBMITTED")
 
-	status, _, err := batch.WaitForTerminal(
+	status, finishedAt, err := batch.WaitForTerminal(
 		cfg.GCPProject, cfg.GCPRegion, jobName,
 		10*time.Second, 20*time.Minute,
 	)
 	if err != nil {
-		return false, fmt.Errorf("poll closer: %w", err)
+		closerCost.UnmeteredReason = appendCostReason(closerCost.UnmeteredReason, "closer Batch polling failed after submission")
+		return false, closerCost, fmt.Errorf("poll closer: %w", err)
 	}
+	usageText := downloadGCSFile(tmpDir, attemptGCSPath+"/usage.jsonl")
+	if usageText == "" {
+		usageText = extractFromBatchLogs(cfg.GCPProject, cfg.GCPRegion, jobName, "GARY_USAGE_B64")
+	}
+	closerCost = batchCostComponent(cfg.CloserModel, usageText, batch.ObservedRuntimeSeconds(status, startedAt, finishedAt), "e2-standard-4")
+	closerCost.Kind = "closer"
 
 	if status.State() != "SUCCEEDED" {
-		return false, fmt.Errorf("closer job %s", status.State())
+		closerCost.UnmeteredReason = appendCostReason(closerCost.UnmeteredReason, "closer Batch job ended in "+status.State())
+		return false, closerCost, fmt.Errorf("closer job %s", status.State())
 	}
 
 	patchData := downloadGCSFile(tmpDir, attemptGCSPath+"/result.patch")
 	if patchData == "" {
-		return false, fmt.Errorf("no patch from closer")
+		return false, closerCost, fmt.Errorf("no patch from closer")
 	}
 
-	return runLocalAcceptance(tmpDir, job, garyBranch, patchData, prefix), nil
+	return runLocalAcceptance(tmpDir, job, garyBranch, patchData, prefix), closerCost, nil
 }
 
 func loadJob(path string) (*jobs.Job, error) {
@@ -1097,28 +1129,13 @@ func randomSuffix(n int) string {
 	return hex.EncodeToString(b)[:n]
 }
 
-func saveResult(cfg *config.Config, job *jobs.Job, batchJobID, branch, commitSHA string, accepted bool, duration time.Duration, patchBytes, attempts, repairCount int, escalated, closerUsed bool, finalStatus string) {
-	result := jobs.RunResult{
-		JobID:        job.ID,
-		BatchJobID:   batchJobID,
-		Branch:       branch,
-		CommitSHA:    commitSHA,
-		Accepted:     accepted,
-		DurationSecs: duration.Seconds(),
-		PatchBytes:   int64(patchBytes),
-		Attempts:     attempts,
-		RepairCount:  repairCount,
-		Escalated:    escalated,
-		CloserUsed:   closerUsed,
-		FinalStatus:  finalStatus,
-	}
-
+func saveRunResult(cfg *config.Config, result jobs.RunResult) {
 	dir := filepath.Join(cfg.ResultsDir, "runs")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}
 
-	filename := fmt.Sprintf("%s.json", job.ID)
+	filename := fmt.Sprintf("%s.json", result.JobID)
 	path := filepath.Join(dir, filename)
 
 	data, err := json.MarshalIndent(result, "", "  ")
@@ -1129,12 +1146,32 @@ func saveResult(cfg *config.Config, job *jobs.Job, batchJobID, branch, commitSHA
 	os.WriteFile(path, data, 0o644)
 }
 
-func estimateModelCost(model string, attempts int) float64 {
-	pt := benchmark.PriceTableForModel(model)
-	inputPerAttempt := 15000
-	outputPerAttempt := 7500
-	cachedPerAttempt := 2000
-	return benchmark.EstimateCost(pt, inputPerAttempt*attempts, outputPerAttempt*attempts, 0, cachedPerAttempt*attempts)
+func batchCostComponent(model, usageText string, runtimeSeconds float64, machineType string) cost.Component {
+	var component cost.Component
+	if usage, err := cost.ParseGeminiCLIStreamJSONL([]byte(usageText), model); err == nil {
+		component = componentFromUsage("worker", usage)
+	} else {
+		component = estimatedComponent("worker", model, "Gemini CLI provider telemetry unavailable: "+err.Error())
+	}
+	component.RuntimeSeconds = runtimeSeconds
+	component.MachineType = machineType
+	component.ProvisioningModel = "STANDARD"
+	computeCost, _ := cost.ComputeCost(component.MachineType, component.ProvisioningModel, runtimeSeconds)
+	component.ComputeCostUSD = computeCost
+	component.TotalCostUSD = component.ModelCostUSD + component.ComputeCostUSD
+	component.UnmeteredReason = appendCostReason(component.UnmeteredReason, "Batch compute is estimated from observed runtime; invoice data was not queried")
+	return component
+}
+
+func workerCostComponent(model, usageText string, runtimeSeconds float64) cost.Component {
+	return batchCostComponent(model, usageText, runtimeSeconds, "e2-small")
+}
+
+func appendCostReason(existing, addition string) string {
+	if existing == "" {
+		return addition
+	}
+	return existing + "; " + addition
 }
 
 func writeLedger(cfg *config.Config, result jobs.RunResult, model string) {
