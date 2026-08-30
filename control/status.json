@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-30T12:58:19Z",
+  "updated_at": "2026-08-30T13:02:48Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -51,30 +51,9 @@
       "result_branch": "gary/calle-tethers-ga-w1-j2-d47b9d19",
       "started_at": "2026-08-30T12:58:15Z",
       "attempts": 1
-    },
-    {
-      "id": "calle-tethers-ga-w1-j1",
-      "batch_job_id": "gary-run-calle-tethers-ga-w1-j1-1-20260830-125818",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/tethers-lang.git",
-      "base_branch": "gary/master-calle-tethers-ga-68a3ef",
-      "result_branch": "gary/calle-tethers-ga-w1-j1-c52b9842",
-      "started_at": "2026-08-30T12:58:15Z",
-      "attempts": 1
     }
   ],
   "recent_jobs": [
-    {
-      "id": "mplan-resolve-google-a-1",
-      "batch_job_id": "gary-run-mplan-resolve-google-a-1-1-20260829-101323",
-      "state": "accepted",
-      "result_branch": "gary/mplan-resolve-google-a-1-0eac1942",
-      "result_commit": "6de0eae",
-      "finished_at": "2026-08-29T10:18:09Z",
-      "attempts": 1,
-      "est_cost": 0.04117817548276325,
-      "summary": "DONE"
-    },
     {
       "id": "resolve-google-a-w1-j4",
       "state": "failed",
@@ -257,6 +236,17 @@
       "attempts": 2,
       "est_cost": 0.05289201573830401,
       "summary": "BUDGET_STOPPED"
+    },
+    {
+      "id": "calle-tethers-ga-w1-j1",
+      "batch_job_id": "gary-run-calle-tethers-ga-w1-j1-1-20260830-125818",
+      "state": "accepted",
+      "result_branch": "gary/calle-tethers-ga-w1-j1-c52b9842",
+      "result_commit": "b6afa52",
+      "finished_at": "2026-08-30T13:02:48Z",
+      "attempts": 1,
+      "est_cost": 0.024877106009958756,
+      "summary": "DONE"
     }
   ]
 }
