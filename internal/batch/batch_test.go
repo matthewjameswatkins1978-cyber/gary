@@ -301,6 +301,37 @@ func TestCodingJobAcceptanceUsesExitCode(t *testing.T) {
 	}
 }
 
+func TestCodingJobPreservesFailedAcceptanceEvidenceBeforeExit(t *testing.T) {
+	cfg := CodingJobConfig{
+		Project: "p", Region: "r", JobName: "j",
+		RepoURL: "https://example.com/repo.git", BaseBranch: "main",
+		GaryBranch: "gary/test", Task: "fix it", Acceptance: "python -m pytest -q",
+		GCSPath: "gs://bucket/run",
+	}
+	script := generateCodingWorkerScript(cfg)
+
+	for _, required := range []string{
+		": > /workspace/acceptance_output.txt",
+		"set +e",
+		"ACCEPTANCE_EXIT=$?",
+		"set -e",
+		"GARY_ACCEPTANCE_B64_START",
+		"gcloud storage cp /workspace/acceptance_output.txt",
+		"if [ $ACCEPTANCE_EXIT -ne 0 ]; then",
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("worker script missing %q", required)
+		}
+	}
+
+	exitIndex := strings.LastIndex(script, "if [ $ACCEPTANCE_EXIT -ne 0 ]; then")
+	markerIndex := strings.Index(script, "GARY_ACCEPTANCE_B64_START")
+	uploadIndex := strings.Index(script, "gcloud storage cp /workspace/acceptance_output.txt")
+	if exitIndex < markerIndex || exitIndex < uploadIndex {
+		t.Fatal("failed acceptance must emit and upload evidence before exiting")
+	}
+}
+
 func TestCodingJobCommitMessageIsShort(t *testing.T) {
 	cfg := CodingJobConfig{
 		Project:    "p",
