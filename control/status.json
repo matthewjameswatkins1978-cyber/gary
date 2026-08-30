@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-30T02:35:53Z",
+  "updated_at": "2026-08-30T02:35:55Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -44,11 +44,13 @@
     },
     {
       "id": "judgement-call-b-w7-j2",
+      "batch_job_id": "gary-run-judgement-call-b-w7-j2-1-20260830-023555",
       "state": "running",
       "repo": "https://github.com/matthewjameswatkins1978-cyber/judgement-call.git",
       "base_branch": "gary/master-judgement-call-b-df8065",
       "result_branch": "gary/judgement-call-b-w7-j2-84f6d109",
-      "started_at": "2026-08-30T02:35:53Z"
+      "started_at": "2026-08-30T02:35:53Z",
+      "attempts": 1
     }
   ],
   "recent_jobs": [
