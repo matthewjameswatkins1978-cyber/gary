@@ -254,6 +254,10 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 					encoded, _ := json.Marshal(typ)
 					item["type"] = encoded
 				}
+				if _, ok := item["id"]; !ok {
+					encoded, _ := json.Marshal(fmt.Sprintf("%s-%03d", field, i+1))
+					item["id"] = encoded
+				}
 				normalizeSource(item, packetDigest, field)
 				items = append(items, item)
 			}
