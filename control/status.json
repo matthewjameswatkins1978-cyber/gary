@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-31T06:53:01Z",
+  "updated_at": "2026-08-31T06:54:44Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -14,6 +14,17 @@
       "result_branch": "gary/gary-live-cert-2-w1-j1-5f44e2cb",
       "started_at": "2026-08-31T06:32:58Z",
       "attempts": 5
+    },
+    {
+      "id": "book-burner-w1-j1",
+      "project_id": "book-burner",
+      "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+      "project_manual_version": 1,
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/book-burner.git",
+      "base_branch": "gary/master-book-burner-76b027",
+      "result_branch": "gary/book-burner-w1-j1-3e2e2ba1",
+      "started_at": "2026-08-31T06:54:44Z"
     }
   ],
   "recent_jobs": [
