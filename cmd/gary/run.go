@@ -37,10 +37,10 @@ const (
 
 var outputMu sync.Mutex
 
-var batchGitHubTokenSource = githubapp.TokenFromEnv
+var batchGitHubTokenSource = githubapp.TokenFromEnvForRepository
 
-func currentBatchGitHubToken() (string, error) {
-	return batchGitHubTokenSource()
+func currentBatchGitHubToken(repoURL string) (string, error) {
+	return batchGitHubTokenSource(repoURL)
 }
 
 func logPrint(prefix, format string, args ...interface{}) {
@@ -262,7 +262,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			snapshotActiveJob(job.ID, jobName, job.Repo, job.BaseBranch, garyBranch, control.JobRunning, attempt, startedAt, projectProvenance{job.ProjectID, job.MasterPacketDigest, job.ProjectManualVersion})
 		}
 
-		githubToken, tokenErr := currentBatchGitHubToken()
+		githubToken, tokenErr := currentBatchGitHubToken(job.Repo)
 		if tokenErr != nil {
 			logPrint(prefix, "  GitHub authentication refresh failed before Batch submission: %v", tokenErr)
 			os.RemoveAll(attemptDir)
@@ -1085,7 +1085,7 @@ func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.J
 	jobName := fmt.Sprintf("gary-closer-%s-%s", job.ID, time.Now().Format("20060102-150405"))
 	attemptGCSPath := fmt.Sprintf("%s/closer", gcsPath)
 
-	githubToken, err := currentBatchGitHubToken()
+	githubToken, err := currentBatchGitHubToken(job.Repo)
 	if err != nil {
 		return false, closerCost, fmt.Errorf("GitHub authentication refresh before Closer submission: %w", err)
 	}

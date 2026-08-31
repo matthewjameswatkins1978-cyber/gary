@@ -13,12 +13,12 @@ import (
 
 // Clone clones a repository into the target directory.
 func Clone(repoURL, targetDir string) error {
-	return runGit(targetDir, "clone", repoURL, ".")
+	return runGitForRepository(repoURL, targetDir, "clone", repoURL, ".")
 }
 
 // CloneBranch clones one branch into the target directory.
 func CloneBranch(repoURL, branch, targetDir string) error {
-	return runGit(targetDir, "clone", "--branch", branch, "--single-branch", repoURL, ".")
+	return runGitForRepository(repoURL, targetDir, "clone", "--branch", branch, "--single-branch", repoURL, ".")
 }
 
 // Checkout checks out an existing branch.
@@ -55,12 +55,12 @@ func CommitAll(dir, message string) error {
 
 // Push pushes the branch to the remote.
 func Push(dir, remote, branch string) error {
-	return runGit(dir, "push", remote, branch)
+	return runGitRemoteForRepository(dir, remote, "push", remote, branch)
 }
 
 // FetchBranch fetches a specific branch from the remote.
 func FetchBranch(dir, remote, branch string) error {
-	return runGit(dir, "fetch", remote, branch)
+	return runGitRemoteForRepository(dir, remote, "fetch", remote, branch)
 }
 
 // FormatPatch generates a format-patch from baseBranch to HEAD.
@@ -84,10 +84,7 @@ func AbortCherryPick(dir string) error {
 
 // ApplyPatch applies a unified diff patch to the working tree.
 func ApplyPatch(dir, patch string) error {
-	cmd, err := gitCommand("git", "apply", "--verbose")
-	if err != nil {
-		return err
-	}
+	cmd := exec.Command("git", "apply", "--verbose")
 	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(patch)
 	out, err := cmd.CombinedOutput()
@@ -98,7 +95,15 @@ func ApplyPatch(dir, patch string) error {
 }
 
 func runGit(dir string, args ...string) error {
-	cmd, err := gitCommand("git", args...)
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func runGitForRepository(repoURL, dir string, args ...string) error {
+	cmd, err := gitCommandForRepository(repoURL, "git", args...)
 	if err != nil {
 		return err
 	}
@@ -108,11 +113,16 @@ func runGit(dir string, args ...string) error {
 	return cmd.Run()
 }
 
-func runGitCapture(dir string, args ...string) (string, error) {
-	cmd, err := gitCommand("git", args...)
+func runGitRemoteForRepository(dir, remote string, args ...string) error {
+	repoURL, err := runGitCapture(dir, "remote", "get-url", remote)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("resolve remote %s: %w", remote, err)
 	}
+	return runGitForRepository(repoURL, dir, args...)
+}
+
+func runGitCapture(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -124,9 +134,9 @@ func runGitCapture(dir string, args ...string) (string, error) {
 // gitCommand supplies a short-lived GitHub App installation token to git
 // without writing it to a remote URL or repository configuration. It is empty
 // outside Actions, so local developer behaviour stays unchanged.
-func gitCommand(name string, args ...string) (*exec.Cmd, error) {
+func gitCommandForRepository(repoURL, name string, args ...string) (*exec.Cmd, error) {
 	cmd := exec.Command(name, args...)
-	token, err := githubapp.TokenFromEnv()
+	token, err := githubapp.TokenFromEnvForRepository(repoURL)
 	if err != nil {
 		return nil, fmt.Errorf("GitHub authentication: %w", err)
 	}

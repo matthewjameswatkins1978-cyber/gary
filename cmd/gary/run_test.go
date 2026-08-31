@@ -61,7 +61,10 @@ func TestBatchGitHubTokenSourceIsConsultedForEachSubmissionBoundary(t *testing.T
 	defer func() { batchGitHubTokenSource = original }()
 
 	calls := 0
-	batchGitHubTokenSource = func() (string, error) {
+	batchGitHubTokenSource = func(repoURL string) (string, error) {
+		if repoURL != "https://github.com/matthewjameswatkins1978-cyber/book-burner.git" {
+			t.Fatalf("token source repo = %q", repoURL)
+		}
 		calls++
 		if calls == 1 {
 			return "token-one", nil
@@ -69,11 +72,11 @@ func TestBatchGitHubTokenSourceIsConsultedForEachSubmissionBoundary(t *testing.T
 		return "token-two", nil
 	}
 
-	first, err := currentBatchGitHubToken()
+	first, err := currentBatchGitHubToken("https://github.com/matthewjameswatkins1978-cyber/book-burner.git")
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := currentBatchGitHubToken()
+	second, err := currentBatchGitHubToken("https://github.com/matthewjameswatkins1978-cyber/book-burner.git")
 	if err != nil {
 		t.Fatal(err)
 	}

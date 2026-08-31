@@ -42,19 +42,10 @@ jobs:
             });
             core.setOutput("already_processed", comments.some((comment) => comment.body.includes(marker)) ? "true" : "false");
 
-      - name: Create short-lived GARY GitHub App token
-        id: gary-app
-        if: steps.idempotency.outputs.already_processed != 'true' && vars.GARY_GITHUB_APP_ID != ''
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.GARY_GITHUB_APP_ID }}
-          private-key: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - uses: actions/checkout@v4
         if: steps.idempotency.outputs.already_processed != 'true'
         with:
-          token: ${{ steps.gary-app.outputs.token || github.token }}
+          token: ${{ github.token }}
 
       - uses: actions/setup-go@v5
         if: steps.idempotency.outputs.already_processed != 'true'
@@ -88,7 +79,9 @@ jobs:
         id: execute
         if: steps.idempotency.outputs.already_processed != 'true'
         env:
-          GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token }}
+          GARY_GITHUB_APP_ID: ${{ vars.GARY_GITHUB_APP_ID }}
+          GARY_GITHUB_APP_INSTALLATION_ID: ${{ vars.GARY_GITHUB_APP_INSTALLATION_ID }}
+          GARY_GITHUB_APP_PRIVATE_KEY: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
         run: |
           set +e
           go run ./cmd/gary issue execute "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/gary-issue-result.json"

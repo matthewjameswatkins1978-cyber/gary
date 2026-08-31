@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/githubapp"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
@@ -182,8 +183,8 @@ func validateInboxJob(job *jobs.Job) error {
 	if !inboxID.MatchString(job.ID) {
 		return errors.New("id must use lowercase letters, digits, and hyphens (1-30 chars)")
 	}
-	if !strings.HasPrefix(job.Repo, "https://github.com/matthewjameswatkins1978-cyber/") || !strings.HasSuffix(job.Repo, ".git") {
-		return errors.New("repo must be an HTTPS repository under matthewjameswatkins1978-cyber and end in .git")
+	if _, err := githubapp.ParseRepository(job.Repo); err != nil {
+		return fmt.Errorf("invalid repo: %w", err)
 	}
 	if !inboxBranch.MatchString(job.BaseBranch) || strings.Contains(job.BaseBranch, "..") {
 		return errors.New("base_branch contains unsupported characters")

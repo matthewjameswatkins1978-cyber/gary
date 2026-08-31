@@ -1,7 +1,9 @@
 # GARY Result Pusher — GitHub App Setup
 
-The GARY control plane uses `actions/create-github-app-token@v2` to obtain a
-short-lived installation token. No custom JWT code is needed.
+GARY uses one trusted GitHub App installation. The control plane exchanges the
+App key for a short-lived installation token for the exact repository named by
+the accepted project packet. Workers receive only that token; they never
+receive the App private key or a reusable PAT.
 
 ## Browser Steps
 
@@ -34,30 +36,43 @@ On the App settings page:
 ### 5. Store the Private Key
 Store the PEM content as repository **secret**: `GARY_GITHUB_APP_PRIVATE_KEY`
 
-### 6. Install the App
+### 6. Install the App on the trusted owner account
 - Go to: https://github.com/settings/apps
 - Click **Install** next to "GARY Result Pusher"
-- Select repositories:
-  - `matthewjameswatkins1978-cyber/gary`
-  - `matthewjameswatkins1978-cyber/judgement-call`
-  - `matthewjameswatkins1978-cyber/book-burner`
+- Select **All repositories** when the trusted owner account is the intended
+  GARY boundary. This lets a newly created private repository work without a
+  source-code allowlist edit. If all-repository scope is not acceptable, use
+  selected repositories and add each new target in GitHub as a one-time
+  installation-scope change.
 - Click **Install**
+- Record the installation ID from the installation page.
 
 ## Required Repository Configuration
 
 | Name | Type | Value |
 |------|------|-------|
 | `GARY_GITHUB_APP_ID` | Variable | App ID (numeric) |
+| `GARY_GITHUB_APP_INSTALLATION_ID` | Variable | Installation ID (numeric) |
 | `GARY_GITHUB_APP_PRIVATE_KEY` | Secret | PEM content (full) |
 
 ## How It Works
 
-The `gary-control.yml` workflow uses `actions/create-github-app-token@v2`
-with the App ID and private key to generate a short-lived installation token.
-This token is passed as `GARY_GITHUB_TOKEN` to the GARY binary for push
-operations (submit, recover, status snapshot publishing).
+The GARY control plane signs a short-lived App JWT and requests an installation
+token with `repositories: [target-repository]`. The token is passed only into
+the bounded Batch job as `GARY_GITHUB_TOKEN`. The master workflow uses its
+normal ephemeral workflow token only to publish status back to the GARY
+control repository.
 
 Read-only commands (status, doctor, list, inspect, logs) do not require the
-App token. The current master workflow also restricts its short-lived token to
-the repositories listed above; add a target repository to that workflow and
-install the App on it before dispatching private-repository work.
+App token. Before a private target can run, its URL must be an HTTPS GitHub
+repository under the approved owner `matthewjameswatkins1978-cyber`. The repo
+name is not hardcoded. GARY rejects other owners, malformed URLs, missing App
+configuration, and failed token minting before worker submission.
+
+## Adding a new private repository
+
+Create the repository under the approved owner and ensure the existing App
+installation covers it. With **All repositories** selected, this is automatic;
+with selected-repository scope, add it to the App installation once. Then use
+its canonical `.git` URL in the project packet. No GARY workflow or source-code
+edit is required.
