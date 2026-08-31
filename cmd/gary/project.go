@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -243,10 +244,27 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 					return project.ProjectManual{}, fmt.Errorf("%s[%d]: %w", field, i, err)
 				}
 				if _, ok := item["text"]; !ok {
-					for _, candidate := range []string{"description", "decision", "choice", "command", "expected_outcome", "purpose", "technology", "objective", "strategy", "capability", "requirement", "statement", "risk", "tool"} {
+					for _, candidate := range []string{"description", "decision", "choice", "command", "expected_outcome", "purpose", "technology", "objective", "strategy", "capability", "requirement", "statement", "risk", "tool", "name", "title", "value", "reason", "goal", "criterion"} {
 						if candidateValue, exists := item[candidate]; exists {
 							item["text"] = candidateValue
 							break
+						}
+					}
+					if _, ok := item["text"]; !ok {
+						keys := make([]string, 0, len(item))
+						for key := range item {
+							keys = append(keys, key)
+						}
+						sort.Strings(keys)
+						for _, key := range keys {
+							if key == "id" || key == "status" || key == "type" || key == "source" || key == "source_locator" || key == "locator" {
+								continue
+							}
+							var candidate string
+							if json.Unmarshal(item[key], &candidate) == nil && strings.TrimSpace(candidate) != "" {
+								item["text"] = item[key]
+								break
+							}
 						}
 					}
 				}
