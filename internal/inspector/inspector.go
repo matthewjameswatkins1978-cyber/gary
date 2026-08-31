@@ -161,5 +161,8 @@ func EvidenceParity(claim project.AcceptanceClaim, evidenceType string, directEv
 	if claim.Boundary == "real_external_service" && directEvidenceAvailable {
 		return evidenceType == "integration_real" || evidenceType == "environment_real" || evidenceType == "human_real"
 	}
+	if claim.Boundary == "process_and_persistent_store" && directEvidenceAvailable {
+		return evidenceType == "component_real" || evidenceType == "integration_real" || evidenceType == "environment_real" || evidenceType == "human_real"
+	}
 	return true
 }

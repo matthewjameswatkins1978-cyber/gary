@@ -20,6 +20,7 @@ type Config struct {
 	ImplementerModel string
 	CloserModel      string
 	MasterModel      string
+	InspectorModel   string
 	WorkerRuntime    string
 	MaxCostUSD       float64
 }
@@ -36,6 +37,7 @@ func Load() (*Config, error) {
 		ImplementerModel: os.Getenv("GARY_IMPLEMENTER_MODEL"),
 		CloserModel:      os.Getenv("GARY_CLOSER_MODEL"),
 		MasterModel:      os.Getenv("GARY_MASTER_MODEL"),
+		InspectorModel:   os.Getenv("GARY_INSPECTOR_MODEL"),
 		WorkerRuntime:    os.Getenv("GARY_WORKER_RUNTIME"),
 	}
 
@@ -53,6 +55,12 @@ func Load() (*Config, error) {
 
 	if c.MasterModel == "" {
 		c.MasterModel = "gemini-3.7-flash"
+	}
+
+	if c.InspectorModel == "" {
+		// Independent inspection is deliberately economical by default; the
+		// contract and evidence rules remain the acceptance gate.
+		c.InspectorModel = "gemini-3.5-flash-lite"
 	}
 
 	if c.WorkerRuntime == "" {

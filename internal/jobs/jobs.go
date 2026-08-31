@@ -14,15 +14,19 @@ type Job struct {
 	MasterPacketDigest   string   `json:"master_packet_digest,omitempty"`
 	ProjectManualVersion int      `json:"project_manual_version,omitempty"`
 	ProjectContext       string   `json:"project_context,omitempty"`
+	EstimatedMinutes     int      `json:"estimated_minutes,omitempty"`
 }
 
 // RunResult records the outcome of a single gary run invocation.
 type RunResult struct {
-	JobID                string  `json:"job_id"`
-	BatchJobID           string  `json:"batch_job_id"`
-	Branch               string  `json:"branch"`
-	CommitSHA            string  `json:"commit_sha"`
-	Accepted             bool    `json:"accepted"`
+	JobID      string `json:"job_id"`
+	BatchJobID string `json:"batch_job_id"`
+	Branch     string `json:"branch"`
+	CommitSHA  string `json:"commit_sha"`
+	Accepted   bool   `json:"accepted"`
+	// ReadyForInspection is a Builder hand-off signal only. It never grants
+	// project acceptance; a fresh Inspector ledger is required for that.
+	ReadyForInspection   bool    `json:"ready_for_inspection,omitempty"`
 	DurationSecs         float64 `json:"duration_seconds"`
 	PatchBytes           int64   `json:"patch_bytes"`
 	Attempts             int     `json:"attempts"`

@@ -380,6 +380,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 					Branch:               garyBranch,
 					CommitSHA:            commitSHA,
 					Accepted:             true,
+					ReadyForInspection:   true,
 					DurationSecs:         duration.Seconds(),
 					PatchBytes:           int64(len(patchData)),
 					Attempts:             attempt,
@@ -523,6 +524,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 					Branch:               garyBranch,
 					CommitSHA:            commitSHA,
 					Accepted:             true,
+					ReadyForInspection:   true,
 					DurationSecs:         duration.Seconds(),
 					Attempts:             actualAttempts,
 					RepairCount:          repairCount,
@@ -1104,7 +1106,7 @@ func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.J
 		MachineType:  "e2-standard-4",
 		Model:        cfg.CloserModel,
 		GitHubToken:  githubToken,
-		MaxRunDurSec: 900,
+		MaxRunDurSec: defaultWorkerMaxRunSec,
 	}
 
 	_, err = batch.SubmitCodingJob(codingCfg)

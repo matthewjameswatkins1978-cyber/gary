@@ -766,6 +766,30 @@ func (s Store) AcceptProjectWithBlockedVerification(id, summary string) error {
 	return s.acceptProject(id, "ACCEPTED_WITH_BLOCKED_VERIFICATION", "accepted-with-blocked-verification", summary)
 }
 
+// AcceptProjectFromInspection is the protected control-layer acceptance path.
+// It binds the terminal transition to the exact immutable Inspector ledger
+// recorded for the current project contract and commit.
+func (s Store) AcceptProjectFromInspection(id, ledgerDigest, summary string, blocked bool) error {
+	p, err := s.LoadProject(id)
+	if err != nil {
+		return err
+	}
+	if p.LatestInspectorRunID == "" || strings.TrimSpace(ledgerDigest) == "" {
+		return fmt.Errorf("%w: no Inspector ledger is recorded", ErrProjectNotAcceptable)
+	}
+	ledger, err := s.LoadInspectionLedger(id, p.LatestInspectorRunID)
+	if err != nil {
+		return err
+	}
+	if ledger.LedgerDigest != ledgerDigest {
+		return fmt.Errorf("%w: Inspector ledger digest mismatch", ErrProjectNotAcceptable)
+	}
+	if blocked {
+		return s.AcceptProjectWithBlockedVerification(id, summary)
+	}
+	return s.AcceptProject(id, summary)
+}
+
 func (s Store) acceptProject(id, stateName, phase, summary string) error {
 	p, err := s.LoadProject(id)
 	if err != nil {

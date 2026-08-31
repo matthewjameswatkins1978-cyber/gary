@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/architecture"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
@@ -25,7 +26,13 @@ const inspectorTimeout = 5 * time.Minute
 // separately constructed Inspector prompt, never the Builder's conversation,
 // retry narrative or private reasoning.
 func runMasterInspector(ctx context.Context, cfg *config.Config, input project.ProjectContext, manifest *masterManifest, stagingBranch string, builderClaims []string) (project.InspectionLedger, cost.Component, error) {
-	component := estimatedComponent("inspector", cfg.MasterModel, "inspector request did not return provider usage")
+	component := estimatedComponent("inspector", cfg.InspectorModel, "inspector request did not return provider usage")
+	if input.Architecture.ManifestVersion > 0 {
+		check := architecture.Validate(input.Architecture, input.Contract)
+		if len(check.Errors) > 0 {
+			return project.InspectionLedger{}, component, fmt.Errorf("architecture preflight failed: %s", strings.Join(check.Errors, "; "))
+		}
+	}
 	tmp, err := os.MkdirTemp("", "gary-inspector-*")
 	if err != nil {
 		return project.InspectionLedger{}, component, err
@@ -63,7 +70,7 @@ func runMasterInspector(ctx context.Context, cfg *config.Config, input project.P
 }
 
 func callInspectorAPI(ctx context.Context, cfg *config.Config, prompt string) (string, cost.Component, error) {
-	component := estimatedComponent("inspector", cfg.MasterModel, "inspector request did not return provider usage")
+	component := estimatedComponent("inspector", cfg.InspectorModel, "inspector request did not return provider usage")
 	token, err := vertexAccessToken(ctx)
 	if err != nil {
 		return "", component, fmt.Errorf("inspector Vertex auth: %w", err)
@@ -78,7 +85,7 @@ func callInspectorAPI(ctx context.Context, cfg *config.Config, prompt string) (s
 	if err != nil {
 		return "", component, fmt.Errorf("inspector request encode: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, yardmasterVertexEndpoint(cfg.GCPProject, cfg.MasterModel), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, yardmasterVertexEndpoint(cfg.GCPProject, cfg.InspectorModel), bytes.NewReader(body))
 	if err != nil {
 		return "", component, fmt.Errorf("inspector request build: %w", err)
 	}
@@ -98,7 +105,7 @@ func callInspectorAPI(ctx context.Context, cfg *config.Config, prompt string) (s
 		component.UnmeteredReason = fmt.Sprintf("inspector HTTP %d returned no usable usage record", resp.StatusCode)
 		return "", component, fmt.Errorf("inspector API %d: %s", resp.StatusCode, compactPlannerError(string(data), 2000))
 	}
-	if usage, usageErr := cost.ParseVertexUsage(json.RawMessage(data), cfg.MasterModel, "", component.ProviderRequestID); usageErr == nil {
+	if usage, usageErr := cost.ParseVertexUsage(json.RawMessage(data), cfg.InspectorModel, "", component.ProviderRequestID); usageErr == nil {
 		component = componentFromUsage("inspector", usage)
 		component.ProviderRequestID = resp.Header.Get("x-goog-request-id")
 	}

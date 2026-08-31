@@ -24,3 +24,9 @@ func TestRuntimeDoctrineStaysInDocumentedRulebook(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkerDoctrineSeparatesHandoffFromAcceptance(t *testing.T) {
+	if !strings.Contains(WorkerRoleRules, "READY_FOR_INSPECTION") || !strings.Contains(WorkerRoleRules, "self-certify") {
+		t.Fatal("worker doctrine must distinguish handoff from independent acceptance")
+	}
+}

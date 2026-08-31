@@ -517,7 +517,9 @@ JOB
 ===
 %s
 
-Do not ask questions unless genuinely blocked.`, doctrine.WorkerRoleRules, doctrine.UniversalRules, task)
+TIME AND HANDOFF
+===============
+This is a small economical work slice. Aim to finish the stated child goal within 8 minutes. At the 8-minute point, stop expanding scope, preserve the useful partial work, run the cheapest relevant check, and return READY_FOR_INSPECTION with the exact evidence and any blocker. The hard worker runtime limit is 10 minutes. Do not ask questions unless genuinely blocked.`, doctrine.WorkerRoleRules, doctrine.UniversalRules, task)
 }
 
 // GenerateCodingJobConfig produces the JSON config for a Batch coding job.
@@ -529,6 +531,9 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 		cfg.Model = "gemini-3.5-flash-lite"
 	}
 	if cfg.MaxRunDurSec == 0 {
+		cfg.MaxRunDurSec = 600
+	}
+	if cfg.MaxRunDurSec > 600 {
 		cfg.MaxRunDurSec = 600
 	}
 

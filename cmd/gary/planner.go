@@ -21,8 +21,9 @@ import (
 
 const (
 	yardmasterPlannerTimeout  = 5 * time.Minute
-	yardmasterContextMaxBytes = 240000
+	yardmasterContextMaxBytes = 64000
 	yardmasterFileMaxBytes    = 48000
+	plannerHistoryMaxBytes    = 16000
 )
 
 func runYardmasterDirect(cfg *config.Config, manifest *masterManifest, brief, stagingBranch string, wave int, history string) (*masterPlan, time.Duration, cost.Component, error) {
@@ -198,7 +199,7 @@ func yardmasterRequestBody(prompt string) map[string]interface{} {
 				"thinkingLevel": "MEDIUM",
 			},
 			"responseMimeType": "application/json",
-			"maxOutputTokens":  8192,
+			"maxOutputTokens":  4096,
 		},
 	}
 }
@@ -222,6 +223,26 @@ func vertexAccessToken(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("gcloud auth print-access-token returned an empty token")
 	}
 	return token, nil
+}
+
+// compactPlannerHistory keeps the durable recent-wave signal while preventing
+// old worker logs and repeated JSON from consuming the next Yardmaster call.
+// The complete history remains persisted in master status; this is only the
+// prompt projection.
+func compactPlannerHistory(history string) string {
+	if len(history) <= plannerHistoryMaxBytes {
+		return history
+	}
+	var waves []masterWaveRecord
+	if err := json.Unmarshal([]byte(history), &waves); err == nil && len(waves) > 0 {
+		for keep := 1; keep <= len(waves); keep++ {
+			candidate, marshalErr := json.Marshal(waves[len(waves)-keep:])
+			if marshalErr == nil && len(candidate) <= plannerHistoryMaxBytes-80 {
+				return fmt.Sprintf("[older wave records compacted; full history is durable]\n%s", candidate)
+			}
+		}
+	}
+	return "[planner history compacted]\n" + compactPlannerError(history, plannerHistoryMaxBytes-32)
 }
 
 func buildYardmasterRepoContext(repoDir string, maxBytes int) (string, error) {

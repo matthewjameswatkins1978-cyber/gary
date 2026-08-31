@@ -43,9 +43,10 @@ type masterPlan struct {
 }
 
 type masterPlanJob struct {
-	ID         string   `json:"id"`
-	Task       string   `json:"task"`
-	Acceptance []string `json:"acceptance"`
+	ID               string   `json:"id"`
+	Task             string   `json:"task"`
+	Acceptance       []string `json:"acceptance"`
+	EstimatedMinutes int      `json:"estimated_minutes,omitempty"`
 }
 
 type masterWaveRecord struct {
@@ -160,8 +161,9 @@ func cmdMaster() {
 		_ = saveMasterStatus(status)
 
 		history, _ := json.Marshal(status.Waves)
+		historyText := compactPlannerHistory(string(history))
 		fmt.Printf("[yardmaster] PLAN wave=%d mode=control-direct model=%s limit=%s\n", wave, cfg.MasterModel, yardmasterPlannerTimeout)
-		plan, planDuration, plannerCost, err := runYardmasterDirect(cfg, manifest, brief, stagingBranch, wave, string(history))
+		plan, planDuration, plannerCost, err := runYardmasterDirect(cfg, manifest, brief, stagingBranch, wave, historyText)
 		record := masterWaveRecord{
 			Wave:                wave,
 			PlannerMode:         "control-direct",
@@ -199,11 +201,16 @@ func cmdMaster() {
 			}
 			status.InspectorRunID = ledger.InspectorRunID
 			status.InspectionLedgerDigest = ledger.LedgerDigest
-			if failed, reason := inspectorHasBlockingFailure(ledger); failed {
+			evaluation := acceptance.Evaluate(projectCtx.Contract, ledger, true)
+			if evaluation.Status == "FAIL" {
+				failed, reason := inspectorHasBlockingFailure(ledger)
+				if !failed {
+					reason = strings.Join(evaluation.Failures, "; ")
+				}
 				if status.InspectionRepairCount >= 2 {
 					failMaster(status, errors.New(reason+"; repair limit exhausted"))
 				}
-				repair, repairErr := acceptance.BuildRepairPacket(projectCtx.Contract, ledger)
+				repair, repairErr := acceptance.BuildRepairPacketForEvaluation(projectCtx.Contract, ledger, evaluation)
 				if repairErr != nil {
 					failMaster(status, fmt.Errorf("build narrow repair packet: %w", repairErr))
 				}
@@ -231,17 +238,17 @@ func cmdMaster() {
 				_ = saveMasterStatus(status)
 				continue
 			}
-			blocked := inspectorHasExternalBlock(ledger)
+			blocked := evaluation.Status == "ACCEPTED_WITH_BLOCKED_VERIFICATION" || inspectorHasExternalBlock(ledger)
 			acceptanceSummary := "independent Inspector evidence recorded"
 			if blocked {
 				acceptanceSummary = "software/integration verified; external verification remains blocked"
 			}
 			if blocked {
-				if err := project.DefaultStore().AcceptProjectWithBlockedVerification(projectID, acceptanceSummary); err != nil {
+				if err := project.DefaultStore().AcceptProjectFromInspection(projectID, ledger.LedgerDigest, acceptanceSummary, true); err != nil {
 					failMaster(status, fmt.Errorf("project acceptance with blocked verification: %w", err))
 				}
 				status.State = "done-with-blocked-verification"
-			} else if err := project.DefaultStore().AcceptProject(projectID, acceptanceSummary); err != nil {
+			} else if err := project.DefaultStore().AcceptProjectFromInspection(projectID, ledger.LedgerDigest, acceptanceSummary, false); err != nil {
 				failMaster(status, fmt.Errorf("project acceptance: %w", err))
 			} else {
 				status.State = "done"
@@ -272,6 +279,7 @@ func cmdMaster() {
 				MasterPacketDigest:   projectCtx.Project.MasterPacketDigest,
 				ProjectManualVersion: projectCtx.Project.ProjectManualVersion,
 				ProjectContext:       childContext,
+				EstimatedMinutes:     child.EstimatedMinutes,
 			})
 		}
 
@@ -452,7 +460,7 @@ PLANNER-SPECIFIC RULES
 - Every child job runs in its own fresh isolated clone. Sibling jobs do not share virtualenvs, installed packages, untracked files, generated caches, or other filesystem state.
 - Do not create a setup job whose uncommitted/ephemeral state is required by another parallel job. Each child must be independently runnable from the current staging branch.
 - Respect dependency and priority ordering in the master brief. If P0/blocker verification is still unresolved, do not schedule P1/P2 or cosmetic work in the same wave unless it is truly independent and cannot mask or complicate P0.
-- Each job must be bounded and have one or more direct executable acceptance commands.
+- Each job must be bounded, have one or more direct executable acceptance commands, and include an estimated_minutes value from 1 to 10. Prefer one small job per wave; split work before it becomes a kitchen-sink task. Use prior observed worker durations in the supplied history to improve estimates.
 - Keep each job task concise (preferably under 2000 characters) so the complete plan remains valid JSON.
 - Acceptance commands are executed directly without a shell and must contain only letters, digits, spaces, underscore, dot, slash, colon, equals, plus, at-sign, percent, comma, hyphen, or square brackets.
 - Never put quotes, parentheses, ampersands, pipes, semicolons, redirects, wildcards, command substitution, or shell operators in acceptance commands.
@@ -472,7 +480,8 @@ Required JSON schema:
     {
       "id": "human-readable-short-id",
       "task": "complete bounded worker instruction",
-      "acceptance": ["direct command", "another direct command"]
+      "acceptance": ["direct command", "another direct command"],
+      "estimated_minutes": 8
     }
   ]
 }
@@ -525,6 +534,12 @@ func validateMasterPlan(plan *masterPlan, maxJobs int) error {
 		}
 		if len(child.Acceptance) == 0 {
 			return fmt.Errorf("job %d has no acceptance commands", i+1)
+		}
+		if child.EstimatedMinutes == 0 {
+			child.EstimatedMinutes = 8
+		}
+		if child.EstimatedMinutes < 1 || child.EstimatedMinutes > 10 {
+			return fmt.Errorf("job %d estimated_minutes must be between 1 and 10", i+1)
 		}
 		for _, command := range child.Acceptance {
 			if !inboxCommand.MatchString(command) {
