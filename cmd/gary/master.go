@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/acceptance"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
@@ -69,6 +70,7 @@ type masterStatus struct {
 	Error                  string             `json:"error,omitempty"`
 	InspectorRunID         string             `json:"inspector_run_id,omitempty"`
 	InspectionLedgerDigest string             `json:"inspection_ledger_digest,omitempty"`
+	InspectionRepairCount  int                `json:"inspection_repair_count,omitempty"`
 	Waves                  []masterWaveRecord `json:"waves,omitempty"`
 	Cost                   *cost.Summary      `json:"cost,omitempty"`
 }
@@ -198,7 +200,36 @@ func cmdMaster() {
 			status.InspectorRunID = ledger.InspectorRunID
 			status.InspectionLedgerDigest = ledger.LedgerDigest
 			if failed, reason := inspectorHasBlockingFailure(ledger); failed {
-				failMaster(status, errors.New(reason))
+				if status.InspectionRepairCount >= 2 {
+					failMaster(status, errors.New(reason+"; repair limit exhausted"))
+				}
+				repair, repairErr := acceptance.BuildRepairPacket(projectCtx.Contract, ledger)
+				if repairErr != nil {
+					failMaster(status, fmt.Errorf("build narrow repair packet: %w", repairErr))
+				}
+				if repairErr := project.DefaultStore().SaveRepairPacket(repair); repairErr != nil {
+					failMaster(status, fmt.Errorf("persist narrow repair packet: %w", repairErr))
+				}
+				status.InspectionRepairCount++
+				status.State = "repairing"
+				_ = saveMasterStatus(status)
+				_ = project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "EXECUTING", CurrentPhase: "repair", CurrentStrategy: projectCtx.Manual.CurrentStrategy, OutstandingWork: []string{reason}, LastEvent: "Inspector routed failed claims to a narrow Builder repair"})
+				repairAcceptance := manifest.Acceptance
+				if len(repairAcceptance) == 0 {
+					repairAcceptance = []string{"echo no-acceptance-command"}
+				}
+				repairJob := &jobs.Job{ID: masterRuntimeID("repair", manifest.ID, wave, status.InspectionRepairCount), Repo: manifest.Repo, BaseBranch: stagingBranch, Task: acceptance.RepairTask(repair), Acceptance: repairAcceptance, ProjectID: projectID, MasterPacketDigest: projectCtx.Project.MasterPacketDigest, ProjectManualVersion: projectCtx.Project.ProjectManualVersion}
+				repairResults := runMasterWave(cfg, []*jobs.Job{repairJob}, 1)
+				if len(repairResults) != 1 || repairResults[0].FinalStatus != "DONE" {
+					failMaster(status, fmt.Errorf("narrow Builder repair did not complete for failed claims"))
+				}
+				if repairErr := integrateMasterResult(manifest.Repo, stagingBranch, repairResults[0]); repairErr != nil {
+					failMaster(status, fmt.Errorf("integrate narrow Builder repair: %w", repairErr))
+				}
+				repairRecord := masterWaveRecord{Wave: wave, PlannerMode: "targeted-repair", PlanSummary: reason, Results: repairResults, Integrated: []string{repairResults[0].JobID}}
+				status.Waves = append(status.Waves, repairRecord)
+				_ = saveMasterStatus(status)
+				continue
 			}
 			blocked := inspectorHasExternalBlock(ledger)
 			acceptanceSummary := "independent Inspector evidence recorded"

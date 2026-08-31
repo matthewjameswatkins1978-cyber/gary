@@ -50,6 +50,26 @@ type InspectionEntry struct {
 	Timestamp        string `json:"timestamp"`
 }
 
+type RepairPacket struct {
+	SchemaVersion      int           `json:"schema_version"`
+	ProjectID          string        `json:"project_id"`
+	ContractVersion    int           `json:"contract_version"`
+	ContractDigest     string        `json:"contract_digest"`
+	InspectedCommitSHA string        `json:"inspected_commit_sha"`
+	InspectorRunID     string        `json:"inspector_run_id"`
+	CreatedAt          string        `json:"created_at"`
+	FailedClaims       []RepairClaim `json:"failed_claims"`
+	PacketDigest       string        `json:"packet_digest"`
+}
+
+type RepairClaim struct {
+	ClaimID          string `json:"claim_id"`
+	Claim            string `json:"claim"`
+	AttemptedVector  string `json:"attempted_vector"`
+	ObservedEvidence string `json:"observed_evidence"`
+	FailureReason    string `json:"failure_reason"`
+}
+
 func ValidateInspectionLedger(ledger InspectionLedger, contract AcceptanceContract, commitSHA string) error {
 	if ledger.SchemaVersion != 1 || ledger.ProjectID != contract.ProjectID || ledger.ContractVersion != contract.ContractVersion || ledger.ContractDigest != contract.ContractDigest || ledger.InspectedCommitSHA != commitSHA || strings.TrimSpace(ledger.InspectorRunID) == "" || strings.TrimSpace(ledger.Timestamp) == "" {
 		return errors.New("ledger provenance does not match acceptance contract or inspected commit")
@@ -153,6 +173,32 @@ func (s Store) LoadInspectionLedger(id, runID string) (InspectionLedger, error) 
 		return InspectionLedger{}, errors.New("inspection ledger digest mismatch")
 	}
 	return ledger, nil
+}
+
+func (s Store) SaveRepairPacket(packet RepairPacket) error {
+	contract, err := s.LoadAcceptanceContract(packet.ProjectID)
+	if err != nil {
+		return err
+	}
+	if packet.SchemaVersion != 1 || packet.ContractVersion != contract.ContractVersion || packet.ContractDigest != contract.ContractDigest || packet.InspectorRunID == "" || len(packet.FailedClaims) == 0 {
+		return errors.New("repair packet is not bound to the current contract and failed inspection")
+	}
+	if packet.PacketDigest == "" {
+		packet.PacketDigest = RepairPacketDigest(packet)
+	}
+	path := filepath.Join(s.projectDir(packet.ProjectID), "evidence", "repair-"+safeEvidenceID(packet.InspectorRunID)+".json")
+	if _, err := os.Stat(path); err == nil {
+		return errors.New("repair packet already exists")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return writeJSON(path, packet)
+}
+
+func RepairPacketDigest(packet RepairPacket) string {
+	packet.PacketDigest = ""
+	b, _ := json.Marshal(packet)
+	return Digest(b)
 }
 
 func safeEvidenceID(id string) string {
