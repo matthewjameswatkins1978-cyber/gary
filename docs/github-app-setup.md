@@ -40,6 +40,7 @@ Store the PEM content as repository **secret**: `GARY_GITHUB_APP_PRIVATE_KEY`
 - Select repositories:
   - `matthewjameswatkins1978-cyber/gary`
   - `matthewjameswatkins1978-cyber/judgement-call`
+  - `matthewjameswatkins1978-cyber/book-burner`
 - Click **Install**
 
 ## Required Repository Configuration
@@ -57,4 +58,6 @@ This token is passed as `GARY_GITHUB_TOKEN` to the GARY binary for push
 operations (submit, recover, status snapshot publishing).
 
 Read-only commands (status, doctor, list, inspect, logs) do not require the
-App token.
+App token. The current master workflow also restricts its short-lived token to
+the repositories listed above; add a target repository to that workflow and
+install the App on it before dispatching private-repository work.

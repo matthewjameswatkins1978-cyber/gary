@@ -100,8 +100,9 @@ recovery.
 
 Read-only Issue commands require no GitHub App. Before `submit` or `recover`,
 create a dedicated **GARY Result Pusher** GitHub App, install it only on GARY
-and the selected target repositories, and grant only **Contents: Read and
-write** and **Metadata: Read**. Generate one private key, then add its App ID
-as repository variable `GARY_GITHUB_APP_ID` and its PEM as repository secret
+and the selected target repositories, including `book-burner` for the current
+private certification target, and grant only **Contents: Read and write** and
+**Metadata: Read**. Generate one private key, then add its App ID as repository
+variable `GARY_GITHUB_APP_ID` and its PEM as repository secret
 `GARY_GITHUB_APP_PRIVATE_KEY`. The workflow exchanges it for a short-lived
 installation token; no PAT is used and the token is never stored in Git.
