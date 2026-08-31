@@ -274,6 +274,28 @@ func TestCodingWorkerDisablesHiddenGeminiRetries(t *testing.T) {
 	}
 }
 
+func TestCodingJobPassesOnlyShortLivedTokenToWorker(t *testing.T) {
+	cfg := CodingJobConfig{
+		Project: "p", Region: "r", JobName: "j",
+		RepoURL:    "https://github.com/matthewjameswatkins1978-cyber/book-burner.git",
+		BaseBranch: "main", GaryBranch: "gary/test", Task: "do stuff",
+		Acceptance: "echo ok", GitHubToken: "installation-token",
+	}
+	data, err := GenerateCodingJobConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "GARY_GITHUB_TOKEN") || !strings.Contains(text, "installation-token") {
+		t.Fatal("worker config did not contain the short-lived repository token")
+	}
+	for _, forbidden := range []string{"GARY_GITHUB_APP_PRIVATE_KEY", "BEGIN RSA PRIVATE KEY", "BEGIN PRIVATE KEY"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("worker config must not contain App private key material: %q", forbidden)
+		}
+	}
+}
+
 func TestCodingJobAcceptanceUsesExitCode(t *testing.T) {
 	cfg := CodingJobConfig{
 		Project:    "p",

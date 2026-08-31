@@ -24,18 +24,9 @@ jobs:
       GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
       GARY_MAX_COST_USD: "0.06"
     steps:
-      - name: Create short-lived GARY GitHub App token
-        id: gary-app
-        if: vars.GARY_GITHUB_APP_ID != ''
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ vars.GARY_GITHUB_APP_ID }}
-          private-key: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - uses: actions/checkout@v4
         with:
-          token: ${{ steps.gary-app.outputs.token || github.token }}
+          token: ${{ github.token }}
           fetch-depth: 0
 
       - uses: actions/setup-go@v5
@@ -66,10 +57,11 @@ jobs:
         id: dispatch
         continue-on-error: true
         env:
-          GARY_GITHUB_TOKEN: ${{ steps.gary-app.outputs.token }}
+          GARY_GITHUB_APP_ID: ${{ vars.GARY_GITHUB_APP_ID }}
+          GARY_GITHUB_APP_INSTALLATION_ID: ${{ vars.GARY_GITHUB_APP_INSTALLATION_ID }}
+          GARY_GITHUB_APP_PRIVATE_KEY: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          test -n "$GARY_GITHUB_TOKEN"
           go run ./cmd/gary inbox dispatch gary/inbox/pending
 
       - name: Record GARY status

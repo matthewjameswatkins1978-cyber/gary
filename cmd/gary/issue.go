@@ -14,6 +14,7 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/control"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/batch"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/githubapp"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
@@ -329,17 +330,17 @@ func executeIssueCommand(command *issueCommand) issueResult {
 	case "doctor":
 		return runCloudDoctor(cfg)
 	case "submit":
-		if os.Getenv("GARY_GITHUB_TOKEN") == "" {
-			return issueFailure(errors.New("submit is locked until the dedicated GARY GitHub App token is configured"))
-		}
 		job, _ := jobFromIssue(command.Job)
+		if err := githubapp.ValidateAppConfiguration(); err != nil {
+			return issueFailure(fmt.Errorf("submit is locked until the dedicated GARY GitHub App is configured: %w", err))
+		}
 		result := RunJob(cfg, job, "issue")
 		return issueSuccess(formatRunResult("GARY // SUBMIT", result))
 	case "recover":
-		if os.Getenv("GARY_GITHUB_TOKEN") == "" {
-			return issueFailure(errors.New("recover is locked until the dedicated GARY GitHub App token is configured"))
-		}
 		job, _ := jobFromIssue(command.Job)
+		if err := githubapp.ValidateAppConfiguration(); err != nil {
+			return issueFailure(fmt.Errorf("recover is locked until the dedicated GARY GitHub App is configured: %w", err))
+		}
 		result, err := recoverBatchRun(cfg, job, command.BatchJobID)
 		if err != nil {
 			return issueFailure(err)

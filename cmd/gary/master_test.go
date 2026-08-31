@@ -90,6 +90,27 @@ func TestLoadMasterManifestAcceptsProjectIDWithoutBriefPath(t *testing.T) {
 	}
 }
 
+func TestMasterWorkflowUsesRepositoryScopedAppMinting(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "gary-master.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(data)
+	if strings.Contains(workflow, "repositories:") || strings.Contains(workflow, "create-github-app-token") {
+		t.Fatal("master workflow must not contain a hardcoded or installation-wide repository token")
+	}
+	for _, required := range []string{
+		"GARY_GITHUB_APP_ID",
+		"GARY_GITHUB_APP_INSTALLATION_ID",
+		"GARY_GITHUB_APP_PRIVATE_KEY",
+		"GARY_GITHUB_TOKEN: ${{ github.token }}",
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Fatalf("master workflow missing %q", required)
+		}
+	}
+}
+
 func TestValidateMasterPlan(t *testing.T) {
 	ok := &masterPlan{Jobs: []masterPlanJob{{
 		ID:         "fix",

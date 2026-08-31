@@ -16,6 +16,7 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/githubapp"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/project"
@@ -307,8 +308,8 @@ func loadMasterManifest(path string) (*masterManifest, string, error) {
 	if !inboxID.MatchString(m.ID) {
 		return nil, "", errors.New("id must use lowercase letters, digits, and hyphens")
 	}
-	if !strings.HasPrefix(m.Repo, "https://github.com/matthewjameswatkins1978-cyber/") || !strings.HasSuffix(m.Repo, ".git") {
-		return nil, "", errors.New("repo must be an HTTPS repository under matthewjameswatkins1978-cyber")
+	if _, err := githubapp.ParseRepository(m.Repo); err != nil {
+		return nil, "", fmt.Errorf("invalid repo: %w", err)
 	}
 	if !inboxBranch.MatchString(m.BaseBranch) || strings.Contains(m.BaseBranch, "..") {
 		return nil, "", errors.New("invalid base_branch")
