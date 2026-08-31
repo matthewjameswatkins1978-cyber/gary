@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-31T06:17:54Z",
+  "updated_at": "2026-08-31T06:21:16Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -7,13 +7,13 @@
       "project_id": "gary-live-cert-20260831f",
       "master_packet_digest": "sha256:073bcf8ea43252968d61879ef15c1506d28d7559f84ed9fb0279611e8e611ed4",
       "project_manual_version": 1,
-      "batch_job_id": "gary-run-gary-live-cert-2-w1-j1-1-20260831-071754",
-      "state": "running",
+      "batch_job_id": "gary-run-gary-live-cert-2-w1-j1-2-20260831-072116",
+      "state": "retrying",
       "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
       "base_branch": "gary/master-gary-live-cert-2-4f598d",
       "result_branch": "gary/gary-live-cert-2-w1-j1-2881059f",
       "started_at": "2026-08-31T06:17:51Z",
-      "attempts": 1
+      "attempts": 2
     }
   ],
   "recent_jobs": [
