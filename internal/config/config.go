@@ -48,7 +48,7 @@ func Load() (*Config, error) {
 	}
 
 	if c.CloserModel == "" {
-		c.CloserModel = "gemini-2.5-flash"
+		c.CloserModel = "gemini-3.6-flash"
 	}
 
 	if c.MasterModel == "" {
