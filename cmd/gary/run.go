@@ -25,6 +25,7 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/githubapp"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/project"
 )
 
 const (
@@ -143,6 +144,28 @@ func RunJobOnceWithModel(cfg *config.Config, job *jobs.Job, prefix, model string
 }
 
 func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model string, attemptLimit int, allowCloser bool, maxRunDurSec int) jobs.RunResult {
+	if job.ProjectID != "" {
+		ctx, err := project.DefaultStore().LoadContext(job.ProjectID)
+		if err != nil {
+			logPrint(prefix, "  PROJECT CONTEXT BLOCKED: %v", err)
+			result := jobs.RunResult{JobID: job.ID, ProjectID: job.ProjectID, FinalStatus: "BLOCKED", Cost: cost.NewSummary()}
+			saveRunResult(cfg, result)
+			return result
+		}
+		if job.MasterPacketDigest != "" || job.ProjectManualVersion != 0 {
+			if err := ctx.ValidateProvenance(job.ProjectID, job.MasterPacketDigest, job.ProjectManualVersion); err != nil {
+				logPrint(prefix, "  PROJECT CONTEXT BLOCKED: %v", err)
+				result := jobs.RunResult{JobID: job.ID, ProjectID: job.ProjectID, MasterPacketDigest: ctx.Project.MasterPacketDigest, ProjectManualVersion: ctx.Project.ProjectManualVersion, FinalStatus: "BLOCKED", Cost: cost.NewSummary()}
+				saveRunResult(cfg, result)
+				return result
+			}
+		}
+		// Rebuild from the verified current manual; never trust a serialized
+		// child context supplied by an older caller or worker.
+		job.ProjectContext = ctx.ChildTaskForID(job.Task, job.ID)
+		job.MasterPacketDigest = ctx.Project.MasterPacketDigest
+		job.ProjectManualVersion = ctx.Project.ProjectManualVersion
+	}
 	if model == "" {
 		model = cfg.ImplementerModel
 	}
@@ -161,7 +184,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	startedAt := submittedAt.UTC().Format(time.RFC3339)
 
 	// Update snapshot: job is now active
-	snapshotActiveJob(job.ID, "", job.Repo, job.BaseBranch, garyBranch, control.JobRunning, 0, startedAt)
+	snapshotActiveJob(job.ID, "", job.Repo, job.BaseBranch, garyBranch, control.JobRunning, 0, startedAt, projectProvenance{job.ProjectID, job.MasterPacketDigest, job.ProjectManualVersion})
 
 	// Budget check before starting
 	if cfg.MaxCostUSD > 0 {
@@ -216,6 +239,9 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		if attempt > 1 {
 			attemptTask = buildRetryTask(job.Task, acceptanceStr, lastProgressState, lastFailure, lastRepairBrief)
 		}
+		if job.ProjectContext != "" {
+			attemptTask += "\n\n" + job.ProjectContext
+		}
 
 		jobName := fmt.Sprintf("gary-run-%s-%d-%s", job.ID, attempt, time.Now().Format("20060102-150405"))
 		attemptGCSPath := fmt.Sprintf("%s/attempt-%d", gcsPath, attempt)
@@ -231,9 +257,9 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 		// Update snapshot: retrying
 		if attempt > 1 {
-			snapshotActiveJob(job.ID, jobName, job.Repo, job.BaseBranch, garyBranch, control.JobRetrying, attempt, startedAt)
+			snapshotActiveJob(job.ID, jobName, job.Repo, job.BaseBranch, garyBranch, control.JobRetrying, attempt, startedAt, projectProvenance{job.ProjectID, job.MasterPacketDigest, job.ProjectManualVersion})
 		} else {
-			snapshotActiveJob(job.ID, jobName, job.Repo, job.BaseBranch, garyBranch, control.JobRunning, attempt, startedAt)
+			snapshotActiveJob(job.ID, jobName, job.Repo, job.BaseBranch, garyBranch, control.JobRunning, attempt, startedAt, projectProvenance{job.ProjectID, job.MasterPacketDigest, job.ProjectManualVersion})
 		}
 
 		githubToken, tokenErr := currentBatchGitHubToken()
@@ -347,6 +373,9 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 				result := jobs.RunResult{
 					JobID:                job.ID,
+					ProjectID:            job.ProjectID,
+					MasterPacketDigest:   job.MasterPacketDigest,
+					ProjectManualVersion: job.ProjectManualVersion,
 					BatchJobID:           jobName,
 					Branch:               garyBranch,
 					CommitSHA:            commitSHA,
@@ -488,6 +517,9 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 				result := jobs.RunResult{
 					JobID:                job.ID,
+					ProjectID:            job.ProjectID,
+					MasterPacketDigest:   job.MasterPacketDigest,
+					ProjectManualVersion: job.ProjectManualVersion,
 					Branch:               garyBranch,
 					CommitSHA:            commitSHA,
 					Accepted:             true,
@@ -516,6 +548,9 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 	result := jobs.RunResult{
 		JobID:                job.ID,
+		ProjectID:            job.ProjectID,
+		MasterPacketDigest:   job.MasterPacketDigest,
+		ProjectManualVersion: job.ProjectManualVersion,
 		Branch:               garyBranch,
 		DurationSecs:         duration.Seconds(),
 		Attempts:             actualAttempts,

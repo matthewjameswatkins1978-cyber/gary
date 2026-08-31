@@ -68,6 +68,28 @@ func TestLoadMasterManifestDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadMasterManifestAcceptsProjectIDWithoutBriefPath(t *testing.T) {
+	dir := t.TempDir()
+	manifest := filepath.Join(dir, "master.json")
+	data := `{
+  "id":"project-master",
+  "project_id":"book-burner",
+  "repo":"https://github.com/matthewjameswatkins1978-cyber/book-burner.git",
+  "base_branch":"master",
+  "max_waves":1
+}`
+	if err := os.WriteFile(manifest, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, brief, err := loadMasterManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ProjectID != "book-burner" || brief != "" {
+		t.Fatalf("project manifest = %+v brief=%q", got, brief)
+	}
+}
+
 func TestValidateMasterPlan(t *testing.T) {
 	ok := &masterPlan{Jobs: []masterPlanJob{{
 		ID:         "fix",

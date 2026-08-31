@@ -5,11 +5,15 @@ import "github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 
 // Job is a small coding task dispatched to a worker.
 type Job struct {
-	ID         string   `json:"id"`
-	Repo       string   `json:"repo"`
-	BaseBranch string   `json:"base_branch"`
-	Task       string   `json:"task"`
-	Acceptance []string `json:"acceptance"`
+	ID                   string   `json:"id"`
+	Repo                 string   `json:"repo"`
+	BaseBranch           string   `json:"base_branch"`
+	Task                 string   `json:"task"`
+	Acceptance           []string `json:"acceptance"`
+	ProjectID            string   `json:"project_id,omitempty"`
+	MasterPacketDigest   string   `json:"master_packet_digest,omitempty"`
+	ProjectManualVersion int      `json:"project_manual_version,omitempty"`
+	ProjectContext       string   `json:"project_context,omitempty"`
 }
 
 // RunResult records the outcome of a single gary run invocation.
@@ -26,6 +30,9 @@ type RunResult struct {
 	Escalated            bool    `json:"escalated"`
 	CloserUsed           bool    `json:"closer_used"`
 	FinalStatus          string  `json:"final_status"`
+	ProjectID            string  `json:"project_id,omitempty"`
+	MasterPacketDigest   string  `json:"master_packet_digest,omitempty"`
+	ProjectManualVersion int     `json:"project_manual_version,omitempty"`
 	ModelCostEstimated   float64 `json:"model_cost_estimated"`
 	ComputeCostEstimated float64 `json:"compute_cost_estimated"`
 	TotalCostEstimated   float64 `json:"total_cost_estimated"`

@@ -9,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
 func TestExtractMarkerFromBatchLogsFiltersUIDAndRestoresOrder(t *testing.T) {
@@ -42,6 +45,14 @@ func TestRuntimeBudgets(t *testing.T) {
 	}
 	if yardmasterPlannerTimeout != 5*time.Minute {
 		t.Fatalf("Yardmaster planner timeout = %s, want 5m", yardmasterPlannerTimeout)
+	}
+}
+
+func TestMissingProjectContextBlocksBeforeWorkerSubmission(t *testing.T) {
+	cfg := &config.Config{ResultsDir: t.TempDir(), ImplementerModel: "gemini-3.5-flash-lite"}
+	result := RunJobOnceWithModel(cfg, &jobs.Job{ID: "context-check", ProjectID: "missing-project", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", BaseBranch: "master", Task: "must not run", Acceptance: []string{"go test ./..."}}, "", "gemini-3.5-flash-lite")
+	if result.FinalStatus != "BLOCKED" || result.Attempts != 0 {
+		t.Fatalf("missing project context was not blocked before worker submission: %+v", result)
 	}
 }
 
@@ -220,7 +231,6 @@ func TestFormatRepairBrief(t *testing.T) {
 		t.Errorf("output missing NEXT ACTION: %s", output)
 	}
 }
-
 
 func TestBuildRetryTaskTreatsFailureAsEvidence(t *testing.T) {
 	guidance := "REPAIR BRIEF:\n  KEEP: preserve working ordering logic\n  CHANGE: fix error propagation\n"
