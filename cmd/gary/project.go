@@ -206,7 +206,7 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 	if version, ok := raw["manual_version"]; ok {
 		var asString string
 		if json.Unmarshal(version, &asString) == nil {
-			n, err := strconv.Atoi(asString)
+			n, err := parseManualVersion(asString)
 			if err != nil {
 				return project.ProjectManual{}, fmt.Errorf("manual_version must be an integer: %w", err)
 			}
@@ -225,13 +225,18 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 		"superseded_decisions": "superseded_decision",
 	} {
 		if value, ok := raw[field]; ok {
-			var items []map[string]json.RawMessage
-			if err := json.Unmarshal(value, &items); err != nil {
+			var rawItems []json.RawMessage
+			if err := json.Unmarshal(value, &rawItems); err != nil {
 				return project.ProjectManual{}, fmt.Errorf("%s: %w", field, err)
 			}
-			for _, item := range items {
+			items := make([]map[string]json.RawMessage, 0, len(rawItems))
+			for i, rawItem := range rawItems {
+				item, err := normalizeRequirementItem(rawItem, field, typ, i, packetDigest)
+				if err != nil {
+					return project.ProjectManual{}, fmt.Errorf("%s[%d]: %w", field, i, err)
+				}
 				if _, ok := item["text"]; !ok {
-					for _, candidate := range []string{"description", "decision", "choice", "command", "expected_outcome"} {
+					for _, candidate := range []string{"description", "decision", "choice", "command", "expected_outcome", "purpose", "technology", "objective", "strategy", "capability"} {
 						if candidateValue, exists := item[candidate]; exists {
 							item["text"] = candidateValue
 							break
@@ -242,19 +247,26 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 					encoded, _ := json.Marshal(typ)
 					item["type"] = encoded
 				}
-				normalizeSource(item, packetDigest)
+				normalizeSource(item, packetDigest, field)
+				items = append(items, item)
 			}
 			encoded, _ := json.Marshal(items)
 			raw[field] = encoded
 		}
 	}
 	if value, ok := raw["conflicts"]; ok {
-		var items []map[string]json.RawMessage
-		if err := json.Unmarshal(value, &items); err != nil {
+		var rawItems []json.RawMessage
+		if err := json.Unmarshal(value, &rawItems); err != nil {
 			return project.ProjectManual{}, fmt.Errorf("conflicts: %w", err)
 		}
-		for _, item := range items {
-			normalizeSource(item, packetDigest)
+		items := make([]map[string]json.RawMessage, 0, len(rawItems))
+		for i, rawItem := range rawItems {
+			item, err := normalizeRequirementItem(rawItem, "conflicts", "conflict", i, packetDigest)
+			if err != nil {
+				return project.ProjectManual{}, fmt.Errorf("conflicts[%d]: %w", i, err)
+			}
+			normalizeSource(item, packetDigest, "conflicts")
+			items = append(items, item)
 		}
 		encoded, _ := json.Marshal(items)
 		raw["conflicts"] = encoded
@@ -270,20 +282,80 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 	return manual, nil
 }
 
-func normalizeSource(item map[string]json.RawMessage, packetDigest string) {
-	if _, ok := item["source"]; ok {
-		return
+func parseManualVersion(value string) (int, error) {
+	if n, err := strconv.Atoi(value); err == nil && n > 0 {
+		return n, nil
 	}
-	locator, ok := item["source_locator"]
-	if !ok {
+	parts := strings.Split(value, ".")
+	if len(parts) < 2 {
+		return 0, fmt.Errorf("%q is not an integer version", value)
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil || major < 1 {
+		return 0, fmt.Errorf("%q is not an integer version", value)
+	}
+	for _, part := range parts[1:] {
+		minor, err := strconv.Atoi(part)
+		if err != nil || minor != 0 {
+			return 0, fmt.Errorf("%q is not an integer version", value)
+		}
+	}
+	return major, nil
+}
+
+func normalizeRequirementItem(raw json.RawMessage, field, typ string, index int, packetDigest string) (map[string]json.RawMessage, error) {
+	var item map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &item); err == nil && item != nil {
+		return item, nil
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err != nil {
+		return nil, err
+	}
+	item = map[string]json.RawMessage{}
+	for key, value := range map[string]string{"id": fmt.Sprintf("%s-%03d", field, index+1), "text": text, "type": typ} {
+		encoded, _ := json.Marshal(value)
+		item[key] = encoded
+	}
+	return item, nil
+}
+
+func normalizeSource(item map[string]json.RawMessage, packetDigest, field string) {
+	if source, ok := item["source"]; ok {
+		var sourceObject map[string]json.RawMessage
+		if json.Unmarshal(source, &sourceObject) != nil {
+			var locator string
+			if json.Unmarshal(source, &locator) == nil {
+				sourceObject = map[string]json.RawMessage{}
+				encoded, _ := json.Marshal(locator)
+				sourceObject["locator"] = encoded
+			}
+		}
+		if sourceObject != nil {
+			if _, ok := sourceObject["packet_digest"]; !ok {
+				encoded, _ := json.Marshal(packetDigest)
+				sourceObject["packet_digest"] = encoded
+			}
+			if _, ok := sourceObject["locator"]; !ok {
+				encoded, _ := json.Marshal("MASTER_PACKET.md#" + field)
+				sourceObject["locator"] = encoded
+			}
+			encoded, _ := json.Marshal(sourceObject)
+			item["source"] = encoded
+		}
 		return
 	}
 	var source struct {
 		PacketDigest string `json:"packet_digest"`
 		Locator      string `json:"locator"`
 	}
-	_ = json.Unmarshal(locator, &source.Locator)
+	if locator, ok := item["source_locator"]; ok {
+		_ = json.Unmarshal(locator, &source.Locator)
+	}
 	source.PacketDigest = packetDigest
+	if source.Locator == "" {
+		source.Locator = "MASTER_PACKET.md#" + field
+	}
 	encoded, _ := json.Marshal(source)
 	item["source"] = encoded
 }
