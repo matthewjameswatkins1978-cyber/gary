@@ -174,6 +174,22 @@ func TestSerializationRoundTrip(t *testing.T) {
 	}
 }
 
+func TestProjectProvenanceRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	active := []JobEntry{{ID: "child", State: JobRunning, ProjectID: "book-burner", MasterPacketDigest: "sha256:abc", ProjectManualVersion: 7}}
+	if err := UpdateSnapshot(dir, active, nil); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := ReadSnapshot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := snap.ActiveJobs[0]
+	if job.ProjectID != "book-burner" || job.MasterPacketDigest != "sha256:abc" || job.ProjectManualVersion != 7 {
+		t.Fatalf("project provenance lost in snapshot: %+v", job)
+	}
+}
+
 func TestYardStateTransitions(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/project"
 )
 
 type masterManifest struct {
@@ -29,6 +31,7 @@ type masterManifest struct {
 	MaxWorkers     int      `json:"max_workers,omitempty"`
 	Acceptance     []string `json:"acceptance,omitempty"`
 	StagingBranch  string   `json:"staging_branch,omitempty"`
+	ProjectID      string   `json:"project_id,omitempty"`
 }
 
 type masterPlan struct {
@@ -53,15 +56,18 @@ type masterWaveRecord struct {
 }
 
 type masterStatus struct {
-	ID            string             `json:"id"`
-	State         string             `json:"state"`
-	UpdatedAt     string             `json:"updated_at"`
-	StagingBranch string             `json:"staging_branch,omitempty"`
-	Wave          int                `json:"wave,omitempty"`
-	Summary       string             `json:"summary,omitempty"`
-	Error         string             `json:"error,omitempty"`
-	Waves         []masterWaveRecord `json:"waves,omitempty"`
-	Cost          *cost.Summary      `json:"cost,omitempty"`
+	ID                   string             `json:"id"`
+	ProjectID            string             `json:"project_id,omitempty"`
+	MasterPacketDigest   string             `json:"master_packet_digest,omitempty"`
+	ProjectManualVersion int                `json:"project_manual_version,omitempty"`
+	State                string             `json:"state"`
+	UpdatedAt            string             `json:"updated_at"`
+	StagingBranch        string             `json:"staging_branch,omitempty"`
+	Wave                 int                `json:"wave,omitempty"`
+	Summary              string             `json:"summary,omitempty"`
+	Error                string             `json:"error,omitempty"`
+	Waves                []masterWaveRecord `json:"waves,omitempty"`
+	Cost                 *cost.Summary      `json:"cost,omitempty"`
 }
 
 func cmdMaster() {
@@ -75,11 +81,6 @@ func cmdMaster() {
 		fmt.Fprintf(os.Stderr, "master: %v\n", err)
 		os.Exit(1)
 	}
-	if prior, err := readMasterStatus(manifest.ID); err == nil && isFinalMasterState(prior.State) {
-		fmt.Printf("GARY // MASTER ALREADY %s\nJob: %s\nBranch: %s\n", strings.ToUpper(prior.State), prior.ID, prior.StagingBranch)
-		return
-	}
-
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "master config: %v\n", err)
@@ -95,8 +96,23 @@ func cmdMaster() {
 	if cfg.GCPRegion == "" {
 		cfg.GCPRegion = "europe-west2"
 	}
+	projectCtx, projectID, err := ensureMasterProject(cfg, manifest, brief)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "master project context: %v\n", err)
+		os.Exit(1)
+	}
+	manifest.ProjectID = projectID
+	brief = projectCtx.PlannerInputWithSource()
+	if prior, err := readMasterStatus(manifest.ID); err == nil && isFinalMasterState(prior.State) {
+		fmt.Printf("GARY // MASTER ALREADY %s\nJob: %s\nBranch: %s\n", strings.ToUpper(prior.State), prior.ID, prior.StagingBranch)
+		return
+	}
+	if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "EXECUTING", CurrentPhase: "planning", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: "master started"}); err != nil {
+		fmt.Fprintf(os.Stderr, "master project state: %v\n", err)
+		os.Exit(1)
+	}
 
-	status := &masterStatus{ID: manifest.ID, State: "starting", Cost: cost.NewSummary()}
+	status := &masterStatus{ID: manifest.ID, ProjectID: projectID, MasterPacketDigest: projectCtx.Project.MasterPacketDigest, ProjectManualVersion: projectCtx.Project.ProjectManualVersion, State: "starting", Cost: cost.NewSummary()}
 	stagingBranch := manifest.StagingBranch
 	if stagingBranch == "" {
 		stagingBranch = fmt.Sprintf("gary/master-%s-%s", shortMasterID(manifest.ID, 16), randomSuffix(6))
@@ -126,6 +142,14 @@ func cmdMaster() {
 	resuming := manifest.StagingBranch != "" && len(status.Waves) > 0
 	startWave, endWave := masterWaveBounds(len(status.Waves), manifest.MaxWaves, resuming)
 	for wave := startWave; wave <= endWave; wave++ {
+		projectCtx, err = project.DefaultStore().LoadContext(projectID)
+		if err != nil {
+			failMaster(status, fmt.Errorf("project context before wave %d: %w", wave, err))
+		}
+		brief = projectCtx.PlannerInputWithSource()
+		if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "PLANNING", CurrentPhase: "planning", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: fmt.Sprintf("planning wave %d", wave)}); err != nil {
+			failMaster(status, fmt.Errorf("project state before wave %d: %w", wave, err))
+		}
 		status.State = "planning"
 		status.Wave = wave
 		_ = saveMasterStatus(status)
@@ -149,12 +173,18 @@ func cmdMaster() {
 
 		if plan.Done {
 			status.Waves = append(status.Waves, record)
+			if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "VERIFYING", CurrentPhase: "verification", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: "planner reports project done"}); err != nil {
+				failMaster(status, fmt.Errorf("project state before final acceptance: %w", err))
+			}
 			if len(manifest.Acceptance) > 0 {
 				status.State = "final-verification"
 				_ = saveMasterStatus(status)
 				if err := runMasterAcceptance(manifest.Repo, stagingBranch, manifest.Acceptance); err != nil {
 					failMaster(status, fmt.Errorf("final acceptance: %w", err))
 				}
+			}
+			if err := project.DefaultStore().AcceptProject(projectID, "project-level master acceptance passed"); err != nil {
+				failMaster(status, fmt.Errorf("project acceptance: %w", err))
 			}
 			status.State = "done"
 			status.Summary = plan.Summary
@@ -171,12 +201,17 @@ func cmdMaster() {
 		_ = saveMasterStatus(status)
 		childJobs := make([]*jobs.Job, 0, len(plan.Jobs))
 		for i, child := range plan.Jobs {
+			childContext := projectCtx.ChildTaskForID(child.Task, child.ID)
 			childJobs = append(childJobs, &jobs.Job{
-				ID:         masterRuntimeID("job", manifest.ID, wave, i+1),
-				Repo:       manifest.Repo,
-				BaseBranch: stagingBranch,
-				Task:       child.Task,
-				Acceptance: child.Acceptance,
+				ID:                   masterRuntimeID("job", manifest.ID, wave, i+1),
+				Repo:                 manifest.Repo,
+				BaseBranch:           stagingBranch,
+				Task:                 child.Task,
+				Acceptance:           child.Acceptance,
+				ProjectID:            projectID,
+				MasterPacketDigest:   projectCtx.Project.MasterPacketDigest,
+				ProjectManualVersion: projectCtx.Project.ProjectManualVersion,
+				ProjectContext:       childContext,
 			})
 		}
 
@@ -217,9 +252,44 @@ func cmdMaster() {
 
 		status.Waves = append(status.Waves, record)
 		_ = saveMasterStatus(status)
+		if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "EXECUTING", CurrentPhase: "executing", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: fmt.Sprintf("wave %d completed", wave)}); err != nil {
+			failMaster(status, fmt.Errorf("project state after wave %d: %w", wave, err))
+		}
 	}
 
 	failMaster(status, fmt.Errorf("master job exhausted this run's wave budget (%d waves, through wave %d) without completion", manifest.MaxWaves, endWave))
+}
+
+func ensureMasterProject(cfg *config.Config, manifest *masterManifest, brief string) (project.ProjectContext, string, error) {
+	store := project.DefaultStore()
+	if manifest.ProjectID != "" {
+		ctx, err := store.LoadContext(manifest.ProjectID)
+		if err != nil {
+			return project.ProjectContext{}, manifest.ProjectID, err
+		}
+		if ctx.Project.State == "ACCEPTED" || ctx.Project.State == "ARCHIVED" {
+			return project.ProjectContext{}, manifest.ProjectID, fmt.Errorf("project %s is terminal (%s)", manifest.ProjectID, ctx.Project.State)
+		}
+		return ctx, manifest.ProjectID, err
+	}
+	projectID := manifest.ID
+	if existing, err := store.LoadProject(projectID); err == nil {
+		ctx, loadErr := store.LoadContext(projectID)
+		if loadErr != nil {
+			return project.ProjectContext{}, projectID, loadErr
+		}
+		if ctx.Project.State == "ACCEPTED" || ctx.Project.State == "ARCHIVED" {
+			return project.ProjectContext{}, projectID, fmt.Errorf("project %s is terminal (%s)", projectID, ctx.Project.State)
+		}
+		if existing.Repo != "" && existing.Repo != manifest.Repo {
+			return project.ProjectContext{}, projectID, errors.New("project repository mismatch")
+		}
+		return ctx, projectID, nil
+	}
+	ctx, err := store.CreateAndIngest(context.Background(), projectID, projectID, manifest.Repo, manifest.BaseBranch, []byte(brief), func(ctx context.Context, input project.ProjectContext) (project.ProjectManual, error) {
+		return generateProjectManual(ctx, cfg, input)
+	})
+	return ctx, projectID, err
 }
 
 func loadMasterManifest(path string) (*masterManifest, string, error) {
@@ -245,15 +315,22 @@ func loadMasterManifest(path string) (*masterManifest, string, error) {
 	if m.StagingBranch != "" && (!inboxBranch.MatchString(m.StagingBranch) || strings.Contains(m.StagingBranch, "..")) {
 		return nil, "", errors.New("invalid staging_branch")
 	}
-	if strings.TrimSpace(m.BriefPath) == "" {
-		return nil, "", errors.New("brief_path is required")
-	}
-	brief, err := os.ReadFile(m.BriefPath)
-	if err != nil {
-		return nil, "", fmt.Errorf("read brief_path: %w", err)
-	}
-	if len(brief) == 0 {
-		return nil, "", errors.New("master brief is empty")
+	var brief []byte
+	if m.ProjectID != "" {
+		if !project.IsValidID(m.ProjectID) {
+			return nil, "", errors.New("invalid project_id")
+		}
+	} else {
+		if strings.TrimSpace(m.BriefPath) == "" {
+			return nil, "", errors.New("brief_path is required")
+		}
+		brief, err = os.ReadFile(m.BriefPath)
+		if err != nil {
+			return nil, "", fmt.Errorf("read brief_path: %w", err)
+		}
+		if len(brief) == 0 {
+			return nil, "", errors.New("master brief is empty")
+		}
 	}
 	if m.MaxWaves == 0 {
 		m.MaxWaves = 4

@@ -41,6 +41,7 @@ $env:GARY_GCP_REGION = "us-central1"
 $env:GARY_GCP_ZONE = "us-central1-a"
 $env:GARY_GITHUB_REPO = "owner/repo"
 $env:GARY_RESULTS_DIR = ".\results"
+$env:GARY_PROJECTS_DIR = ".\gary\projects"
 ```
 
 Or copy `.env.example` to `.env` and source it. See `.env.example` for all
@@ -54,6 +55,7 @@ supported variables.
 | `GARY_GITHUB_REPO` | No | GitHub repository (owner/repo) |
 | `GARY_RESULTS_DIR` | No | Local results directory (default: ./results) |
 | `GARY_WORKER_RUNTIME` | No | Default worker: `batch` or `managed` (default: batch) |
+| `GARY_PROJECTS_DIR` | No | Durable project context root (default: ./gary/projects) |
 
 ## Layout
 
@@ -89,6 +91,26 @@ go run ./cmd/gary cost <job-or-master-id>
 Ordinary results are stored under `results/runs/<job-id>.json`; master results
 are stored under `gary/master/status/<master-id>.json`. The GitHub-readable yard
 snapshot is `control/status.json` and reports `idle` when no jobs remain active.
+
+## Durable projects
+
+Long master packets can be ingested into durable project context. The original
+packet is stored before the Yardmaster call, identified by SHA-256, and never
+rewritten. The Yardmaster produces versioned structured manuals; amendments
+produce new manual versions while preserving the packet and older manuals.
+
+```powershell
+go run ./cmd/gary project start --id book-burner --repo https://github.com/matthewjameswatkins1978-cyber/book-burner.git --base-branch master MASTER_PACKET.md
+go run ./cmd/gary project status book-burner
+go run ./cmd/gary project resume book-burner
+go run ./cmd/gary project amend book-burner AMENDMENT.md
+go run ./cmd/gary project inspect book-burner --json
+```
+
+Project-backed master manifests use `project_id` instead of `brief_path`.
+Every master wave and child worker rehydrates and verifies the project packet
+and current manual before continuing. Missing or tampered context blocks the
+operation; project acceptance is required before archival.
 
 Do not put credentials in this repository; copy `.env.example` to `.env`
 for local development.

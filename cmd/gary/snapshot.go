@@ -14,7 +14,13 @@ import (
 var snapshotMutationMu sync.Mutex
 
 // snapshotActiveJob records a job as active in the snapshot.
-func snapshotActiveJob(jobID, batchJobID, repo, baseBranch, resultBranch string, state control.JobState, attempts int, startedAt string) {
+type projectProvenance struct {
+	ProjectID            string
+	MasterPacketDigest   string
+	ProjectManualVersion int
+}
+
+func snapshotActiveJob(jobID, batchJobID, repo, baseBranch, resultBranch string, state control.JobState, attempts int, startedAt string, provenance ...projectProvenance) {
 	snapshotMutationMu.Lock()
 	defer snapshotMutationMu.Unlock()
 
@@ -34,18 +40,25 @@ func snapshotActiveJob(jobID, batchJobID, repo, baseBranch, resultBranch string,
 	}
 
 	// Add/update active
+	var p projectProvenance
+	if len(provenance) > 0 {
+		p = provenance[0]
+	}
 	found := false
 	for i, a := range snap.ActiveJobs {
 		if a.ID == jobID {
 			snap.ActiveJobs[i] = control.JobEntry{
-				ID:           jobID,
-				BatchJobID:   batchJobID,
-				State:        state,
-				Repo:         repo,
-				BaseBranch:   baseBranch,
-				ResultBranch: resultBranch,
-				Attempts:     attempts,
-				StartedAt:    startedAt,
+				ID:                   jobID,
+				ProjectID:            p.ProjectID,
+				MasterPacketDigest:   p.MasterPacketDigest,
+				ProjectManualVersion: p.ProjectManualVersion,
+				BatchJobID:           batchJobID,
+				State:                state,
+				Repo:                 repo,
+				BaseBranch:           baseBranch,
+				ResultBranch:         resultBranch,
+				Attempts:             attempts,
+				StartedAt:            startedAt,
 			}
 			found = true
 			break
@@ -53,14 +66,17 @@ func snapshotActiveJob(jobID, batchJobID, repo, baseBranch, resultBranch string,
 	}
 	if !found {
 		snap.ActiveJobs = append(snap.ActiveJobs, control.JobEntry{
-			ID:           jobID,
-			BatchJobID:   batchJobID,
-			State:        state,
-			Repo:         repo,
-			BaseBranch:   baseBranch,
-			ResultBranch: resultBranch,
-			Attempts:     attempts,
-			StartedAt:    startedAt,
+			ID:                   jobID,
+			ProjectID:            p.ProjectID,
+			MasterPacketDigest:   p.MasterPacketDigest,
+			ProjectManualVersion: p.ProjectManualVersion,
+			BatchJobID:           batchJobID,
+			State:                state,
+			Repo:                 repo,
+			BaseBranch:           baseBranch,
+			ResultBranch:         resultBranch,
+			Attempts:             attempts,
+			StartedAt:            startedAt,
 		})
 	}
 
@@ -101,16 +117,19 @@ func snapshotJobComplete(jobID string, result jobs.RunResult) {
 	}
 
 	recent := append(snap.RecentJobs, control.JobEntry{
-		ID:           jobID,
-		BatchJobID:   result.BatchJobID,
-		State:        state,
-		ResultBranch: result.Branch,
-		ResultCommit: result.CommitSHA,
-		Attempts:     result.Attempts,
-		EstCost:      result.TotalCostEstimated, // legacy compatibility
-		Cost:         result.Cost,
-		Summary:      summary,
-		FinishedAt:   time.Now().UTC().Format(time.RFC3339),
+		ID:                   jobID,
+		ProjectID:            result.ProjectID,
+		MasterPacketDigest:   result.MasterPacketDigest,
+		ProjectManualVersion: result.ProjectManualVersion,
+		BatchJobID:           result.BatchJobID,
+		State:                state,
+		ResultBranch:         result.Branch,
+		ResultCommit:         result.CommitSHA,
+		Attempts:             result.Attempts,
+		EstCost:              result.TotalCostEstimated, // legacy compatibility
+		Cost:                 result.Cost,
+		Summary:              summary,
+		FinishedAt:           time.Now().UTC().Format(time.RFC3339),
 	})
 
 	control.PublishSnapshot(repoRoot, active, recent)

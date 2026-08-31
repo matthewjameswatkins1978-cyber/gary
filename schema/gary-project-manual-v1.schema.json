@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gary.project-manual.v1",
+  "type": "object",
+  "required": ["schema", "project_id", "objective", "definition_of_done", "source_packet_digest", "manual_version", "manual_digest"],
+  "properties": {
+    "schema": {"const": "gary.project-manual.v1"},
+    "project_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,59}$"},
+    "objective": {"type": "string", "minLength": 1},
+    "definition_of_done": {"type": "string", "minLength": 1},
+    "source_packet_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "manual_version": {"type": "integer", "minimum": 1},
+    "manual_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "conflicts": {"type": "array"},
+    "hard_constraints": {"type": "array"},
+    "acceptance_criteria": {"type": "array"}
+  },
+  "additionalProperties": true
+}

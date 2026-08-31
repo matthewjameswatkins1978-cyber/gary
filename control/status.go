@@ -39,19 +39,22 @@ const (
 
 // JobEntry is a concise snapshot of one job.
 type JobEntry struct {
-	ID           string        `json:"id"`
-	BatchJobID   string        `json:"batch_job_id,omitempty"`
-	State        JobState      `json:"state"`
-	Repo         string        `json:"repo,omitempty"`
-	BaseBranch   string        `json:"base_branch,omitempty"`
-	ResultBranch string        `json:"result_branch,omitempty"`
-	ResultCommit string        `json:"result_commit,omitempty"`
-	StartedAt    string        `json:"started_at,omitempty"`
-	FinishedAt   string        `json:"finished_at,omitempty"`
-	Attempts     int           `json:"attempts,omitempty"`
-	EstCost      float64       `json:"est_cost,omitempty"` // legacy compatibility
-	Cost         *cost.Summary `json:"cost,omitempty"`
-	Summary      string        `json:"summary,omitempty"`
+	ID                   string        `json:"id"`
+	ProjectID            string        `json:"project_id,omitempty"`
+	MasterPacketDigest   string        `json:"master_packet_digest,omitempty"`
+	ProjectManualVersion int           `json:"project_manual_version,omitempty"`
+	BatchJobID           string        `json:"batch_job_id,omitempty"`
+	State                JobState      `json:"state"`
+	Repo                 string        `json:"repo,omitempty"`
+	BaseBranch           string        `json:"base_branch,omitempty"`
+	ResultBranch         string        `json:"result_branch,omitempty"`
+	ResultCommit         string        `json:"result_commit,omitempty"`
+	StartedAt            string        `json:"started_at,omitempty"`
+	FinishedAt           string        `json:"finished_at,omitempty"`
+	Attempts             int           `json:"attempts,omitempty"`
+	EstCost              float64       `json:"est_cost,omitempty"` // legacy compatibility
+	Cost                 *cost.Summary `json:"cost,omitempty"`
+	Summary              string        `json:"summary,omitempty"`
 }
 
 // Snapshot is the full status file written to control/status.json.
