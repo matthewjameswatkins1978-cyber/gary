@@ -56,6 +56,49 @@ type masterWaveRecord struct {
 	Integrated          []string         `json:"integrated,omitempty"`
 }
 
+// masterPlannerHistory is deliberately smaller than masterWaveRecord. The
+// Yardmaster needs decisions and outcomes for replanning, not every provider
+// token field and cost component from every prior worker attempt.
+type masterPlannerHistory struct {
+	Wave       int                       `json:"wave"`
+	Plan       string                    `json:"plan,omitempty"`
+	Results    []masterPlannerHistoryJob `json:"results,omitempty"`
+	Integrated []string                  `json:"integrated,omitempty"`
+}
+
+type masterPlannerHistoryJob struct {
+	JobID    string  `json:"job_id"`
+	Status   string  `json:"status"`
+	Attempts int     `json:"attempts,omitempty"`
+	Accepted bool    `json:"accepted,omitempty"`
+	Commit   string  `json:"commit,omitempty"`
+	CostUSD  float64 `json:"cost_usd,omitempty"`
+}
+
+func compactMasterHistory(waves []masterWaveRecord) string {
+	history := make([]masterPlannerHistory, 0, len(waves))
+	for _, wave := range waves {
+		record := masterPlannerHistory{Wave: wave.Wave, Plan: truncatePlannerText(wave.PlanSummary, 1200), Integrated: wave.Integrated}
+		for _, result := range wave.Results {
+			record.Results = append(record.Results, masterPlannerHistoryJob{
+				JobID: result.JobID, Status: result.FinalStatus, Attempts: result.Attempts,
+				Accepted: result.Accepted, Commit: result.CommitSHA, CostUSD: result.TotalCostEstimated,
+			})
+		}
+		history = append(history, record)
+	}
+	b, _ := json.Marshal(history)
+	return string(b)
+}
+
+func truncatePlannerText(text string, max int) string {
+	text = strings.TrimSpace(text)
+	if max <= 0 || len(text) <= max {
+		return text
+	}
+	return text[:max] + "..."
+}
+
 type masterStatus struct {
 	ID                   string             `json:"id"`
 	ProjectID            string             `json:"project_id,omitempty"`
@@ -155,7 +198,7 @@ func cmdMaster() {
 		status.Wave = wave
 		_ = saveMasterStatus(status)
 
-		history, _ := json.Marshal(status.Waves)
+		history := compactMasterHistory(status.Waves)
 		fmt.Printf("[yardmaster] PLAN wave=%d mode=control-direct model=%s limit=%s\n", wave, cfg.MasterModel, yardmasterPlannerTimeout)
 		plan, planDuration, plannerCost, err := runYardmasterDirect(cfg, manifest, brief, stagingBranch, wave, string(history))
 		record := masterWaveRecord{

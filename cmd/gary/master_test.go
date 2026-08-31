@@ -188,6 +188,25 @@ func TestMasterPlannerPromptIncludesCorrectRoleUniversalRulesAndJobBrief(t *test
 	}
 }
 
+func TestCompactMasterHistoryOmitsRawCostTelemetry(t *testing.T) {
+	history := compactMasterHistory([]masterWaveRecord{{
+		Wave:        1,
+		PlanSummary: strings.Repeat("x", 1400),
+		Results:     []jobs.RunResult{{JobID: "job-1", FinalStatus: "DONE", Accepted: true, Attempts: 1, CommitSHA: "abc123", TotalCostEstimated: 0.12}},
+	}})
+	if len(history) >= 1400 {
+		t.Fatalf("compact history remained too large: %d bytes", len(history))
+	}
+	for _, marker := range []string{"\"job_id\":\"job-1\"", "\"status\":\"DONE\"", "\"commit\":\"abc123\"", "\"cost_usd\":0.12"} {
+		if !strings.Contains(history, marker) {
+			t.Fatalf("compact history missing %q: %s", marker, history)
+		}
+	}
+	if strings.Contains(history, "input_tokens") || strings.Contains(history, "cached_input_tokens") {
+		t.Fatalf("compact history leaked raw token telemetry: %s", history)
+	}
+}
+
 func TestMasterPlannerPromptDelegatesHeavyWork(t *testing.T) {
 	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
 	prompt := buildMasterPlannerPrompt(m, "finish it", "stage", 1, "[]")
