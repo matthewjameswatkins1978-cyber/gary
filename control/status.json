@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-31T10:36:34Z",
+  "updated_at": "2026-08-31T10:36:47Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -41,6 +41,17 @@
       "result_branch": "gary/judgement-call-b-w10-j1-a9ff29c1",
       "started_at": "2026-08-30T03:22:32Z",
       "attempts": 2
+    },
+    {
+      "id": "book-burner-laun-w4-j1",
+      "project_id": "book-burner",
+      "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+      "project_manual_version": 1,
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/book-burner.git",
+      "base_branch": "gary/master-book-burner-laun-f29441",
+      "result_branch": "gary/book-burner-laun-w4-j1-f580b9a7",
+      "started_at": "2026-08-31T10:36:47Z"
     }
   ],
   "recent_jobs": [
