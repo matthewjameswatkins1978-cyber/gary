@@ -152,16 +152,34 @@ func cmdProjectAmend() {
 }
 
 func printProjectContext(ctx project.ProjectContext, jsonOutput bool) {
+	var ledger project.InspectionLedger
+	if ctx.Project.LatestInspectorRunID != "" {
+		ledger, _ = project.DefaultStore().LoadInspectionLedger(ctx.Project.ProjectID, ctx.Project.LatestInspectorRunID)
+	}
 	if jsonOutput {
 		_ = json.NewEncoder(os.Stdout).Encode(struct {
-			Project project.Project       `json:"project"`
-			State   project.ProjectState  `json:"state"`
-			Manual  project.ProjectManual `json:"manual"`
-		}{ctx.Project, ctx.State, ctx.Manual})
+			Project    project.Project            `json:"project"`
+			State      project.ProjectState       `json:"state"`
+			Manual     project.ProjectManual      `json:"manual"`
+			Contract   project.AcceptanceContract `json:"acceptance_contract,omitempty"`
+			Inspection project.InspectionLedger   `json:"latest_inspection,omitempty"`
+		}{ctx.Project, ctx.State, ctx.Manual, ctx.Contract, ledger})
 		return
 	}
 	fmt.Printf("Project: %s\nState: %s\nMaster packet: %s\nManual: v%d\nPhase: %s\n", ctx.Project.ProjectID, ctx.Project.State, ctx.Project.MasterPacketDigest, ctx.Project.ProjectManualVersion, ctx.State.CurrentPhase)
 	fmt.Printf("Objective: %s\n", ctx.Manual.Objective)
+	if ctx.Contract.ContractVersion > 0 {
+		fmt.Printf("Acceptance contract: v%d (%s)\n", ctx.Contract.ContractVersion, ctx.Contract.ContractDigest)
+		for _, claim := range ctx.Contract.Claims {
+			fmt.Printf("  [%s] %s\n", claim.Importance, claim.Statement)
+		}
+	}
+	if ledger.InspectorRunID != "" {
+		fmt.Printf("Latest Inspector: %s (%s)\n", ledger.InspectorRunID, ledger.LedgerDigest)
+		for _, entry := range ledger.Entries {
+			fmt.Printf("  %s %s\n", entry.Result, entry.ClaimID)
+		}
+	}
 	fmt.Printf("Source: %s\n", filepath.Join(project.DefaultStore().Root(), ctx.Project.ProjectID, "source", "MASTER_PACKET.md"))
 }
 

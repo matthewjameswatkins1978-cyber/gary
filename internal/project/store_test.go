@@ -315,3 +315,43 @@ func ctxDigestForTest(store Store, id string) string {
 	p, _ := store.LoadProject(id)
 	return p.AcceptanceContractDigest
 }
+
+func TestInspectionLedgerIsProvenanceBoundAndImmutable(t *testing.T) {
+	store := NewStore(t.TempDir())
+	ctx, err := store.CreateAndIngest(context.Background(), "ledger", "Ledger", "", "", []byte("packet"), testManual)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := "inspector-ledger-001"
+	entry := InspectionEntry{
+		ClaimID: ctx.Contract.Claims[0].ClaimID, Claim: ctx.Contract.Claims[0].Statement,
+		Boundary: ctx.Contract.Claims[0].Boundary, InspectionSeam: "go-test",
+		VectorOrAction: "run the focused test suite", EvidenceType: "unit", Result: InspectionPass,
+		InspectorRunID: runID, Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+	ledger := InspectionLedger{
+		SchemaVersion: 1, ProjectID: ctx.Project.ProjectID, ContractVersion: ctx.Contract.ContractVersion,
+		ContractDigest: ctx.Contract.ContractDigest, InspectedCommitSHA: "0123456789abcdef",
+		InspectorRunID: runID, Timestamp: time.Now().UTC().Format(time.RFC3339), Entries: []InspectionEntry{entry},
+	}
+	ledger.LedgerDigest = InspectionLedgerDigest(ledger)
+	if err := store.SaveInspectionLedger(ledger); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.LoadInspectionLedger("ledger", runID)
+	if err != nil || loaded.LedgerDigest != ledger.LedgerDigest {
+		t.Fatalf("loaded ledger = %+v err=%v", loaded, err)
+	}
+	p, err := store.LoadProject("ledger")
+	if err != nil || p.LatestInspectorRunID != runID || p.LatestEvidenceLedgerDigest != ledger.LedgerDigest {
+		t.Fatalf("project evidence pointer = %+v err=%v", p, err)
+	}
+	changed := ledger
+	changed.Entries = append([]InspectionEntry(nil), ledger.Entries...)
+	changed.Entries[0].Result = InspectionFail
+	changed.Entries[0].FailureReason = "changed after publication"
+	changed.LedgerDigest = InspectionLedgerDigest(changed)
+	if err := store.SaveInspectionLedger(changed); err == nil {
+		t.Fatal("mutable replacement of inspection ledger was accepted")
+	}
+}

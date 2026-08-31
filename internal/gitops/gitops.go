@@ -41,6 +41,13 @@ func CommitSHA(dir string) (string, error) {
 	return runGitCapture(dir, "rev-parse", "--short", "HEAD")
 }
 
+// FullCommitSHA returns the immutable repository identity used for evidence
+// provenance. CommitSHA remains short for the existing human-facing result
+// records.
+func FullCommitSHA(dir string) (string, error) {
+	return runGitCapture(dir, "rev-parse", "HEAD")
+}
+
 // CommitAll stages all changes and commits with the given message.
 func CommitAll(dir, message string) error {
 	if err := runGit(dir, "add", "-A"); err != nil {

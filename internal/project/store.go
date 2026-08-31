@@ -50,21 +50,23 @@ func IsValidID(id string) bool { return projectIDPattern.MatchString(id) }
 
 // Project is the durable identity and current-version pointer for a project.
 type Project struct {
-	Schema                    string `json:"schema"`
-	ProjectID                 string `json:"project_id"`
-	ProjectName               string `json:"project_name,omitempty"`
-	Repo                      string `json:"repo,omitempty"`
-	BaseBranch                string `json:"base_branch,omitempty"`
-	State                     string `json:"state"`
-	MasterPacketDigest        string `json:"master_packet_digest"`
-	MasterPacketVersion       int    `json:"master_packet_version"`
-	ProjectManualVersion      int    `json:"project_manual_version"`
-	ManualDigest              string `json:"manual_digest,omitempty"`
-	AcceptanceContractVersion int    `json:"acceptance_contract_version,omitempty"`
-	AcceptanceContractDigest  string `json:"acceptance_contract_digest,omitempty"`
-	CreatedAt                 string `json:"created_at"`
-	UpdatedAt                 string `json:"updated_at"`
-	AcceptedAt                string `json:"accepted_at,omitempty"`
+	Schema                     string `json:"schema"`
+	ProjectID                  string `json:"project_id"`
+	ProjectName                string `json:"project_name,omitempty"`
+	Repo                       string `json:"repo,omitempty"`
+	BaseBranch                 string `json:"base_branch,omitempty"`
+	State                      string `json:"state"`
+	MasterPacketDigest         string `json:"master_packet_digest"`
+	MasterPacketVersion        int    `json:"master_packet_version"`
+	ProjectManualVersion       int    `json:"project_manual_version"`
+	ManualDigest               string `json:"manual_digest,omitempty"`
+	AcceptanceContractVersion  int    `json:"acceptance_contract_version,omitempty"`
+	AcceptanceContractDigest   string `json:"acceptance_contract_digest,omitempty"`
+	LatestInspectorRunID       string `json:"latest_inspector_run_id,omitempty"`
+	LatestEvidenceLedgerDigest string `json:"latest_evidence_ledger_digest,omitempty"`
+	CreatedAt                  string `json:"created_at"`
+	UpdatedAt                  string `json:"updated_at"`
+	AcceptedAt                 string `json:"accepted_at,omitempty"`
 }
 
 // AcceptanceContract is the durable observable boundary derived from the
@@ -337,7 +339,7 @@ func (s Store) SaveManual(id string, manual ProjectManual) error {
 	if err != nil {
 		return err
 	}
-	if p.State == "ACCEPTED" || p.State == "ARCHIVED" {
+	if isTerminalProjectState(p.State) {
 		return fmt.Errorf("%w: project state is %s", ErrProjectNotAcceptable, p.State)
 	}
 	if manual.ProjectID != id || manual.SourcePacketDigest != p.MasterPacketDigest {
@@ -600,7 +602,7 @@ func (s Store) AddAmendment(id string, contents []byte) (Amendment, error) {
 	if err != nil {
 		return Amendment{}, err
 	}
-	if p.State == "ACCEPTED" || p.State == "ARCHIVED" {
+	if isTerminalProjectState(p.State) {
 		return Amendment{}, fmt.Errorf("%w: project state is %s", ErrProjectNotAcceptable, p.State)
 	}
 	amendments, err := s.LoadAmendments(id)
@@ -638,6 +640,16 @@ func (s Store) SaveState(id string, state ProjectState) error {
 }
 
 func (s Store) AcceptProject(id, summary string) error {
+	return s.acceptProject(id, "ACCEPTED", "accepted", summary)
+}
+
+// AcceptProjectWithBlockedVerification records that all software-verifiable
+// work passed while one or more external or human claims remain blocked.
+func (s Store) AcceptProjectWithBlockedVerification(id, summary string) error {
+	return s.acceptProject(id, "ACCEPTED_WITH_BLOCKED_VERIFICATION", "accepted-with-blocked-verification", summary)
+}
+
+func (s Store) acceptProject(id, stateName, phase, summary string) error {
 	p, err := s.LoadProject(id)
 	if err != nil {
 		return err
@@ -648,7 +660,7 @@ func (s Store) AcceptProject(id, summary string) error {
 	if p.State != "VERIFYING" {
 		return fmt.Errorf("%w: state is %s", ErrProjectNotAcceptable, p.State)
 	}
-	state := ProjectState{Schema: StateSchema, ProjectID: id, State: "ACCEPTED", CurrentPhase: "accepted", LastEvent: summary}
+	state := ProjectState{Schema: StateSchema, ProjectID: id, State: stateName, CurrentPhase: phase, LastEvent: summary}
 	if err := s.SaveState(id, state); err != nil {
 		return err
 	}
@@ -664,7 +676,7 @@ func (s Store) ResumeProject(id string) (ProjectContext, error) {
 	if err != nil {
 		return ProjectContext{}, err
 	}
-	if ctx.Project.State == "ARCHIVED" || ctx.Project.State == "ACCEPTED" {
+	if isTerminalProjectState(ctx.Project.State) {
 		return ProjectContext{}, fmt.Errorf("%w: project state is %s", ErrProjectNotAcceptable, ctx.Project.State)
 	}
 	state := ctx.State
@@ -682,7 +694,7 @@ func (s Store) ArchiveProject(id string) error {
 	if err != nil {
 		return err
 	}
-	if p.State != "ACCEPTED" {
+	if p.State != "ACCEPTED" && p.State != "ACCEPTED_WITH_BLOCKED_VERIFICATION" {
 		return fmt.Errorf("%w: project state is %s", ErrProjectNotAcceptable, p.State)
 	}
 	state := ProjectState{Schema: StateSchema, ProjectID: id, State: "ARCHIVED", CurrentPhase: "archived", LastEvent: "project archived"}
@@ -770,11 +782,15 @@ func ManualDigest(m ProjectManual) string {
 
 func validProjectState(state string) bool {
 	switch state {
-	case "ACTIVE", "PLANNING", "EXECUTING", "VERIFYING", "ACCEPTED", "ARCHIVED", "FAILED", "PAUSED":
+	case "ACTIVE", "PLANNING", "EXECUTING", "VERIFYING", "ACCEPTED", "ACCEPTED_WITH_BLOCKED_VERIFICATION", "ARCHIVED", "FAILED", "PAUSED":
 		return true
 	default:
 		return false
 	}
+}
+
+func isTerminalProjectState(state string) bool {
+	return state == "ACCEPTED" || state == "ACCEPTED_WITH_BLOCKED_VERIFICATION" || state == "ARCHIVED"
 }
 
 func writeJSON(path string, value any) error {

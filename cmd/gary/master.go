@@ -57,18 +57,20 @@ type masterWaveRecord struct {
 }
 
 type masterStatus struct {
-	ID                   string             `json:"id"`
-	ProjectID            string             `json:"project_id,omitempty"`
-	MasterPacketDigest   string             `json:"master_packet_digest,omitempty"`
-	ProjectManualVersion int                `json:"project_manual_version,omitempty"`
-	State                string             `json:"state"`
-	UpdatedAt            string             `json:"updated_at"`
-	StagingBranch        string             `json:"staging_branch,omitempty"`
-	Wave                 int                `json:"wave,omitempty"`
-	Summary              string             `json:"summary,omitempty"`
-	Error                string             `json:"error,omitempty"`
-	Waves                []masterWaveRecord `json:"waves,omitempty"`
-	Cost                 *cost.Summary      `json:"cost,omitempty"`
+	ID                     string             `json:"id"`
+	ProjectID              string             `json:"project_id,omitempty"`
+	MasterPacketDigest     string             `json:"master_packet_digest,omitempty"`
+	ProjectManualVersion   int                `json:"project_manual_version,omitempty"`
+	State                  string             `json:"state"`
+	UpdatedAt              string             `json:"updated_at"`
+	StagingBranch          string             `json:"staging_branch,omitempty"`
+	Wave                   int                `json:"wave,omitempty"`
+	Summary                string             `json:"summary,omitempty"`
+	Error                  string             `json:"error,omitempty"`
+	InspectorRunID         string             `json:"inspector_run_id,omitempty"`
+	InspectionLedgerDigest string             `json:"inspection_ledger_digest,omitempty"`
+	Waves                  []masterWaveRecord `json:"waves,omitempty"`
+	Cost                   *cost.Summary      `json:"cost,omitempty"`
 }
 
 func cmdMaster() {
@@ -184,11 +186,36 @@ func cmdMaster() {
 					failMaster(status, fmt.Errorf("final acceptance: %w", err))
 				}
 			}
-			if err := project.DefaultStore().AcceptProject(projectID, "project-level master acceptance passed"); err != nil {
-				failMaster(status, fmt.Errorf("project acceptance: %w", err))
+			status.State = "inspecting"
+			_ = saveMasterStatus(status)
+			inspectCtx, cancelInspect := context.WithTimeout(context.Background(), inspectorTimeout)
+			ledger, inspectorCost, err := runMasterInspector(inspectCtx, cfg, projectCtx, manifest, stagingBranch, []string{"Deterministic worker acceptance passed for all integrated child jobs."})
+			cancelInspect()
+			status.Cost.Add(inspectorCost)
+			if err != nil {
+				failMaster(status, fmt.Errorf("independent inspection: %w", err))
 			}
-			status.State = "done"
-			status.Summary = plan.Summary
+			status.InspectorRunID = ledger.InspectorRunID
+			status.InspectionLedgerDigest = ledger.LedgerDigest
+			if failed, reason := inspectorHasBlockingFailure(ledger); failed {
+				failMaster(status, errors.New(reason))
+			}
+			blocked := inspectorHasExternalBlock(ledger)
+			acceptanceSummary := "independent Inspector evidence recorded"
+			if blocked {
+				acceptanceSummary = "software/integration verified; external verification remains blocked"
+			}
+			if blocked {
+				if err := project.DefaultStore().AcceptProjectWithBlockedVerification(projectID, acceptanceSummary); err != nil {
+					failMaster(status, fmt.Errorf("project acceptance with blocked verification: %w", err))
+				}
+				status.State = "done-with-blocked-verification"
+			} else if err := project.DefaultStore().AcceptProject(projectID, acceptanceSummary); err != nil {
+				failMaster(status, fmt.Errorf("project acceptance: %w", err))
+			} else {
+				status.State = "done"
+			}
+			status.Summary = acceptanceSummary + ": " + plan.Summary
 			_ = saveMasterStatus(status)
 			printMasterComplete(status, stagingBranch, wave)
 			return
@@ -269,7 +296,7 @@ func ensureMasterProject(cfg *config.Config, manifest *masterManifest, brief str
 		if err != nil {
 			return project.ProjectContext{}, manifest.ProjectID, err
 		}
-		if ctx.Project.State == "ACCEPTED" || ctx.Project.State == "ARCHIVED" {
+		if ctx.Project.State == "ACCEPTED" || ctx.Project.State == "ACCEPTED_WITH_BLOCKED_VERIFICATION" || ctx.Project.State == "ARCHIVED" {
 			return project.ProjectContext{}, manifest.ProjectID, fmt.Errorf("project %s is terminal (%s)", manifest.ProjectID, ctx.Project.State)
 		}
 		ctx, err = ensureMasterAcceptanceContract(store, ctx)
@@ -281,7 +308,7 @@ func ensureMasterProject(cfg *config.Config, manifest *masterManifest, brief str
 		if loadErr != nil {
 			return project.ProjectContext{}, projectID, loadErr
 		}
-		if ctx.Project.State == "ACCEPTED" || ctx.Project.State == "ARCHIVED" {
+		if ctx.Project.State == "ACCEPTED" || ctx.Project.State == "ACCEPTED_WITH_BLOCKED_VERIFICATION" || ctx.Project.State == "ARCHIVED" {
 			return project.ProjectContext{}, projectID, fmt.Errorf("project %s is terminal (%s)", projectID, ctx.Project.State)
 		}
 		if existing.Repo != "" && existing.Repo != manifest.Repo {
@@ -581,7 +608,7 @@ func readMasterStatus(id string) (*masterStatus, error) {
 func isFinalMasterState(state string) bool {
 	// Successful completion is idempotently terminal. Failed master jobs are
 	// retryable so a corrected brief, model, or runtime policy can use the same ID.
-	return state == "done"
+	return state == "done" || state == "done-with-blocked-verification"
 }
 
 func saveMasterStatus(status *masterStatus) error {

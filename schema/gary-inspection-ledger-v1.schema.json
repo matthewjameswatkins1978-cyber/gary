@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gary.agent-yard.local/schema/gary-inspection-ledger-v1.schema.json",
+  "title": "GARY Inspection Ledger v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "contract_version", "contract_digest", "inspected_commit_sha", "inspector_run_id", "timestamp", "entries", "ledger_digest"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "project_id": { "type": "string", "minLength": 1 },
+    "contract_version": { "type": "integer", "minimum": 1 },
+    "contract_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "inspected_commit_sha": { "type": "string", "minLength": 7 },
+    "inspector_run_id": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "minLength": 1 },
+    "ledger_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim_id", "claim", "boundary", "inspection_seam", "vector_or_action", "evidence_type", "result", "inspector_run_id", "timestamp"],
+        "properties": {
+          "claim_id": { "type": "string", "minLength": 1 },
+          "claim": { "type": "string", "minLength": 1 },
+          "boundary": { "type": "string", "minLength": 1 },
+          "inspection_seam": { "type": "string", "minLength": 1 },
+          "vector_or_action": { "type": "string", "minLength": 1 },
+          "evidence_artifact": { "type": "string" },
+          "evidence_type": { "type": "string", "minLength": 1 },
+          "result": { "enum": ["PASS", "FAIL", "BLOCKED_ENVIRONMENT", "BLOCKED_HUMAN", "NOT_TESTED", "NOT_APPLICABLE"] },
+          "failure_reason": { "type": "string" },
+          "inspector_run_id": { "type": "string", "minLength": 1 },
+          "timestamp": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
