@@ -10,7 +10,7 @@ func TestDecodeProjectManualNormalizesYardmasterVariants(t *testing.T) {
   "schema": "gary.project-manual.v1",
   "project_id": "demo",
   "objective": "Test durable intake",
-  "definition_of_done": "The marker exists",
+  "definition_of_done": [{"id":"DONE-001","description":"The marker exists"}],
   "manual_version": "1.0.0",
   "source_packet_digest": "` + digest + `",
   "forbidden_changes": ["Do not add dependencies"],
@@ -21,7 +21,7 @@ func TestDecodeProjectManualNormalizesYardmasterVariants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manual.ManualVersion != 1 || len(manual.FunctionalRequirements) != 1 || manual.FunctionalRequirements[0].Text != "Add the marker" {
+	if manual.ManualVersion != 1 || manual.DefinitionOfDone != "The marker exists" || len(manual.FunctionalRequirements) != 1 || manual.FunctionalRequirements[0].Text != "Add the marker" {
 		t.Fatalf("manual normalization = %+v", manual)
 	}
 	if manual.FunctionalRequirements[0].Source.PacketDigest != digest || manual.FunctionalRequirements[0].Source.Locator != "MASTER PACKET: ## Objective" {
