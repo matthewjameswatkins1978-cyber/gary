@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"sort"
+
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 )
 
 const telltailAdapterProtocol = "telltail.adapter.v1"
@@ -33,6 +35,9 @@ type routeDecision struct {
 	CaseID      string   `json:"case_id"`
 	Action      string   `json:"action"`
 	ChoiceID    string   `json:"choice_id"`
+	RouteID     string   `json:"route_id"`
+	Provider    string   `json:"provider"`
+	Model       string   `json:"model"`
 	ReasonCodes []string `json:"reason_codes,omitempty"`
 }
 
@@ -70,6 +75,26 @@ func cmdRoute() {
 		fmt.Fprintf(os.Stderr, "route decision: %v\n", err)
 		os.Exit(2)
 	}
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "route config: %v\n", err)
+		os.Exit(2)
+	}
+	provider := "google-cloud-batch"
+	if cfg.WorkerRuntime == "managed" {
+		provider = "google-managed-agent"
+	}
+	if requested := stringValue(req.Situation, "requested_provider"); requested != "" && requested != provider {
+		fmt.Fprintf(os.Stderr, "route provider mismatch: requested %q, configured %q\n", requested, provider)
+		os.Exit(2)
+	}
+	if requested := stringValue(req.Situation, "requested_model"); requested != "" && requested != cfg.ImplementerModel {
+		fmt.Fprintf(os.Stderr, "route model mismatch: requested %q, configured %q\n", requested, cfg.ImplementerModel)
+		os.Exit(2)
+	}
+	decision.RouteID = decision.ChoiceID
+	decision.Provider = provider
+	decision.Model = cfg.ImplementerModel
 	if err := json.NewEncoder(os.Stdout).Encode(decision); err != nil {
 		fmt.Fprintf(os.Stderr, "route output: %v\n", err)
 		os.Exit(1)
