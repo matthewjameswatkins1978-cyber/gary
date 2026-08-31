@@ -5,6 +5,6 @@
   "max_waves": 5,
   "max_jobs_per_wave": 1,
   "max_workers": 1,
-  "project_id": "book-burner",
-  "staging_branch": "gary/master-book-burner-laun-f29441"
+  "staging_branch": "gary/master-book-burner-laun-f29441",
+  "project_id": "book-burner"
 }

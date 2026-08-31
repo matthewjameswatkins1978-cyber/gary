@@ -3,11 +3,12 @@
   "project_id": "book-burner",
   "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
   "project_manual_version": 1,
-  "state": "running",
-  "updated_at": "2026-08-31T12:02:21Z",
+  "state": "failed",
+  "updated_at": "2026-08-31T12:11:07Z",
   "staging_branch": "gary/master-book-burner-laun-f29441",
   "wave": 8,
   "summary": "Core domain, metadata integration, and capture workflow with atomic photo store are accepted. Scheduling the Export \u0026 Archiving subsystem (CSV/JSON/Manifest generation and ZIP archive packaging).",
+  "error": "Master run was canceled after Wave 7 integration before Wave 8 worker dispatch; preserved staging is resumable.",
   "planner_memory": "Accepted: Core domain models (c199371), Metadata provider adapters \u0026 composite fallback (ff2c2d6), Barcode scanner seam, capture state machine, and atomic photo store (78f0c15). Next slice: Export and Archiving engine (books.csv, books.json, manifest.json, ZIP packaging with photos). Outstanding after: SwiftUI UI views (Capture, Books List, Book Detail, Export share sheet).",
   "waves": [
     {
