@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-31T11:04:00Z",
+  "updated_at": "2026-08-31T11:08:10Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -41,33 +41,9 @@
       "result_branch": "gary/judgement-call-b-w10-j1-a9ff29c1",
       "started_at": "2026-08-30T03:22:32Z",
       "attempts": 2
-    },
-    {
-      "id": "book-burner-laun-w6-j1",
-      "project_id": "book-burner",
-      "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
-      "project_manual_version": 1,
-      "batch_job_id": "gary-run-book-burner-laun-w6-j1-1-20260831-110400",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/book-burner.git",
-      "base_branch": "gary/master-book-burner-laun-f29441",
-      "result_branch": "gary/book-burner-laun-w6-j1-4093f8ad",
-      "started_at": "2026-08-31T11:03:59Z",
-      "attempts": 1
     }
   ],
   "recent_jobs": [
-    {
-      "id": "judgement-call-b-w2-j2",
-      "batch_job_id": "gary-run-judgement-call-b-w2-j2-1-20260829-194747",
-      "state": "accepted",
-      "result_branch": "gary/judgement-call-b-w2-j2-ce3e966d",
-      "result_commit": "4a9b8d6",
-      "finished_at": "2026-08-29T19:56:34Z",
-      "attempts": 1,
-      "est_cost": 0.026349358989017253,
-      "summary": "DONE"
-    },
     {
       "id": "judgement-call-b-w3-j1",
       "state": "failed",
@@ -601,6 +577,54 @@
             "compute_cost_usd": 0.001458690933045,
             "total_cost_usd": 0.10809938093304501,
             "runtime_seconds": 253.68537966,
+            "machine_type": "e2-small",
+            "provisioning_model": "STANDARD",
+            "pricing_version": "2026-08-30",
+            "pricing_effective_date": "2026-08-30",
+            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+            "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+          }
+        ],
+        "unmetered_components": [
+          "Batch compute is estimated from observed runtime; invoice data was not queried"
+        ]
+      },
+      "summary": "DONE"
+    },
+    {
+      "id": "book-burner-laun-w6-j1",
+      "project_id": "book-burner",
+      "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+      "project_manual_version": 1,
+      "batch_job_id": "gary-run-book-burner-laun-w6-j1-1-20260831-110400",
+      "state": "accepted",
+      "result_branch": "gary/book-burner-laun-w6-j1-4093f8ad",
+      "result_commit": "ff2c2d6",
+      "finished_at": "2026-08-31T11:08:10Z",
+      "attempts": 1,
+      "est_cost": 0.10658984378460425,
+      "cost": {
+        "pricing_status": "MIXED",
+        "currency": "USD",
+        "pricing_version": "2026-08-30",
+        "worker_model_cost_usd": 0.10535481,
+        "model_cost_usd": 0.10535481,
+        "compute_cost_usd": 0.0012350337846042498,
+        "total_cost_usd": 0.10658984378460425,
+        "components": [
+          {
+            "kind": "worker",
+            "model_requested": "gemini-3.5-flash-lite",
+            "usage_source": "PROVIDER_REPORTED",
+            "input_tokens": 768709,
+            "cached_input_tokens": 531807,
+            "fresh_input_tokens": 236902,
+            "output_tokens": 7332,
+            "total_tokens": 776041,
+            "model_cost_usd": 0.10535481,
+            "compute_cost_usd": 0.0012350337846042498,
+            "total_cost_usd": 0.10658984378460425,
+            "runtime_seconds": 214.788484279,
             "machine_type": "e2-small",
             "provisioning_model": "STANDARD",
             "pricing_version": "2026-08-30",
