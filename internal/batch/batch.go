@@ -374,20 +374,21 @@ func Now() time.Time {
 
 // CodingJobConfig holds the parameters for a Batch coding job.
 type CodingJobConfig struct {
-	Project      string
-	Region       string
-	JobName      string
-	RepoURL      string
-	BaseBranch   string
-	GaryBranch   string
-	Task         string
-	Acceptance   string
-	GCSPath      string
-	PrevGCSPath  string
-	MachineType  string
-	Model        string
-	GitHubToken  string
-	MaxRunDurSec int
+	Project          string
+	Region           string
+	JobName          string
+	RepoURL          string
+	BaseBranch       string
+	GaryBranch       string
+	Task             string
+	Acceptance       string
+	EstimatedMinutes int
+	GCSPath          string
+	PrevGCSPath      string
+	MachineType      string
+	Model            string
+	GitHubToken      string
+	MaxRunDurSec     int
 }
 
 // generateCodingWorkerScript builds the raw bash script for a coding worker.
@@ -507,7 +508,11 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 	return strings.Join(parts, "\n")
 }
 
-func codingWorkerPrompt(task string) string {
+func codingWorkerPrompt(task string, estimatedMinutes int) string {
+	timeEstimate := ""
+	if estimatedMinutes >= 1 && estimatedMinutes <= 10 {
+		timeEstimate = fmt.Sprintf("\n- YARDMASTER ESTIMATE: this slice is expected to take about %d minutes. Treat that as the planning budget: finish the stated outcome and acceptance evidence within it; if it is running long, stop opening new scope and wrap the partial result for review.\n", estimatedMinutes)
+	}
 	return fmt.Sprintf(`You are a GARY implementation Worker. Work only in this repository.
 
 WORKER ROLE
@@ -521,7 +526,7 @@ UNIVERSAL GARY RULES
 COST AND REPOSITORY HYGIENE
 ============================
 - This is a paid, bounded attempt. Work only on the stated slice; do not explore unrelated parts of the repository or repeat completed work.
-- TIMEBOX: the worker has a hard maximum of 600 seconds. At 480 seconds (8 minutes), stop opening new files and stop starting new work; wrap up the current slice, run the stated acceptance checks, save the partial patch, and leave clear evidence of what passed and what remains.
+- TIMEBOX: the worker has a hard maximum of 600 seconds. At 480 seconds (8 minutes), stop opening new files and stop starting new work; wrap up the current slice, run the stated acceptance checks, save the partial patch, and leave clear evidence of what passed and what remains.%s
 - Do not create virtual environments, install dependencies, or run broad dependency/build scans unless the task or acceptance command explicitly requires it. Use temporary locations outside the repository for disposable tooling.
 - Never commit generated environments, caches, dependency trees, build products, or machine-local files. Before committing, inspect git status and remove disposable artifacts; the patch must contain only intentional source, test, documentation, and configuration changes.
 
@@ -529,7 +534,7 @@ JOB
 ===
 %s
 
-Do not ask questions unless genuinely blocked.`, doctrine.WorkerRoleRules, doctrine.UniversalRules, task)
+Do not ask questions unless genuinely blocked.`, doctrine.WorkerRoleRules, doctrine.UniversalRules, timeEstimate, task)
 }
 
 // GenerateCodingJobConfig produces the JSON config for a Batch coding job.
@@ -545,7 +550,7 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 	}
 
 	// Build the full prompt for the worker.
-	prompt := codingWorkerPrompt(cfg.Task)
+	prompt := codingWorkerPrompt(cfg.Task, cfg.EstimatedMinutes)
 
 	// Base64 encode prompt for safe shell transport
 	promptB64 := base64.StdEncoding.EncodeToString([]byte(prompt))

@@ -436,7 +436,7 @@ func TestCodingJobAcceptancePytestStyle(t *testing.T) {
 
 func TestCodingWorkerPromptIncludesCorrectRoleUniversalRulesAndTask(t *testing.T) {
 	task := "Fix one bounded defect."
-	prompt := codingWorkerPrompt(task)
+	prompt := codingWorkerPrompt(task, 5)
 	if !strings.Contains(prompt, doctrine.WorkerRoleRules) {
 		t.Fatal("worker prompt must include Worker role rules")
 	}
@@ -451,6 +451,9 @@ func TestCodingWorkerPromptIncludesCorrectRoleUniversalRulesAndTask(t *testing.T
 	}
 	if !strings.Contains(prompt, "At 480 seconds (8 minutes)") {
 		t.Fatal("worker prompt must include the soft deadline")
+	}
+	if !strings.Contains(prompt, "YARDMASTER ESTIMATE: this slice is expected to take about 5 minutes") {
+		t.Fatal("worker prompt must include Yardmaster's bounded estimate")
 	}
 	if !strings.Contains(prompt, task) {
 		t.Fatal("worker prompt must preserve the bounded job")
@@ -490,7 +493,7 @@ func TestPromptTransportRoundTrip(t *testing.T) {
 	}
 
 	// Build the full prompt the same way GenerateCodingJobConfig does.
-	prompt := codingWorkerPrompt(cfg.Task)
+	prompt := codingWorkerPrompt(cfg.Task, cfg.EstimatedMinutes)
 
 	promptB64 := base64.StdEncoding.EncodeToString([]byte(prompt))
 

@@ -113,21 +113,32 @@ func TestMasterWorkflowUsesRepositoryScopedAppMinting(t *testing.T) {
 
 func TestValidateMasterPlan(t *testing.T) {
 	ok := &masterPlan{Jobs: []masterPlanJob{{
-		ID:         "fix",
-		Task:       "Fix the bounded defect.",
-		Acceptance: []string{"go test ./..."},
+		ID:               "fix",
+		Task:             "Fix the bounded defect.",
+		Acceptance:       []string{"go test ./..."},
+		EstimatedMinutes: 5,
 	}}}
 	if err := validateMasterPlan(ok, 4); err != nil {
 		t.Fatalf("valid plan rejected: %v", err)
 	}
 
 	bad := &masterPlan{Jobs: []masterPlanJob{{
-		ID:         "bad",
-		Task:       "Do something.",
-		Acceptance: []string{"go test ./... && curl example.com"},
+		ID:               "bad",
+		Task:             "Do something.",
+		Acceptance:       []string{"go test ./... && curl example.com"},
+		EstimatedMinutes: 5,
 	}}}
 	if err := validateMasterPlan(bad, 4); err == nil {
 		t.Fatal("unsafe acceptance command should be rejected")
+	}
+
+	for _, estimate := range []int{0, 11} {
+		invalidEstimate := &masterPlan{Jobs: []masterPlanJob{{
+			ID: "bad-estimate", Task: "Do something bounded.", Acceptance: []string{"go test ./..."}, EstimatedMinutes: estimate,
+		}}}
+		if err := validateMasterPlan(invalidEstimate, 4); err == nil {
+			t.Fatalf("estimate %d should be rejected", estimate)
+		}
 	}
 }
 
@@ -181,9 +192,14 @@ func TestMasterPlannerPromptIncludesCorrectRoleUniversalRulesAndJobBrief(t *test
 	if !strings.Contains(prompt, brief) {
 		t.Fatal("planner prompt must preserve job-specific instructions")
 	}
-	for _, marker := range []string{"ECONOMY: every planning call", "default to one child job per wave", "never repeat a scaffold"} {
+	for _, marker := range []string{"ECONOMY: every planning call", "exactly one child job may run in a wave", "never repeat a scaffold"} {
 		if !strings.Contains(prompt, marker) {
 			t.Fatalf("planner prompt missing economy rule %q", marker)
+		}
+	}
+	for _, marker := range []string{"estimated_minutes", "Aim for 4–8 minutes", "actual_seconds"} {
+		if !strings.Contains(prompt, marker) {
+			t.Fatalf("planner prompt missing time-estimation rule %q", marker)
 		}
 	}
 	for _, marker := range []string{"ROLLING YARDMASTER MEMORY", "CONTEXT COMPACTION CONTRACT", "at most 1600 characters"} {
@@ -197,12 +213,12 @@ func TestCompactMasterHistoryOmitsRawCostTelemetry(t *testing.T) {
 	history := compactMasterHistory([]masterWaveRecord{{
 		Wave:        1,
 		PlanSummary: strings.Repeat("x", 1400),
-		Results:     []jobs.RunResult{{JobID: "job-1", FinalStatus: "DONE", Accepted: true, Attempts: 1, CommitSHA: "abc123", TotalCostEstimated: 0.12}},
+		Results:     []jobs.RunResult{{JobID: "job-1", FinalStatus: "DONE", Accepted: true, Attempts: 1, CommitSHA: "abc123", TotalCostEstimated: 0.12, EstimatedMinutes: 5, DurationSecs: 312}},
 	}})
 	if len(history) >= 1400 {
 		t.Fatalf("compact history remained too large: %d bytes", len(history))
 	}
-	for _, marker := range []string{"\"job_id\":\"job-1\"", "\"status\":\"DONE\"", "\"commit\":\"abc123\"", "\"cost_usd\":0.12"} {
+	for _, marker := range []string{"\"job_id\":\"job-1\"", "\"status\":\"DONE\"", "\"commit\":\"abc123\"", "\"cost_usd\":0.12", "\"estimated_minutes\":5", "\"actual_seconds\":312"} {
 		if !strings.Contains(history, marker) {
 			t.Fatalf("compact history missing %q: %s", marker, history)
 		}
@@ -251,5 +267,17 @@ func TestCompactPlannerMemoryIsBoundedAndFallsBack(t *testing.T) {
 	}
 	if got := compactPlannerMemory("  accepted c123; next: tests  ", "fallback"); got != "accepted c123; next: tests" {
 		t.Fatalf("memory was not trimmed or preferred: %q", got)
+	}
+}
+
+func TestEconomicPlanDefersAdditionalJobs(t *testing.T) {
+	plan := enforceEconomicPlan(&masterPlan{Summary: "next slice", Jobs: []masterPlanJob{
+		{ID: "one", Task: "first"}, {ID: "two", Task: "second"},
+	}})
+	if len(plan.Jobs) != 1 || plan.Jobs[0].ID != "one" {
+		t.Fatalf("economic plan jobs = %+v, want only first job", plan.Jobs)
+	}
+	if !strings.Contains(plan.Summary, "deferred to later waves") {
+		t.Fatalf("economic plan did not record deferral: %q", plan.Summary)
 	}
 }

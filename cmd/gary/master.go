@@ -43,9 +43,10 @@ type masterPlan struct {
 }
 
 type masterPlanJob struct {
-	ID         string   `json:"id"`
-	Task       string   `json:"task"`
-	Acceptance []string `json:"acceptance"`
+	ID               string   `json:"id"`
+	Task             string   `json:"task"`
+	Acceptance       []string `json:"acceptance"`
+	EstimatedMinutes int      `json:"estimated_minutes"`
 }
 
 const (
@@ -74,12 +75,14 @@ type masterPlannerHistory struct {
 }
 
 type masterPlannerHistoryJob struct {
-	JobID    string  `json:"job_id"`
-	Status   string  `json:"status"`
-	Attempts int     `json:"attempts,omitempty"`
-	Accepted bool    `json:"accepted,omitempty"`
-	Commit   string  `json:"commit,omitempty"`
-	CostUSD  float64 `json:"cost_usd,omitempty"`
+	JobID            string  `json:"job_id"`
+	Status           string  `json:"status"`
+	Attempts         int     `json:"attempts,omitempty"`
+	Accepted         bool    `json:"accepted,omitempty"`
+	Commit           string  `json:"commit,omitempty"`
+	CostUSD          float64 `json:"cost_usd,omitempty"`
+	EstimatedMinutes int     `json:"estimated_minutes,omitempty"`
+	ActualSeconds    float64 `json:"actual_seconds,omitempty"`
 }
 
 func compactMasterHistory(waves []masterWaveRecord) string {
@@ -90,6 +93,7 @@ func compactMasterHistory(waves []masterWaveRecord) string {
 			record.Results = append(record.Results, masterPlannerHistoryJob{
 				JobID: result.JobID, Status: result.FinalStatus, Attempts: result.Attempts,
 				Accepted: result.Accepted, Commit: result.CommitSHA, CostUSD: result.TotalCostEstimated,
+				EstimatedMinutes: result.EstimatedMinutes, ActualSeconds: result.DurationSecs,
 			})
 		}
 		history = append(history, record)
@@ -266,6 +270,7 @@ func cmdMaster() {
 				BaseBranch:           stagingBranch,
 				Task:                 child.Task,
 				Acceptance:           child.Acceptance,
+				EstimatedMinutes:     child.EstimatedMinutes,
 				ProjectID:            projectID,
 				MasterPacketDigest:   projectCtx.Project.MasterPacketDigest,
 				ProjectManualVersion: projectCtx.Project.ProjectManualVersion,
@@ -274,6 +279,9 @@ func cmdMaster() {
 		}
 
 		results := runMasterWave(cfg, childJobs, manifest.MaxWorkers)
+		for i := range results {
+			results[i].EstimatedMinutes = plan.Jobs[i].EstimatedMinutes
+		}
 		record.Results = results
 		for _, result := range results {
 			if result.Cost != nil {
@@ -437,6 +445,7 @@ PLANNER-SPECIFIC RULES
 - ECONOMY: every planning call and every worker attempt is paid. Choose the smallest useful next slice, and do not schedule speculative future work.
 - ECONOMY: exactly one child job may run in a wave. Put one small, independently verifiable outcome in it; defer all other work to later waves after that result is integrated.
 - ECONOMY: every child worker has a hard maximum runtime of 600 seconds (10 minutes) and must begin wrapping up at 480 seconds (8 minutes). Do not give it a feature bundle, whole subsystem, broad migration, full test suite, or several unrelated acceptance goals.
+- TIME ESTIMATION: every job must include an estimated_minutes value from 1 through 10. Aim for 4–8 minutes; if the estimate is above 8 minutes, split the work before dispatch. Compare prior estimated_minutes with actual_seconds in the previous-wave history and make later jobs smaller when estimates overshoot or workers reach the soft deadline.
 - ECONOMY: never repeat a scaffold or setup job merely because an earlier attempt was unsuccessful. If the same objective failed or was budget-stopped, use the evidence to split it into a smaller bounded slice or stop and report the blocker.
 - ECONOMY: after an accepted result, plan from the current staging branch and extend it; do not recreate already accepted models, tests, configuration, or project structure.
 - ECONOMY: workers must use existing tools and temporary locations outside the repository. Do not ask them to create virtual environments, install dependencies, or commit caches/build products unless the master brief explicitly requires that exact repository content.
@@ -474,7 +483,8 @@ Required JSON schema:
     {
       "id": "human-readable-short-id",
       "task": "complete bounded worker instruction",
-      "acceptance": ["direct command", "another direct command"]
+      "acceptance": ["direct command", "another direct command"],
+      "estimated_minutes": 5
     }
   ]
 }
@@ -544,6 +554,9 @@ func validateMasterPlan(plan *masterPlan, maxJobs int) error {
 	for i, child := range plan.Jobs {
 		if strings.TrimSpace(child.Task) == "" || len(child.Task) > maxPlannerTaskBytes {
 			return fmt.Errorf("job %d task is empty or too large", i+1)
+		}
+		if child.EstimatedMinutes < 1 || child.EstimatedMinutes > 10 {
+			return fmt.Errorf("job %d estimated_minutes must be between 1 and 10", i+1)
 		}
 		if len(child.Acceptance) == 0 {
 			return fmt.Errorf("job %d has no acceptance commands", i+1)

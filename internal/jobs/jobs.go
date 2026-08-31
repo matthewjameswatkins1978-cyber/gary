@@ -10,6 +10,7 @@ type Job struct {
 	BaseBranch           string   `json:"base_branch"`
 	Task                 string   `json:"task"`
 	Acceptance           []string `json:"acceptance"`
+	EstimatedMinutes     int      `json:"estimated_minutes,omitempty"`
 	ProjectID            string   `json:"project_id,omitempty"`
 	MasterPacketDigest   string   `json:"master_packet_digest,omitempty"`
 	ProjectManualVersion int      `json:"project_manual_version,omitempty"`
@@ -24,6 +25,7 @@ type RunResult struct {
 	CommitSHA            string  `json:"commit_sha"`
 	Accepted             bool    `json:"accepted"`
 	DurationSecs         float64 `json:"duration_seconds"`
+	EstimatedMinutes     int     `json:"estimated_minutes,omitempty"`
 	PatchBytes           int64   `json:"patch_bytes"`
 	Attempts             int     `json:"attempts"`
 	RepairCount          int     `json:"repair_count"`

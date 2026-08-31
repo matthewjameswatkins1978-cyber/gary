@@ -272,20 +272,21 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		}
 
 		codingCfg := batch.CodingJobConfig{
-			Project:      cfg.GCPProject,
-			Region:       cfg.GCPRegion,
-			JobName:      jobName,
-			RepoURL:      job.Repo,
-			BaseBranch:   job.BaseBranch,
-			GaryBranch:   garyBranch,
-			Task:         attemptTask,
-			Acceptance:   acceptanceStr,
-			GCSPath:      attemptGCSPath,
-			PrevGCSPath:  prevGCSPatch,
-			MachineType:  "e2-small",
-			Model:        model,
-			GitHubToken:  githubToken,
-			MaxRunDurSec: maxRunDurSec,
+			Project:          cfg.GCPProject,
+			Region:           cfg.GCPRegion,
+			JobName:          jobName,
+			RepoURL:          job.Repo,
+			BaseBranch:       job.BaseBranch,
+			GaryBranch:       garyBranch,
+			Task:             attemptTask,
+			Acceptance:       acceptanceStr,
+			EstimatedMinutes: job.EstimatedMinutes,
+			GCSPath:          attemptGCSPath,
+			PrevGCSPath:      prevGCSPatch,
+			MachineType:      "e2-small",
+			Model:            model,
+			GitHubToken:      githubToken,
+			MaxRunDurSec:     maxRunDurSec,
 		}
 
 		_, err = batch.SubmitCodingJob(codingCfg)

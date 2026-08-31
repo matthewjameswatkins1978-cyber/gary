@@ -141,7 +141,7 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 	if err := validateMasterPlan(&plan, maxJobs); err != nil {
 		return nil, component, err
 	}
-	return &plan, component, nil
+	return enforceEconomicPlan(&plan), component, nil
 }
 
 func estimatedComponent(kind, model, reason string) cost.Component {
