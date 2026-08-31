@@ -39,3 +39,20 @@ func TestDecideRouteFailsClosed(t *testing.T) {
 		t.Fatal("no usable route accepted")
 	}
 }
+
+func TestDecideRouteRejectsMalformedRequests(t *testing.T) {
+	base := routeRequest{Protocol: telltailAdapterProtocol, CaseID: "c", ProbeKind: "route", Choices: []routeChoice{{ID: "c", Eligible: true, Sufficient: true}}}
+	for name, req := range map[string]routeRequest{
+		"missing-case":       {Protocol: telltailAdapterProtocol, ProbeKind: "route", Choices: base.Choices},
+		"wrong-kind":         {Protocol: telltailAdapterProtocol, CaseID: "c", ProbeKind: "live", Choices: base.Choices},
+		"no-choices":         {Protocol: telltailAdapterProtocol, CaseID: "c", ProbeKind: "route"},
+		"duplicate-id":       {Protocol: telltailAdapterProtocol, CaseID: "c", ProbeKind: "route", Choices: []routeChoice{{ID: "c"}, {ID: "c"}}},
+		"missing-specialist": {Protocol: telltailAdapterProtocol, CaseID: "c", ProbeKind: "route", Situation: map[string]any{"context_dependency": "high"}, Choices: base.Choices},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := decideRoute(req); err == nil {
+				t.Fatal("malformed request accepted")
+			}
+		})
+	}
+}
