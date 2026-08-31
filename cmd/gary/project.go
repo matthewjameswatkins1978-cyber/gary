@@ -214,6 +214,15 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 			raw["manual_version"] = encoded
 		}
 	}
+	for _, field := range []string{"objective", "definition_of_done"} {
+		if value, ok := raw[field]; ok {
+			var statements []string
+			if json.Unmarshal(value, &statements) == nil {
+				encoded, _ := json.Marshal(strings.Join(statements, "\n"))
+				raw[field] = encoded
+			}
+		}
+	}
 	for field, typ := range map[string]string{
 		"hard_constraints": "hard_constraint", "architecture_decisions": "architecture_decision",
 		"technology_choices": "technology_choice", "forbidden_changes": "forbidden_change",
@@ -236,7 +245,7 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 					return project.ProjectManual{}, fmt.Errorf("%s[%d]: %w", field, i, err)
 				}
 				if _, ok := item["text"]; !ok {
-					for _, candidate := range []string{"description", "decision", "choice", "command", "expected_outcome", "purpose", "technology", "objective", "strategy", "capability"} {
+					for _, candidate := range []string{"description", "decision", "choice", "command", "expected_outcome", "purpose", "technology", "objective", "strategy", "capability", "requirement", "statement", "risk", "tool"} {
 						if candidateValue, exists := item[candidate]; exists {
 							item["text"] = candidateValue
 							break
@@ -349,7 +358,11 @@ func normalizeSource(item map[string]json.RawMessage, packetDigest, field string
 		PacketDigest string `json:"packet_digest"`
 		Locator      string `json:"locator"`
 	}
-	if locator, ok := item["source_locator"]; ok {
+	locator, ok := item["source_locator"]
+	if !ok {
+		locator, ok = item["locator"]
+	}
+	if ok {
 		_ = json.Unmarshal(locator, &source.Locator)
 	}
 	source.PacketDigest = packetDigest
