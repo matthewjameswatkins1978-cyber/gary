@@ -460,6 +460,28 @@ func TestCodingWorkerPromptIncludesCorrectRoleUniversalRulesAndTask(t *testing.T
 	}
 }
 
+func TestCodingWorkerPromptOnlyIncludesValidYardmasterEstimate(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		want     string
+		estimate int
+	}{
+		{name: "valid", want: "YARDMASTER ESTIMATE: this slice is expected to take about 6 minutes", estimate: 6},
+		{name: "missing", estimate: 0},
+		{name: "out-of-range", estimate: 11},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			prompt := codingWorkerPrompt("bounded task", test.estimate)
+			if test.want != "" && !strings.Contains(prompt, test.want) {
+				t.Fatalf("prompt missing estimate marker %q", test.want)
+			}
+			if test.want == "" && strings.Contains(prompt, "YARDMASTER ESTIMATE") {
+				t.Fatalf("prompt included invalid estimate %d", test.estimate)
+			}
+		})
+	}
+}
+
 func TestCodingWorkerScriptCleansDisposableArtifacts(t *testing.T) {
 	script := generateCodingWorkerScript(CodingJobConfig{RepoURL: "https://example.com/repo.git", BaseBranch: "main", GaryBranch: "gary/job", Task: "task", Acceptance: "echo ok"})
 	for _, marker := range []string{"-name .venv", "-name __pycache__", "-name .build", "timeout --signal=TERM --kill-after=90s 480s gemini", "GARY WORKER SOFT DEADLINE", "git add -A"} {

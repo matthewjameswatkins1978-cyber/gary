@@ -142,6 +142,26 @@ func TestValidateMasterPlan(t *testing.T) {
 	}
 }
 
+func TestMasterPlanJSONCarriesWorkerEstimate(t *testing.T) {
+	original := masterPlan{Summary: "one bounded slice", Jobs: []masterPlanJob{{
+		ID: "slice", Task: "Make one small change.", Acceptance: []string{"go test ./..."}, EstimatedMinutes: 6,
+	}}}
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"estimated_minutes":6`) {
+		t.Fatalf("plan JSON omitted estimate: %s", data)
+	}
+	var decoded masterPlan
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Jobs[0].EstimatedMinutes != 6 {
+		t.Fatalf("decoded estimate = %d, want 6", decoded.Jobs[0].EstimatedMinutes)
+	}
+}
+
 func TestMasterWaveBoundsGiveResumeAFreshBoundedBudget(t *testing.T) {
 	start, end := masterWaveBounds(6, 5, true)
 	if start != 7 || end != 11 {
@@ -272,10 +292,13 @@ func TestCompactPlannerMemoryIsBoundedAndFallsBack(t *testing.T) {
 
 func TestEconomicPlanDefersAdditionalJobs(t *testing.T) {
 	plan := enforceEconomicPlan(&masterPlan{Summary: "next slice", Jobs: []masterPlanJob{
-		{ID: "one", Task: "first"}, {ID: "two", Task: "second"},
+		{ID: "one", Task: "first", EstimatedMinutes: 6}, {ID: "two", Task: "second", EstimatedMinutes: 4},
 	}})
 	if len(plan.Jobs) != 1 || plan.Jobs[0].ID != "one" {
 		t.Fatalf("economic plan jobs = %+v, want only first job", plan.Jobs)
+	}
+	if plan.Jobs[0].EstimatedMinutes != 6 {
+		t.Fatalf("economic gate changed estimate to %d, want 6", plan.Jobs[0].EstimatedMinutes)
 	}
 	if !strings.Contains(plan.Summary, "deferred to later waves") {
 		t.Fatalf("economic plan did not record deferral: %q", plan.Summary)
