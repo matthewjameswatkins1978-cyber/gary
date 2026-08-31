@@ -232,8 +232,8 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 		"superseded_decisions": "superseded_decision",
 	} {
 		if value, ok := raw[field]; ok {
-			var rawItems []json.RawMessage
-			if err := json.Unmarshal(value, &rawItems); err != nil {
+			rawItems, err := normalizeArrayValue(value)
+			if err != nil {
 				return project.ProjectManual{}, fmt.Errorf("%s: %w", field, err)
 			}
 			items := make([]map[string]json.RawMessage, 0, len(rawItems))
@@ -287,6 +287,18 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 		return project.ProjectManual{}, err
 	}
 	return manual, nil
+}
+
+func normalizeArrayValue(value json.RawMessage) ([]json.RawMessage, error) {
+	var items []json.RawMessage
+	if err := json.Unmarshal(value, &items); err == nil {
+		return items, nil
+	}
+	var scalar string
+	if err := json.Unmarshal(value, &scalar); err != nil {
+		return nil, err
+	}
+	return []json.RawMessage{json.RawMessage(value)}, nil
 }
 
 func normalizeTopLevelText(value json.RawMessage) (json.RawMessage, bool) {
