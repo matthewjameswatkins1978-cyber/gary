@@ -48,6 +48,12 @@ type masterPlanJob struct {
 	Acceptance []string `json:"acceptance"`
 }
 
+const (
+	maxEconomicWaveJobs   = 1
+	maxPlannerTaskBytes   = 1600
+	maxPlannerMemoryBytes = 1600
+)
+
 type masterWaveRecord struct {
 	Wave                int              `json:"wave"`
 	PlannerMode         string           `json:"planner_mode,omitempty"`
@@ -429,7 +435,8 @@ PLANNER-SPECIFIC RULES
 - Do not redesign the project unless the master brief explicitly requires it.
 - Prefer finishing and verification over cleanup.
 - ECONOMY: every planning call and every worker attempt is paid. Choose the smallest useful next slice, and do not schedule speculative future work.
-- ECONOMY: default to one child job per wave. Schedule a second only when the jobs are genuinely independent, touch disjoint files, and the parallelism materially reduces total work.
+- ECONOMY: exactly one child job may run in a wave. Put one small, independently verifiable outcome in it; defer all other work to later waves after that result is integrated.
+- ECONOMY: every child worker has a hard maximum runtime of 600 seconds (10 minutes) and must begin wrapping up at 480 seconds (8 minutes). Do not give it a feature bundle, whole subsystem, broad migration, full test suite, or several unrelated acceptance goals.
 - ECONOMY: never repeat a scaffold or setup job merely because an earlier attempt was unsuccessful. If the same objective failed or was budget-stopped, use the evidence to split it into a smaller bounded slice or stop and report the blocker.
 - ECONOMY: after an accepted result, plan from the current staging branch and extend it; do not recreate already accepted models, tests, configuration, or project structure.
 - ECONOMY: workers must use existing tools and temporary locations outside the repository. Do not ask them to create virtual environments, install dependencies, or commit caches/build products unless the master brief explicitly requires that exact repository content.
@@ -438,7 +445,7 @@ PLANNER-SPECIFIC RULES
 - Do not create a setup job whose uncommitted/ephemeral state is required by another parallel job. Each child must be independently runnable from the current staging branch.
 - Respect dependency and priority ordering in the master brief. If P0/blocker verification is still unresolved, do not schedule P1/P2 or cosmetic work in the same wave unless it is truly independent and cannot mask or complicate P0.
 - Each job must be bounded and have one or more direct executable acceptance commands.
-- Keep each job task concise (preferably under 2000 characters) so the complete plan remains valid JSON.
+- Keep each job task concise and under 1600 characters. It must describe one outcome, a small file scope, and one or two direct acceptance commands.
 - Acceptance commands are executed directly without a shell and must contain only letters, digits, spaces, underscore, dot, slash, colon, equals, plus, at-sign, percent, comma, hyphen, or square brackets.
 - Never put quotes, parentheses, ampersands, pipes, semicolons, redirects, wildcards, command substitution, or shell operators in acceptance commands.
 - Safe examples include: "python3 -m venv .venv", ".venv/bin/pip install -e .", ".venv/bin/pip install pytest ruff", ".venv/bin/python -m pytest -q", ".venv/bin/ruff check .", "python3 scripts/run_build8_smoke.py", "test -f README.md", and "grep -q ACCEPTED README.md".
@@ -490,7 +497,19 @@ func compactPlannerMemory(memory, fallback string) string {
 	if memory == "" {
 		memory = strings.TrimSpace(fallback)
 	}
-	return truncatePlannerText(memory, 1600)
+	return truncatePlannerText(memory, maxPlannerMemoryBytes)
+}
+
+// enforceEconomicPlan is a final control-plane gate. A planner may still
+// return multiple ideas despite the contract; only the first bounded job is
+// paid for, and the Yardmaster can schedule the rest after observing progress.
+func enforceEconomicPlan(plan *masterPlan) *masterPlan {
+	if plan == nil || len(plan.Jobs) <= maxEconomicWaveJobs {
+		return plan
+	}
+	plan.Jobs = plan.Jobs[:maxEconomicWaveJobs]
+	plan.Summary = strings.TrimSpace(plan.Summary) + " Additional planned jobs were deferred to later waves by the economy gate."
+	return plan
 }
 
 func readMasterPlan(repoURL, branch, planPath string, maxJobs int) (*masterPlan, error) {
@@ -523,7 +542,7 @@ func validateMasterPlan(plan *masterPlan, maxJobs int) error {
 		return fmt.Errorf("planner returned %d jobs; max is %d", len(plan.Jobs), maxJobs)
 	}
 	for i, child := range plan.Jobs {
-		if strings.TrimSpace(child.Task) == "" || len(child.Task) > 12000 {
+		if strings.TrimSpace(child.Task) == "" || len(child.Task) > maxPlannerTaskBytes {
 			return fmt.Errorf("job %d task is empty or too large", i+1)
 		}
 		if len(child.Acceptance) == 0 {

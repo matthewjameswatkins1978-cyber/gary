@@ -442,7 +442,7 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		": > /workspace/usage.jsonl",
 		"echo \"Running Gemini CLI...\"",
 		"set +e",
-		fmt.Sprintf("cat /workspace/gary_prompt.txt | gemini -m %s --yolo --output-format stream-json 2>&1 | tee /workspace/usage.jsonl", cfg.Model),
+		fmt.Sprintf("cat /workspace/gary_prompt.txt | timeout --signal=TERM --kill-after=90s 480s gemini -m %s --yolo --output-format stream-json 2>&1 | tee /workspace/usage.jsonl", cfg.Model),
 		"GEMINI_EXIT=${PIPESTATUS[0]}",
 		"set -e",
 		"echo \"Gemini CLI exit code: $GEMINI_EXIT\"",
@@ -454,6 +454,7 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		fmt.Sprintf("%s > /workspace/acceptance_output.txt 2>&1", cfg.Acceptance),
 		"ACCEPTANCE_EXIT=$?",
 		"set -e",
+		"if [ $GEMINI_EXIT -eq 124 ]; then echo \"GARY WORKER SOFT DEADLINE REACHED at 8 minutes; partial work preserved for Yardmaster review.\" | tee -a /workspace/acceptance_output.txt; fi",
 		"",
 		"# Always preserve acceptance_output.txt",
 		"cat /workspace/acceptance_output.txt || true",
@@ -520,6 +521,7 @@ UNIVERSAL GARY RULES
 COST AND REPOSITORY HYGIENE
 ============================
 - This is a paid, bounded attempt. Work only on the stated slice; do not explore unrelated parts of the repository or repeat completed work.
+- TIMEBOX: the worker has a hard maximum of 600 seconds. At 480 seconds (8 minutes), stop opening new files and stop starting new work; wrap up the current slice, run the stated acceptance checks, save the partial patch, and leave clear evidence of what passed and what remains.
 - Do not create virtual environments, install dependencies, or run broad dependency/build scans unless the task or acceptance command explicitly requires it. Use temporary locations outside the repository for disposable tooling.
 - Never commit generated environments, caches, dependency trees, build products, or machine-local files. Before committing, inspect git status and remove disposable artifacts; the patch must contain only intentional source, test, documentation, and configuration changes.
 

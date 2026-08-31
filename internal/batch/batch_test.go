@@ -449,6 +449,9 @@ func TestCodingWorkerPromptIncludesCorrectRoleUniversalRulesAndTask(t *testing.T
 	if !strings.Contains(prompt, "Never commit generated environments") {
 		t.Fatal("worker prompt must include repository hygiene rules")
 	}
+	if !strings.Contains(prompt, "At 480 seconds (8 minutes)") {
+		t.Fatal("worker prompt must include the soft deadline")
+	}
 	if !strings.Contains(prompt, task) {
 		t.Fatal("worker prompt must preserve the bounded job")
 	}
@@ -456,7 +459,7 @@ func TestCodingWorkerPromptIncludesCorrectRoleUniversalRulesAndTask(t *testing.T
 
 func TestCodingWorkerScriptCleansDisposableArtifacts(t *testing.T) {
 	script := generateCodingWorkerScript(CodingJobConfig{RepoURL: "https://example.com/repo.git", BaseBranch: "main", GaryBranch: "gary/job", Task: "task", Acceptance: "echo ok"})
-	for _, marker := range []string{"-name .venv", "-name __pycache__", "-name .build", "git add -A"} {
+	for _, marker := range []string{"-name .venv", "-name __pycache__", "-name .build", "timeout --signal=TERM --kill-after=90s 480s gemini", "GARY WORKER SOFT DEADLINE", "git add -A"} {
 		if !strings.Contains(script, marker) {
 			t.Fatalf("worker script missing artifact hygiene marker %q", marker)
 		}
