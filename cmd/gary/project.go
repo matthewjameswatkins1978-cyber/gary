@@ -216,9 +216,7 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 	}
 	for _, field := range []string{"objective", "definition_of_done"} {
 		if value, ok := raw[field]; ok {
-			var statements []string
-			if json.Unmarshal(value, &statements) == nil {
-				encoded, _ := json.Marshal(strings.Join(statements, "\n"))
+			if encoded, ok := normalizeTopLevelText(value); ok {
 				raw[field] = encoded
 			}
 		}
@@ -289,6 +287,35 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 		return project.ProjectManual{}, err
 	}
 	return manual, nil
+}
+
+func normalizeTopLevelText(value json.RawMessage) (json.RawMessage, bool) {
+	var statements []json.RawMessage
+	if json.Unmarshal(value, &statements) != nil {
+		return nil, false
+	}
+	texts := make([]string, 0, len(statements))
+	for _, statement := range statements {
+		var asString string
+		if json.Unmarshal(statement, &asString) == nil {
+			texts = append(texts, asString)
+			continue
+		}
+		var item map[string]json.RawMessage
+		if json.Unmarshal(statement, &item) != nil {
+			return nil, false
+		}
+		for _, field := range []string{"text", "description", "statement", "requirement", "criterion", "done"} {
+			if candidate, ok := item[field]; ok {
+				if json.Unmarshal(candidate, &asString) == nil {
+					texts = append(texts, asString)
+					break
+				}
+			}
+		}
+	}
+	encoded, _ := json.Marshal(strings.Join(texts, "\n"))
+	return encoded, true
 }
 
 func parseManualVersion(value string) (int, error) {
