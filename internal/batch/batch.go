@@ -465,6 +465,10 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		"  echo \"ACCEPTANCE FAILED (exit code $ACCEPTANCE_EXIT)\" | tee -a /workspace/acceptance_output.txt",
 		"fi",
 		"",
+		"# Remove disposable worker artifacts before staging; never publish environments or caches.",
+		"find . -type d \\( -name .venv -o -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache -o -name .tox -o -name .nox -o -name .swiftpm -o -name .build -o -name DerivedData \\) -prune -exec rm -rf {} + 2>/dev/null || true",
+		"find . -type d -name '*.egg-info' -prune -exec rm -rf {} + 2>/dev/null || true",
+		"",
 		"# Commit changes",
 		"echo \"Committing changes...\"",
 		"git add -A",
@@ -512,6 +516,12 @@ WORKER ROLE
 UNIVERSAL GARY RULES
 ====================
 %s
+
+COST AND REPOSITORY HYGIENE
+============================
+- This is a paid, bounded attempt. Work only on the stated slice; do not explore unrelated parts of the repository or repeat completed work.
+- Do not create virtual environments, install dependencies, or run broad dependency/build scans unless the task or acceptance command explicitly requires it. Use temporary locations outside the repository for disposable tooling.
+- Never commit generated environments, caches, dependency trees, build products, or machine-local files. Before committing, inspect git status and remove disposable artifacts; the patch must contain only intentional source, test, documentation, and configuration changes.
 
 JOB
 ===

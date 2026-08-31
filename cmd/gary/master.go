@@ -378,6 +378,11 @@ PLANNER-SPECIFIC RULES
 - Planning is a single control-plane model call. You cannot run tools or tests. Use the supplied repository snapshot and existing evidence, then delegate execution and verification to child jobs.
 - Do not redesign the project unless the master brief explicitly requires it.
 - Prefer finishing and verification over cleanup.
+- ECONOMY: every planning call and every worker attempt is paid. Choose the smallest useful next slice, and do not schedule speculative future work.
+- ECONOMY: default to one child job per wave. Schedule a second only when the jobs are genuinely independent, touch disjoint files, and the parallelism materially reduces total work.
+- ECONOMY: never repeat a scaffold or setup job merely because an earlier attempt was unsuccessful. If the same objective failed or was budget-stopped, use the evidence to split it into a smaller bounded slice or stop and report the blocker.
+- ECONOMY: after an accepted result, plan from the current staging branch and extend it; do not recreate already accepted models, tests, configuration, or project structure.
+- ECONOMY: workers must use existing tools and temporary locations outside the repository. Do not ask them to create virtual environments, install dependencies, or commit caches/build products unless the master brief explicitly requires that exact repository content.
 - Create at most %d independent jobs that can safely start from the same current branch.
 - Every child job runs in its own fresh isolated clone. Sibling jobs do not share virtualenvs, installed packages, untracked files, generated caches, or other filesystem state.
 - Do not create a setup job whose uncommitted/ephemeral state is required by another parallel job. Each child must be independently runnable from the current staging branch.

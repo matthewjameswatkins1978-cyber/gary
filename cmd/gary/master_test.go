@@ -181,6 +181,11 @@ func TestMasterPlannerPromptIncludesCorrectRoleUniversalRulesAndJobBrief(t *test
 	if !strings.Contains(prompt, brief) {
 		t.Fatal("planner prompt must preserve job-specific instructions")
 	}
+	for _, marker := range []string{"ECONOMY: every planning call", "default to one child job per wave", "never repeat a scaffold"} {
+		if !strings.Contains(prompt, marker) {
+			t.Fatalf("planner prompt missing economy rule %q", marker)
+		}
+	}
 }
 
 func TestMasterPlannerPromptDelegatesHeavyWork(t *testing.T) {
