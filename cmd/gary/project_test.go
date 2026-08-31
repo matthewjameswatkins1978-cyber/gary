@@ -11,8 +11,9 @@ func TestDecodeProjectManualNormalizesYardmasterVariants(t *testing.T) {
   "project_id": "demo",
   "objective": "Test durable intake",
   "definition_of_done": "The marker exists",
-  "manual_version": "1",
+  "manual_version": "1.0.0",
   "source_packet_digest": "` + digest + `",
+  "forbidden_changes": ["Do not add dependencies"],
   "functional_requirements": [{"id":"REQ-001","description":"Add the marker","source_locator":"MASTER PACKET: ## Objective"}],
   "acceptance_criteria": [{"id":"AC-001","command":"grep -q marker README.md","expected_outcome":"returncode 0","source_locator":"MASTER PACKET: ## Acceptance"}]
 }`
@@ -25,6 +26,9 @@ func TestDecodeProjectManualNormalizesYardmasterVariants(t *testing.T) {
 	}
 	if manual.FunctionalRequirements[0].Source.PacketDigest != digest || manual.FunctionalRequirements[0].Source.Locator != "MASTER PACKET: ## Objective" {
 		t.Fatalf("requirement source = %+v", manual.FunctionalRequirements[0].Source)
+	}
+	if len(manual.ForbiddenChanges) != 1 || manual.ForbiddenChanges[0].Text != "Do not add dependencies" {
+		t.Fatalf("string requirement normalization = %+v", manual.ForbiddenChanges)
 	}
 	if manual.AcceptanceCriteria[0].Text != "grep -q marker README.md" || manual.AcceptanceCriteria[0].Source.Locator == "" {
 		t.Fatalf("acceptance normalization = %+v", manual.AcceptanceCriteria[0])
