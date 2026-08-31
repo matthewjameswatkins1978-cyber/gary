@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -716,12 +717,46 @@ func runLocalAcceptanceClassified(tmpDir string, job *jobs.Job, garyBranch, patc
 		logPrintln(prefix, "    LOCAL PASS")
 	}
 
+	if err := cleanupDisposableWorkerArtifacts(workDir); err != nil {
+		logPrint(prefix, "    LOCAL CLEANUP FAIL: %v", err)
+		return fail(err, true)
+	}
 	if err := gitops.CommitAll(workDir, fmt.Sprintf("GARY: %s", job.Task)); err != nil {
 		logPrint(prefix, "    LOCAL COMMIT FAIL: %v", err)
 		return fail(err, isServiceEnvironmentBlocker(err.Error()))
 	}
 
 	return localAcceptanceResult{passed: true}
+}
+
+func cleanupDisposableWorkerArtifacts(root string) error {
+	disposable := map[string]bool{
+		".venv":         true,
+		"__pycache__":   true,
+		".pytest_cache": true,
+		".mypy_cache":   true,
+		".ruff_cache":   true,
+		".tox":          true,
+		".nox":          true,
+		".swiftpm":      true,
+		".build":        true,
+		"DerivedData":   true,
+	}
+	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == root || !entry.IsDir() {
+			return nil
+		}
+		if disposable[entry.Name()] || strings.HasSuffix(entry.Name(), ".egg-info") {
+			if err := os.RemoveAll(path); err != nil {
+				return err
+			}
+			return filepath.SkipDir
+		}
+		return nil
+	})
 }
 
 func isServiceEnvironmentBlocker(message string) bool {

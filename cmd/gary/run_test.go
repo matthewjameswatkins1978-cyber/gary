@@ -96,6 +96,37 @@ func TestServiceEnvironmentBlockerUsesStrongInfrastructureSignatures(t *testing.
 	}
 }
 
+func TestCleanupDisposableWorkerArtifactsBeforeCommit(t *testing.T) {
+	root := t.TempDir()
+	keep := filepath.Join(root, "intentional.txt")
+	if err := os.WriteFile(keep, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		filepath.Join(root, ".venv", "bin", "python"),
+		filepath.Join(root, "nested", "__pycache__", "module.pyc"),
+		filepath.Join(root, "package.egg-info", "PKG-INFO"),
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("disposable"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := cleanupDisposableWorkerArtifacts(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatalf("intentional file was removed: %v", err)
+	}
+	for _, path := range []string{filepath.Join(root, ".venv"), filepath.Join(root, "nested", "__pycache__"), filepath.Join(root, "package.egg-info")} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("disposable path still exists: %s", path)
+		}
+	}
+}
+
 func TestCompactFailureLogs(t *testing.T) {
 	short := "one\ntwo"
 	if got := compactFailureLogs(short, 100); got != short {

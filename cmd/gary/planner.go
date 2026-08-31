@@ -254,7 +254,12 @@ func buildYardmasterRepoContext(repoDir string, maxBytes int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	files := strings.Fields(fileList)
+	files := make([]string, 0)
+	for _, name := range strings.Fields(fileList) {
+		if !plannerDisposablePath(name) {
+			files = append(files, name)
+		}
+	}
 	writeBudgeted("TRACKED FILES:\n")
 	for _, name := range files {
 		if !writeBudgeted(name + "\n") {
@@ -327,6 +332,20 @@ func plannerTextFile(path string) bool {
 	default:
 		return false
 	}
+}
+
+func plannerDisposablePath(path string) bool {
+	parts := strings.Split(strings.ToLower(filepath.ToSlash(path)), "/")
+	for _, part := range parts {
+		switch part {
+		case ".venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".nox", ".swiftpm", ".build", "deriveddata":
+			return true
+		}
+		if strings.HasSuffix(part, ".egg-info") {
+			return true
+		}
+	}
+	return false
 }
 
 func plannerCommandOutput(dir, name string, args ...string) (string, error) {

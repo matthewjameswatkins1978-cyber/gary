@@ -51,3 +51,19 @@ func TestYardmasterVertexEndpointDoesNotUseDeveloperAPI(t *testing.T) {
 		t.Fatalf("Yardmaster should use global Vertex endpoint, got %q", got)
 	}
 }
+
+func TestPlannerDisposablePathsAreExcludedFromContext(t *testing.T) {
+	for _, test := range []struct {
+		path string
+		want bool
+	}{
+		{path: ".venv/lib/python/site.py", want: true},
+		{path: "nested/__pycache__/module.pyc", want: true},
+		{path: "BookBurner.egg-info/PKG-INFO", want: true},
+		{path: "BookBurner/Features/Capture/CaptureStateMachine.swift", want: false},
+	} {
+		if got := plannerDisposablePath(test.path); got != test.want {
+			t.Fatalf("plannerDisposablePath(%q) = %t, want %t", test.path, got, test.want)
+		}
+	}
+}
