@@ -81,11 +81,17 @@ type SourceRef struct {
 }
 
 type Requirement struct {
-	ID     string    `json:"id"`
-	Type   string    `json:"type,omitempty"`
-	Text   string    `json:"text"`
-	Status string    `json:"status,omitempty"`
-	Source SourceRef `json:"source,omitempty"`
+	ID              string    `json:"id"`
+	Type            string    `json:"type,omitempty"`
+	Text            string    `json:"text"`
+	Description     string    `json:"description,omitempty"`
+	Decision        string    `json:"decision,omitempty"`
+	Choice          string    `json:"choice,omitempty"`
+	Command         string    `json:"command,omitempty"`
+	ExpectedOutcome string    `json:"expected_outcome,omitempty"`
+	Mitigation      string    `json:"mitigation,omitempty"`
+	Status          string    `json:"status,omitempty"`
+	Source          SourceRef `json:"source,omitempty"`
 }
 
 type Conflict struct {

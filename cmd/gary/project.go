@@ -184,16 +184,107 @@ func generateProjectManual(ctx context.Context, cfg *config.Config, input projec
 	if err != nil {
 		return project.ProjectManual{}, err
 	}
-	var manual project.ProjectManual
-	dec := json.NewDecoder(strings.NewReader(text))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&manual); err != nil {
+	manual, err := decodeProjectManual(text, input.Project.MasterPacketDigest)
+	if err != nil {
 		return project.ProjectManual{}, fmt.Errorf("project manual JSON: %w; output=%s", err, compactPlannerError(text, 3000))
+	}
+	return manual, nil
+}
+
+// decodeProjectManual accepts only known, semantically equivalent Yardmaster
+// representations. The durable store remains the strict validation boundary.
+func decodeProjectManual(text, packetDigest string) (project.ProjectManual, error) {
+	dec := json.NewDecoder(strings.NewReader(text))
+	var raw map[string]json.RawMessage
+	if err := dec.Decode(&raw); err != nil {
+		return project.ProjectManual{}, err
 	}
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
 		return project.ProjectManual{}, errors.New("project manual returned more than one JSON value")
 	}
+	if version, ok := raw["manual_version"]; ok {
+		var asString string
+		if json.Unmarshal(version, &asString) == nil {
+			n, err := strconv.Atoi(asString)
+			if err != nil {
+				return project.ProjectManual{}, fmt.Errorf("manual_version must be an integer: %w", err)
+			}
+			encoded, _ := json.Marshal(n)
+			raw["manual_version"] = encoded
+		}
+	}
+	for field, typ := range map[string]string{
+		"hard_constraints": "hard_constraint", "architecture_decisions": "architecture_decision",
+		"technology_choices": "technology_choice", "forbidden_changes": "forbidden_change",
+		"functional_requirements": "requirement", "non_functional_requirements": "non_functional_requirement",
+		"acceptance_criteria": "acceptance", "important_context": "context",
+		"important_rationale": "rationale", "known_dependencies": "dependency",
+		"known_external_services": "external_service", "known_risks": "risk",
+		"open_questions": "open_question", "active_decisions": "active_decision",
+		"superseded_decisions": "superseded_decision",
+	} {
+		if value, ok := raw[field]; ok {
+			var items []map[string]json.RawMessage
+			if err := json.Unmarshal(value, &items); err != nil {
+				return project.ProjectManual{}, fmt.Errorf("%s: %w", field, err)
+			}
+			for _, item := range items {
+				if _, ok := item["text"]; !ok {
+					for _, candidate := range []string{"description", "decision", "choice", "command", "expected_outcome"} {
+						if candidateValue, exists := item[candidate]; exists {
+							item["text"] = candidateValue
+							break
+						}
+					}
+				}
+				if _, ok := item["type"]; !ok {
+					encoded, _ := json.Marshal(typ)
+					item["type"] = encoded
+				}
+				normalizeSource(item, packetDigest)
+			}
+			encoded, _ := json.Marshal(items)
+			raw[field] = encoded
+		}
+	}
+	if value, ok := raw["conflicts"]; ok {
+		var items []map[string]json.RawMessage
+		if err := json.Unmarshal(value, &items); err != nil {
+			return project.ProjectManual{}, fmt.Errorf("conflicts: %w", err)
+		}
+		for _, item := range items {
+			normalizeSource(item, packetDigest)
+		}
+		encoded, _ := json.Marshal(items)
+		raw["conflicts"] = encoded
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return project.ProjectManual{}, err
+	}
+	var manual project.ProjectManual
+	if err := json.Unmarshal(encoded, &manual); err != nil {
+		return project.ProjectManual{}, err
+	}
 	return manual, nil
+}
+
+func normalizeSource(item map[string]json.RawMessage, packetDigest string) {
+	if _, ok := item["source"]; ok {
+		return
+	}
+	locator, ok := item["source_locator"]
+	if !ok {
+		return
+	}
+	var source struct {
+		PacketDigest string `json:"packet_digest"`
+		Locator      string `json:"locator"`
+	}
+	_ = json.Unmarshal(locator, &source.Locator)
+	source.PacketDigest = packetDigest
+	encoded, _ := json.Marshal(source)
+	item["source"] = encoded
 }
 
 func buildProjectManualPrompt(input project.ProjectContext) string {
