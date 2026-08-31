@@ -14,6 +14,7 @@ func TestDecodeProjectManualNormalizesYardmasterVariants(t *testing.T) {
   "manual_version": "1.0.0",
   "source_packet_digest": "` + digest + `",
   "forbidden_changes": ["Do not add dependencies"],
+  "important_rationale": "Keep the certification bounded",
   "functional_requirements": [{"id":"REQ-001","description":"Add the marker","source_locator":"MASTER PACKET: ## Objective"}],
   "acceptance_criteria": [{"id":"AC-001","command":"grep -q marker README.md","expected_outcome":"returncode 0","source_locator":"MASTER PACKET: ## Acceptance"}]
 }`
@@ -29,6 +30,9 @@ func TestDecodeProjectManualNormalizesYardmasterVariants(t *testing.T) {
 	}
 	if len(manual.ForbiddenChanges) != 1 || manual.ForbiddenChanges[0].Text != "Do not add dependencies" {
 		t.Fatalf("string requirement normalization = %+v", manual.ForbiddenChanges)
+	}
+	if len(manual.ImportantRationale) != 1 || manual.ImportantRationale[0].Text != "Keep the certification bounded" {
+		t.Fatalf("scalar list normalization = %+v", manual.ImportantRationale)
 	}
 	if manual.AcceptanceCriteria[0].Text != "grep -q marker README.md" || manual.AcceptanceCriteria[0].Source.Locator == "" {
 		t.Fatalf("acceptance normalization = %+v", manual.AcceptanceCriteria[0])
