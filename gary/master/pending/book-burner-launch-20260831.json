@@ -1,0 +1,9 @@
+{
+  "id": "book-burner-launch-20260831",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/book-burner.git",
+  "base_branch": "main",
+  "max_waves": 6,
+  "max_jobs_per_wave": 2,
+  "max_workers": 1,
+  "project_id": "book-burner"
+}

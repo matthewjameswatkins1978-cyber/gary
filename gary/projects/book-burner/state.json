@@ -1,0 +1,9 @@
+{
+  "schema": "gary.project-state.v1",
+  "project_id": "book-burner",
+  "state": "EXECUTING",
+  "current_phase": "executing",
+  "current_strategy": "Execute incremental bounded jobs from core persistence and allocator to VisionKit scanner seam, rapid capture loop, metadata fallback, UI list/detail, and ZIP export, concluding with physical iPhone pile verification.",
+  "last_event": "wave 1 completed",
+  "updated_at": "2026-08-31T06:57:21Z"
+}

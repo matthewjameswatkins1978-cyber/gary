@@ -1,0 +1,701 @@
+{
+  "schema": "gary.project-manual.v1",
+  "project_id": "book-burner",
+  "objective": "Build and verify Book Burner 0.1 Capture Edition: a professional native iPhone application for high-speed physical book capture, photo inventorying, location tracking, and self-contained ZIP/CSV/JSON export.",
+  "definition_of_done": "Native iPhone app builds cleanly with strict Swift concurrency checking on Xcode macOS environment\nHigh-speed capture loop operational: Scan ISBN -\u003e Photograph front cover -\u003e Auto-save -\u003e Instantly reset to scanner without manual Save buttons or blocking dialogs\nPermanent monotonic identifier (BB-XXXXXX) assigned to every physical copy, surviving restarts and never reused or collided\nSupport duplicate ISBNs as separate physical records with unique BB IDs\nSupport offline capture, metadata failure, and 'No ISBN / Can't Scan' path with recoverable records\nMetadata enrichment via Google Books and Open Library running asynchronously behind a provider seam with local caching and fallback\nLocation tracking with inheritance across session and safe 'Unassigned' fallback\nUndo Last Book safely cleans up record and image assets without reusing the BB ID\nTwo primary native sections: Capture and Books (performant list, native search, filtering, and vertically scrolling detail)\nCollection export producing valid ZIP containing books.csv, books.json, photos/, and manifest.json with full character escaping and relative asset integrity\nSwiftData versioned schema and migration tests passing\nAutomated domain and unit tests passing with mock/fixture provider data and separated barcode acquisition seam\nReal iPhone physical acceptance script passed including 25-book test and messy ~50-book test (or flagged CODE COMPLETE, PHYSICAL ACCEPTANCE PENDING until executed)",
+  "hard_constraints": [
+    {
+      "id": "hard_constraints-001",
+      "type": "hard_constraint",
+      "text": "Authoritative builds and tests must execute on macOS using Xcode",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "hard_constraints-002",
+      "type": "hard_constraint",
+      "text": "Target iOS version must run on Matthew's physical iPhone; do not target unstable/beta OS unnecessarily",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "hard_constraints-003",
+      "type": "hard_constraint",
+      "text": "No API secrets, credentials, or private tokens committed to Git repository; use Secrets.xcconfig.example",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "hard_constraints-004",
+      "type": "hard_constraint",
+      "text": "Do not embed eBay application client secrets or scrapers into the iOS client binary",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "hard_constraints-005",
+      "type": "hard_constraint",
+      "text": "ISBN must not be used as primary entity identity; each physical copy receives a distinct BB ID",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "hard_constraints-006",
+      "type": "hard_constraint",
+      "text": "Image writes must be atomic (temp write -\u003e verify -\u003e move/rename to permanent location -\u003e commit persistence)",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "hard_constraints-007",
+      "type": "hard_constraint",
+      "text": "Full-resolution image blobs must not be stored in SwiftData records; use app-managed files with relative paths",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "hard_constraints-008",
+      "type": "hard_constraint",
+      "text": "Capture loop must never block on metadata enrichment or network latency",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "hard_constraints-009",
+      "type": "hard_constraint",
+      "text": "No fatalError, forced unwrap, or unhandled crash reachable during standard capture/export/network failures",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    }
+  ],
+  "architecture_decisions": [
+    {
+      "id": "AD-001",
+      "type": "architecture_decision",
+      "text": "Structure code around Features (Capture, Books, BookDetail, Locations, Export), Domain (Books, Identification, Metadata, Research), Infrastructure (Persistence, Networking, Photos, Archiving), Integrations (GoogleBooks, OpenLibrary), and Shared utilities. Avoid unnecessary Redux/TCA ceremony or giant service containers.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#architecture_decisions"
+      }
+    },
+    {
+      "id": "AD-002",
+      "type": "architecture_decision",
+      "text": "Define BookMetadataProvider boundary. Map external Google Books and Open Library DTOs to domain models without exposing provider schemas to the rest of the application. Fallback: Google Books -\u003e Open Library -\u003e Needs review.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#architecture_decisions"
+      }
+    },
+    {
+      "id": "AD-003",
+      "type": "architecture_decision",
+      "text": "Store photos deterministically named (e.g. BB-000127-front.heic) in the app sandbox. Save relative paths in SwiftData BookPhoto entities. Allow multi-photo support per copy (front, copyright page, signature, dust jacket, printing line, other).",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#architecture_decisions"
+      }
+    },
+    {
+      "id": "AD-004",
+      "type": "architecture_decision",
+      "text": "Wrap VisionKit/DataScannerViewController behind a seam that emits barcode events to allow unit and UI testing with fake scanner inputs.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#architecture_decisions"
+      }
+    },
+    {
+      "id": "AD-005",
+      "type": "architecture_decision",
+      "text": "Generate BookBurner-YYYY-MM-DD.zip containing UTF-8 escaped books.csv, rich versioned books.json, manifest.json, and the photos/ directory using native APIs or a single pinned, lightweight Swift Package for ZIP creation.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#architecture_decisions"
+      }
+    }
+  ],
+  "technology_choices": [
+    {
+      "id": "technology_choices-001",
+      "type": "technology_choice",
+      "text": "Swift (Current stable language mode, async/await, actors, Sendable, Observation)",
+      "choice": "Swift (Current stable language mode, async/await, actors, Sendable, Observation)",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#technology_choices"
+      }
+    },
+    {
+      "id": "technology_choices-002",
+      "type": "technology_choice",
+      "text": "SwiftUI (Native TabView, Navigation, Search, Dynamic Type, Dark Mode)",
+      "choice": "SwiftUI (Native TabView, Navigation, Search, Dynamic Type, Dark Mode)",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#technology_choices"
+      }
+    },
+    {
+      "id": "technology_choices-003",
+      "type": "technology_choice",
+      "text": "SwiftData with versioned schema and migration support",
+      "choice": "SwiftData with versioned schema and migration support",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#technology_choices"
+      }
+    },
+    {
+      "id": "technology_choices-004",
+      "type": "technology_choice",
+      "text": "VisionKit (DataScannerViewController) restricted to book barcode types (EAN-13 / ISBN)",
+      "choice": "VisionKit (DataScannerViewController) restricted to book barcode types (EAN-13 / ISBN)",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#technology_choices"
+      }
+    },
+    {
+      "id": "technology_choices-005",
+      "type": "technology_choice",
+      "text": "Foundation URLSession",
+      "choice": "Foundation URLSession",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#technology_choices"
+      }
+    },
+    {
+      "id": "technology_choices-006",
+      "type": "technology_choice",
+      "text": "Native Apple archiving API or one pinned, minimal Swift Package for ZIP compression",
+      "choice": "Native Apple archiving API or one pinned, minimal Swift Package for ZIP compression",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#technology_choices"
+      }
+    },
+    {
+      "id": "technology_choices-007",
+      "type": "technology_choice",
+      "text": "Apple Unified Logging (os.Logger) avoiding secret leakage and print statements",
+      "choice": "Apple Unified Logging (os.Logger) avoiding secret leakage and print statements",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#technology_choices"
+      }
+    }
+  ],
+  "forbidden_changes": [
+    {
+      "id": "forbidden_changes-001",
+      "type": "forbidden_change",
+      "text": "Do not add eBay listing creation, account management, Amazon seller integration, or live scraping to v0.1",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    },
+    {
+      "id": "forbidden_changes-002",
+      "type": "forbidden_change",
+      "text": "Do not add CloudKit sync, custom backends, user authentication, or multi-user SaaS features to v0.1",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    },
+    {
+      "id": "forbidden_changes-003",
+      "type": "forbidden_change",
+      "text": "Do not introduce AI/OCR edition identification or automated valuation tools during capture v0.1",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    },
+    {
+      "id": "forbidden_changes-004",
+      "type": "forbidden_change",
+      "text": "Do not implement complex warehouse/hierarchical storage location models",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    },
+    {
+      "id": "forbidden_changes-005",
+      "type": "forbidden_change",
+      "text": "Do not substitute downloaded online cover art for actual physical copy photographs",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    },
+    {
+      "id": "forbidden_changes-006",
+      "type": "forbidden_change",
+      "text": "Do not silence Swift strict concurrency warnings or introduce unstructured detached tasks indiscriminately",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    },
+    {
+      "id": "forbidden_changes-007",
+      "type": "forbidden_change",
+      "text": "Do not implement global ISBN deduplication that rejects duplicate physical scans",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    }
+  ],
+  "functional_requirements": [
+    {
+      "id": "FR-001",
+      "type": "requirement",
+      "text": "Scan ISBN -\u003e Normalise/Validate -\u003e Allocate BB ID -\u003e Trigger async metadata -\u003e Prompt front photo -\u003e Capture photo -\u003e Persist record -\u003e Haptic/Audio success feedback -\u003e Auto-reset scanner without Save confirmation.",
+      "description": "Scan ISBN -\u003e Normalise/Validate -\u003e Allocate BB ID -\u003e Trigger async metadata -\u003e Prompt front photo -\u003e Capture photo -\u003e Persist record -\u003e Haptic/Audio success feedback -\u003e Auto-reset scanner without Save confirmation.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-002",
+      "type": "requirement",
+      "text": "Allocate monotonic, unique human-readable IDs formatted as BB-000001, BB-000002 that persist across app restarts and never get reallocated after deletions.",
+      "description": "Allocate monotonic, unique human-readable IDs formatted as BB-000001, BB-000002 that persist across app restarts and never get reallocated after deletions.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-003",
+      "type": "requirement",
+      "text": "Allow repeated scanning of identical ISBNs, creating distinct BookCopy records with unique BB IDs without modal interruption.",
+      "description": "Allow repeated scanning of identical ISBNs, creating distinct BookCopy records with unique BB IDs without modal interruption.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-004",
+      "type": "requirement",
+      "text": "Provide a quick 'No ISBN / Can't Scan' path allowing BB ID allocation, front photo capture, location inheritance, and marking as 'No ISBN' / 'Needs review'.",
+      "description": "Provide a quick 'No ISBN / Can't Scan' path allowing BB ID allocation, front photo capture, location inheritance, and marking as 'No ISBN' / 'Needs review'.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-005",
+      "type": "requirement",
+      "text": "Fetch book metadata asynchronously from Google Books (via ISBN query) falling back to Open Library. Store provenance, cache successful lookups by ISBN, and never block capture on network response.",
+      "description": "Fetch book metadata asynchronously from Google Books (via ISBN query) falling back to Open Library. Store provenance, cache successful lookups by ISBN, and never block capture on network response.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-006",
+      "type": "requirement",
+      "text": "Maintain active storage location (e.g., Box 1, Office Shelf, Unassigned). Allow quick selection/creation and automatically inherit to newly captured books.",
+      "description": "Maintain active storage location (e.g., Box 1, Office Shelf, Unassigned). Allow quick selection/creation and automatically inherit to newly captured books.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-007",
+      "type": "requirement",
+      "text": "Provide immediate single-step undo that deletes the most recently captured record and associated photo assets while preserving the monotonic BB ID sequence without reuse.",
+      "description": "Provide immediate single-step undo that deletes the most recently captured record and associated photo assets while preserving the monotonic BB ID sequence without reuse.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-008",
+      "type": "requirement",
+      "text": "Native list view displaying thumbnail, title, author, year, BB ID, and status badge. Vertically scrolling detail view with photo preview, metadata provenance, location editor, and mark-as-incorrect actions.",
+      "description": "Native list view displaying thumbnail, title, author, year, BB ID, and status badge. Vertically scrolling detail view with photo preview, metadata provenance, location editor, and mark-as-incorrect actions.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-009",
+      "type": "requirement",
+      "text": "Native search across BB ID, title, author, ISBN, publisher, and location, with filters for status (Unresolved, Lookup pending, Needs review, Location).",
+      "description": "Native search across BB ID, title, author, ISBN, publisher, and location, with filters for status (Unresolved, Lookup pending, Needs review, Location).",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-010",
+      "type": "requirement",
+      "text": "Export inventory as a ZIP archive named BookBurner-YYYY-MM-DD.zip containing books.csv (escaped UTF-8), books.json (schema-versioned rich payload), manifest.json, and photos/ directory via system share sheet.",
+      "description": "Export inventory as a ZIP archive named BookBurner-YYYY-MM-DD.zip containing books.csv (escaped UTF-8), books.json (schema-versioned rich payload), manifest.json, and photos/ directory via system share sheet.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "id": "NFR-001",
+      "type": "non_functional_requirement",
+      "text": "Post-shutter local persistence and scan-ready reset must be perceived as near-instantaneous on target iPhone, independent of network enrichment.",
+      "description": "Post-shutter local persistence and scan-ready reset must be perceived as near-instantaneous on target iPhone, independent of network enrichment.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#non_functional_requirements"
+      }
+    },
+    {
+      "id": "NFR-002",
+      "type": "non_functional_requirement",
+      "text": "Incomplete captures, app interruptions, or crashes must never corrupt the SwiftData store or orphan filesystem image references.",
+      "description": "Incomplete captures, app interruptions, or crashes must never corrupt the SwiftData store or orphan filesystem image references.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#non_functional_requirements"
+      }
+    },
+    {
+      "id": "NFR-003",
+      "type": "non_functional_requirement",
+      "text": "Full support for Dynamic Type, VoiceOver accessibility labels, 44pt touch targets, Light/Dark mode, and non-haptic visual status fallbacks.",
+      "description": "Full support for Dynamic Type, VoiceOver accessibility labels, 44pt touch targets, Light/Dark mode, and non-haptic visual status fallbacks.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#non_functional_requirements"
+      }
+    },
+    {
+      "id": "NFR-004",
+      "type": "non_functional_requirement",
+      "text": "Zero strict concurrency compilation warnings, MainActor UI isolation, proper Sendable conformances, and no raw print debugging in production builds.",
+      "description": "Zero strict concurrency compilation warnings, MainActor UI isolation, proper Sendable conformances, and no raw print debugging in production builds.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#non_functional_requirements"
+      }
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "type": "acceptance",
+      "text": "Unit tests verify ISBN-10/13 validation, monotonic BB ID generation without reuse, CSV/JSON serialization, and provider fallback logic using fixtures.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-002",
+      "type": "acceptance",
+      "text": "SwiftData schema migration tests pass without data loss or model corruption.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-003",
+      "type": "acceptance",
+      "text": "Exported ZIP archive contains matching row counts in CSV and JSON, valid relative photo file paths, and uncorrupted special characters/Unicode.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-004",
+      "type": "acceptance",
+      "text": "Physical iPhone acceptance script executed including camera permissions, torch, offline scan, duplicate ISBN, unreadable barcode, location switch, and Undo.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-005",
+      "type": "acceptance",
+      "text": "Successful completion of 25-book test followed by the messy ~50-book physical pile test without blocking freezes or app crashes.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    }
+  ],
+  "important_context": [
+    {
+      "id": "important_context-001",
+      "type": "context",
+      "text": "Target user is Matthew scanning a large physical pile of books needing triage (sell, bundle, donate, keep).",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#important_context"
+      }
+    },
+    {
+      "id": "important_context-002",
+      "type": "context",
+      "text": "The application is fundamentally a high-velocity physical capture and liquidation tool, not a Goodreads-style reading tracker.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#important_context"
+      }
+    },
+    {
+      "id": "important_context-003",
+      "type": "context",
+      "text": "Physical capture outranks the network: network availability or provider failure must never pause or degrade physical scanning ergonomics.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#important_context"
+      }
+    },
+    {
+      "id": "important_context-004",
+      "type": "context",
+      "text": "Market valuation and eBay Browse API research integrations are scheduled for v0.2 to prevent credential leakage in the client binary.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#important_context"
+      }
+    }
+  ],
+  "important_rationale": [
+    {
+      "id": "important_rationale-001",
+      "type": "rationale",
+      "text": "Separating BB ID from ISBN ensures multi-copy inventory is treated as distinct physical assets with independent photo evidence and location tracking.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#important_rationale"
+      }
+    },
+    {
+      "id": "important_rationale-002",
+      "type": "rationale",
+      "text": "Decoupling photo writes to the filesystem keeps SwiftData lean and performant during rapid image acquisitions.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#important_rationale"
+      }
+    },
+    {
+      "id": "important_rationale-003",
+      "type": "rationale",
+      "text": "Avoiding modal dialogs and save buttons maximizes physical ergonomics when processing large book piles with one hand.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#important_rationale"
+      }
+    }
+  ],
+  "known_dependencies": [
+    {
+      "id": "known_dependencies-001",
+      "type": "dependency",
+      "text": "Apple iOS SDK (SwiftUI, SwiftData, VisionKit, Foundation, UniformTypeIdentifiers)",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#known_dependencies"
+      }
+    },
+    {
+      "id": "known_dependencies-002",
+      "type": "dependency",
+      "text": "Xcode toolchain on Mac build machine",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#known_dependencies"
+      }
+    },
+    {
+      "id": "known_dependencies-003",
+      "type": "dependency",
+      "text": "Optional pinned Swift Package for standard ZIP archive generation if Foundation compression is insufficient",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#known_dependencies"
+      }
+    }
+  ],
+  "known_external_services": [
+    {
+      "id": "known_external_services-001",
+      "type": "external_service",
+      "text": "Primary book metadata lookup via ISBN query (requires API key via xcconfig)",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#known_external_services"
+      }
+    },
+    {
+      "id": "known_external_services-002",
+      "type": "external_service",
+      "text": "Fallback public metadata lookup via ISBN",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#known_external_services"
+      }
+    },
+    {
+      "id": "known_external_services-003",
+      "type": "external_service",
+      "text": "Active asking price research (Deferred to v0.2 via secure gateway / Lucy-GARY agent)",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#known_external_services"
+      }
+    }
+  ],
+  "known_risks": [
+    {
+      "id": "known_risks-001",
+      "type": "risk",
+      "text": "VisionKit / DataScannerViewController simulator limitations",
+      "mitigation": "Isolate barcode events behind a protocol seam for mock testing and mandate real-device physical acceptance runs.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#known_risks"
+      }
+    },
+    {
+      "id": "known_risks-002",
+      "type": "risk",
+      "text": "API rate limits or missing credentials for Google Books",
+      "mitigation": "Degrade gracefully to Open Library and flag records as 'Lookup pending' / 'Needs review' without blocking capture.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#known_risks"
+      }
+    },
+    {
+      "id": "known_risks-003",
+      "type": "risk",
+      "text": "Disk exhaustion or orphaned images during interrupted captures",
+      "mitigation": "Atomic file writing pipeline and Undo cleanup routines.",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#known_risks"
+      }
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "OQ-001",
+      "type": "open_question",
+      "text": "What is the minimum iOS version installed on Matthew's target iPhone?",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#open_questions"
+      }
+    },
+    {
+      "id": "OQ-002",
+      "type": "open_question",
+      "text": "Will Matthew supply a Google Books API key in Secrets.xcconfig, or should the app initialize using Open Library alone until configured?",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#open_questions"
+      }
+    }
+  ],
+  "current_phase": "0.1 Capture Edition - Project Intake \u0026 Baseline Implementation",
+  "current_strategy": "Execute incremental bounded jobs from core persistence and allocator to VisionKit scanner seam, rapid capture loop, metadata fallback, UI list/detail, and ZIP export, concluding with physical iPhone pile verification.",
+  "remaining_capabilities": [
+    "Job 1: Scaffold Xcode project, SwiftData container, domain models, test target, and Secrets.xcconfig.example",
+    "Job 2: Implement persistent BB ID allocator, multi-photo model, StorageLocation entity, and schema versioning/migration tests",
+    "Job 3: Implement VisionKit barcode scanner with ISBN normalisation and capture lock seam",
+    "Job 4: Implement continuous capture state machine (Scan -\u003e Photo -\u003e Atomic Write -\u003e Persistence -\u003e Reset)",
+    "Job 5: Implement Google Books \u0026 Open Library async metadata adapters with caching and fallback",
+    "Job 6: Implement 'No ISBN / Can't Scan' path and error recovery states",
+    "Job 7: Implement Storage Location management and Undo Last Book mechanics",
+    "Job 8: Implement native Books inventory browser, detail screen, search, and status filters",
+    "Job 9: Implement ZIP export engine (CSV, JSON, manifest, photos) with system share sheet",
+    "Job 10: Run 25-book test, polish UI/haptics/accessibility, and execute final ~50-book physical acceptance test"
+  ],
+  "active_decisions": [
+    {
+      "id": "active_decisions-001",
+      "type": "active_decision",
+      "text": "Allocate monotonic BB IDs starting at BB-000001",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#active_decisions"
+      }
+    },
+    {
+      "id": "active_decisions-002",
+      "type": "active_decision",
+      "text": "Use SwiftData for persistence and file system for images",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#active_decisions"
+      }
+    },
+    {
+      "id": "active_decisions-003",
+      "type": "active_decision",
+      "text": "Default location to 'Unassigned' when no location is configured",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#active_decisions"
+      }
+    },
+    {
+      "id": "active_decisions-004",
+      "type": "active_decision",
+      "text": "Defer all eBay pricing and seller features to v0.2",
+      "source": {
+        "packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+        "locator": "MASTER_PACKET.md#active_decisions"
+      }
+    }
+  ],
+  "source_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+  "manual_version": 1,
+  "manual_digest": "sha256:488ab33f580268a05040cbf7f00ef7c9fe40e4f98b95af3c0cb0487f8edfee63"
+}

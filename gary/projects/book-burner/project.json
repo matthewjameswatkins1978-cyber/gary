@@ -1,0 +1,14 @@
+{
+  "schema": "gary.project.v1",
+  "project_id": "book-burner",
+  "project_name": "pasted text",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/book-burner.git",
+  "base_branch": "main",
+  "state": "EXECUTING",
+  "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+  "master_packet_version": 1,
+  "project_manual_version": 1,
+  "manual_digest": "sha256:488ab33f580268a05040cbf7f00ef7c9fe40e4f98b95af3c0cb0487f8edfee63",
+  "created_at": "2026-08-31T06:53:18Z",
+  "updated_at": "2026-08-31T06:57:21Z"
+}
