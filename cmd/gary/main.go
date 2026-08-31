@@ -17,6 +17,8 @@ func main() {
 	switch os.Args[1] {
 	case "version":
 		cmdVersion()
+	case "route":
+		cmdRoute()
 	case "doctor":
 		cmdDoctor()
 	case "run":
@@ -70,6 +72,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Commands:")
 	fmt.Fprintln(os.Stderr, "  version      Print version information")
+	fmt.Fprintln(os.Stderr, "  route        Decide a route without launching a worker")
 	fmt.Fprintln(os.Stderr, "  doctor       Check environment readiness")
 	fmt.Fprintln(os.Stderr, "  run          Run one coding job (guarded workflows preferred)")
 	fmt.Fprintln(os.Stderr, "  run-many     Run coding jobs concurrently (guarded workflows preferred)")

@@ -15,6 +15,14 @@ Batch is reserved for isolated implementation workers.
 go run ./cmd/gary version
 ```
 
+The decision-only routing entrypoint consumes one `telltail.adapter.v1`
+request from stdin and returns one `telltail.decision.v1` response without
+launching a worker or changing a repository:
+
+```powershell
+Get-Content -Raw telltail-adapter-request.json | go run ./cmd/gary route --dry-run --json
+```
+
 ```powershell
 go run ./cmd/gary doctor
 ```
