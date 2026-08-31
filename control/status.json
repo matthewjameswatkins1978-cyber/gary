@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-31T06:54:46Z",
+  "updated_at": "2026-08-31T06:57:19Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -14,19 +14,6 @@
       "result_branch": "gary/gary-live-cert-2-w1-j1-5f44e2cb",
       "started_at": "2026-08-31T06:32:58Z",
       "attempts": 5
-    },
-    {
-      "id": "book-burner-w1-j1",
-      "project_id": "book-burner",
-      "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
-      "project_manual_version": 1,
-      "batch_job_id": "gary-run-book-burner-w1-j1-1-20260831-075446",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/book-burner.git",
-      "base_branch": "gary/master-book-burner-76b027",
-      "result_branch": "gary/book-burner-w1-j1-3e2e2ba1",
-      "started_at": "2026-08-31T06:54:44Z",
-      "attempts": 1
     }
   ],
   "recent_jobs": [
@@ -212,6 +199,45 @@
       "attempts": 2,
       "est_cost": 0.05289201573830401,
       "summary": "BUDGET_STOPPED"
+    },
+    {
+      "id": "book-burner-w1-j1",
+      "project_id": "book-burner",
+      "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+      "project_manual_version": 1,
+      "state": "failed",
+      "result_branch": "gary/book-burner-w1-j1-3e2e2ba1",
+      "finished_at": "2026-08-31T06:57:19Z",
+      "est_cost": 0.000591748047333,
+      "cost": {
+        "pricing_status": "ESTIMATED",
+        "currency": "USD",
+        "pricing_version": "2026-08-30",
+        "model_cost_usd": 0,
+        "compute_cost_usd": 0.000591748047333,
+        "total_cost_usd": 0.000591748047333,
+        "components": [
+          {
+            "kind": "worker",
+            "model_requested": "gemini-3.5-flash-lite",
+            "usage_source": "ESTIMATED",
+            "model_cost_usd": 0,
+            "compute_cost_usd": 0.000591748047333,
+            "total_cost_usd": 0.000591748047333,
+            "runtime_seconds": 102.912703884,
+            "machine_type": "e2-small",
+            "provisioning_model": "STANDARD",
+            "pricing_version": "2026-08-30",
+            "pricing_effective_date": "2026-08-30",
+            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+            "unmetered_reason": "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+          }
+        ],
+        "unmetered_components": [
+          "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+        ]
+      },
+      "summary": "BLOCKED"
     }
   ]
 }
