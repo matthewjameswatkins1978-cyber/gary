@@ -1,6 +1,21 @@
 {
-  "updated_at": "2026-08-31T06:50:39Z",
-  "yard_state": "idle",
+  "updated_at": "2026-08-31T06:53:01Z",
+  "yard_state": "running",
+  "active_jobs": [
+    {
+      "id": "gary-live-cert-2-w1-j1",
+      "project_id": "gary-live-cert-20260831i",
+      "master_packet_digest": "sha256:4c9bbb91bb33febb33fc36a37eeefb38ccd7a72c86da7df3a1dd96b50784c09e",
+      "project_manual_version": 1,
+      "batch_job_id": "gary-run-gary-live-cert-2-w1-j1-5-20260831-075301",
+      "state": "retrying",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
+      "base_branch": "gary/master-gary-live-cert-2-1367d0",
+      "result_branch": "gary/gary-live-cert-2-w1-j1-5f44e2cb",
+      "started_at": "2026-08-31T06:32:58Z",
+      "attempts": 5
+    }
+  ],
   "recent_jobs": [
     {
       "id": "resolve-google-a-w1-j4",
@@ -184,53 +199,6 @@
       "attempts": 2,
       "est_cost": 0.05289201573830401,
       "summary": "BUDGET_STOPPED"
-    },
-    {
-      "id": "gary-live-cert-2-w1-j1",
-      "project_id": "gary-live-cert-20260831j",
-      "master_packet_digest": "sha256:0eddd2184ad7ad333b28e2af2bb9f443ffe93465940255302571811a97644540",
-      "project_manual_version": 1,
-      "batch_job_id": "gary-run-gary-live-cert-2-w1-j1-1-20260831-074435",
-      "state": "accepted",
-      "result_branch": "gary/gary-live-cert-2-w1-j1-51f9b928",
-      "result_commit": "c04b5db",
-      "finished_at": "2026-08-31T06:50:39Z",
-      "attempts": 1,
-      "est_cost": 0.03331476776216575,
-      "cost": {
-        "pricing_status": "MIXED",
-        "currency": "USD",
-        "pricing_version": "2026-08-30",
-        "worker_model_cost_usd": 0.031386,
-        "model_cost_usd": 0.031386,
-        "compute_cost_usd": 0.0019287677621657499,
-        "total_cost_usd": 0.03331476776216575,
-        "components": [
-          {
-            "kind": "worker",
-            "model_requested": "gemini-3.5-flash-lite",
-            "usage_source": "PROVIDER_REPORTED",
-            "input_tokens": 98395,
-            "fresh_input_tokens": 98395,
-            "output_tokens": 747,
-            "total_tokens": 99142,
-            "model_cost_usd": 0.031386,
-            "compute_cost_usd": 0.0019287677621657499,
-            "total_cost_usd": 0.03331476776216575,
-            "runtime_seconds": 335.437871681,
-            "machine_type": "e2-small",
-            "provisioning_model": "STANDARD",
-            "pricing_version": "2026-08-30",
-            "pricing_effective_date": "2026-08-30",
-            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
-            "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
-          }
-        ],
-        "unmetered_components": [
-          "Batch compute is estimated from observed runtime; invoice data was not queried"
-        ]
-      },
-      "summary": "DONE"
     }
   ]
 }
