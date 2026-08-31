@@ -25,7 +25,7 @@ const (
 	yardmasterFileMaxBytes    = 48000
 )
 
-func runYardmasterDirect(cfg *config.Config, manifest *masterManifest, brief, stagingBranch string, wave int, history string) (*masterPlan, time.Duration, cost.Component, error) {
+func runYardmasterDirect(cfg *config.Config, manifest *masterManifest, brief, stagingBranch string, wave int, history, memory string) (*masterPlan, time.Duration, cost.Component, error) {
 	component := estimatedComponent("yardmaster", cfg.MasterModel, "planner request did not return provider usage")
 	if cfg.GCPProject == "" {
 		return nil, 0, component, fmt.Errorf("yardmaster: GARY_GCP_PROJECT is required on the control plane")
@@ -46,7 +46,7 @@ func runYardmasterDirect(cfg *config.Config, manifest *masterManifest, brief, st
 		return nil, 0, component, fmt.Errorf("yardmaster context: %w", err)
 	}
 
-	prompt := buildMasterPlannerPrompt(manifest, brief, stagingBranch, wave, history)
+	prompt := buildMasterPlannerPrompt(manifest, brief, stagingBranch, wave, history, memory)
 	prompt += "\n\nREPOSITORY SNAPSHOT\n===================\n" + repoContext
 
 	ctx, cancel := context.WithTimeout(context.Background(), yardmasterPlannerTimeout)

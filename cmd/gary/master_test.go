@@ -168,7 +168,7 @@ func TestPythonAcceptanceEnvironmentAndCommandRouting(t *testing.T) {
 func TestMasterPlannerPromptIncludesCorrectRoleUniversalRulesAndJobBrief(t *testing.T) {
 	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
 	brief := "EXTRA JOB RULE: preserve the public API."
-	prompt := buildMasterPlannerPrompt(m, brief, "stage", 1, "[]")
+	prompt := buildMasterPlannerPrompt(m, brief, "stage", 1, "[]", "previous compact memory")
 	if !strings.Contains(prompt, doctrine.YardmasterRoleRules) {
 		t.Fatal("planner prompt must include the Yardmaster role rules")
 	}
@@ -184,6 +184,11 @@ func TestMasterPlannerPromptIncludesCorrectRoleUniversalRulesAndJobBrief(t *test
 	for _, marker := range []string{"ECONOMY: every planning call", "default to one child job per wave", "never repeat a scaffold"} {
 		if !strings.Contains(prompt, marker) {
 			t.Fatalf("planner prompt missing economy rule %q", marker)
+		}
+	}
+	for _, marker := range []string{"ROLLING YARDMASTER MEMORY", "CONTEXT COMPACTION CONTRACT", "at most 1600 characters"} {
+		if !strings.Contains(prompt, marker) {
+			t.Fatalf("planner prompt missing compaction contract %q", marker)
 		}
 	}
 }
@@ -209,7 +214,7 @@ func TestCompactMasterHistoryOmitsRawCostTelemetry(t *testing.T) {
 
 func TestMasterPlannerPromptDelegatesHeavyWork(t *testing.T) {
 	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
-	prompt := buildMasterPlannerPrompt(m, "finish it", "stage", 1, "[]")
+	prompt := buildMasterPlannerPrompt(m, "finish it", "stage", 1, "[]", "")
 	for _, required := range []string{
 		"You are the planning and supervision layer. You do not implement child jobs.",
 		"Do not install dependencies",
@@ -225,7 +230,7 @@ func TestMasterPlannerPromptDelegatesHeavyWork(t *testing.T) {
 
 func TestMasterPlannerPromptDefinesParallelIsolationAndSafeAcceptance(t *testing.T) {
 	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
-	prompt := buildMasterPlannerPrompt(m, "P0 before P1", "stage", 1, "[]")
+	prompt := buildMasterPlannerPrompt(m, "P0 before P1", "stage", 1, "[]", "")
 	for _, required := range []string{
 		"fresh isolated clone",
 		"Sibling jobs do not share virtualenvs",
@@ -237,5 +242,14 @@ func TestMasterPlannerPromptDefinesParallelIsolationAndSafeAcceptance(t *testing
 		if !strings.Contains(prompt, required) {
 			t.Fatalf("planner prompt missing %q", required)
 		}
+	}
+}
+
+func TestCompactPlannerMemoryIsBoundedAndFallsBack(t *testing.T) {
+	if got := compactPlannerMemory("", strings.Repeat("x", 2000)); len(got) != 1600 {
+		t.Fatalf("fallback memory length = %d, want 1600", len(got))
+	}
+	if got := compactPlannerMemory("  accepted c123; next: tests  ", "fallback"); got != "accepted c123; next: tests" {
+		t.Fatalf("memory was not trimmed or preferred: %q", got)
 	}
 }

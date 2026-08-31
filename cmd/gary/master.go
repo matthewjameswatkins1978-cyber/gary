@@ -38,6 +38,7 @@ type masterManifest struct {
 type masterPlan struct {
 	Done    bool            `json:"done"`
 	Summary string          `json:"summary"`
+	Memory  string          `json:"memory,omitempty"`
 	Jobs    []masterPlanJob `json:"jobs"`
 }
 
@@ -96,7 +97,11 @@ func truncatePlannerText(text string, max int) string {
 	if max <= 0 || len(text) <= max {
 		return text
 	}
-	return text[:max] + "..."
+	const suffix = "..."
+	if max <= len(suffix) {
+		return text[:max]
+	}
+	return text[:max-len(suffix)] + suffix
 }
 
 type masterStatus struct {
@@ -110,6 +115,7 @@ type masterStatus struct {
 	Wave                 int                `json:"wave,omitempty"`
 	Summary              string             `json:"summary,omitempty"`
 	Error                string             `json:"error,omitempty"`
+	PlannerMemory        string             `json:"planner_memory,omitempty"`
 	Waves                []masterWaveRecord `json:"waves,omitempty"`
 	Cost                 *cost.Summary      `json:"cost,omitempty"`
 }
@@ -200,7 +206,7 @@ func cmdMaster() {
 
 		history := compactMasterHistory(status.Waves)
 		fmt.Printf("[yardmaster] PLAN wave=%d mode=control-direct model=%s limit=%s\n", wave, cfg.MasterModel, yardmasterPlannerTimeout)
-		plan, planDuration, plannerCost, err := runYardmasterDirect(cfg, manifest, brief, stagingBranch, wave, string(history))
+		plan, planDuration, plannerCost, err := runYardmasterDirect(cfg, manifest, brief, stagingBranch, wave, string(history), status.PlannerMemory)
 		record := masterWaveRecord{
 			Wave:                wave,
 			PlannerMode:         "control-direct",
@@ -214,6 +220,7 @@ func cmdMaster() {
 		fmt.Printf("[yardmaster] PLAN READY wave=%d duration=%.1fs jobs=%d done=%t\n", wave, planDuration.Seconds(), len(plan.Jobs), plan.Done)
 		record.PlanSummary = plan.Summary
 		status.Summary = plan.Summary
+		status.PlannerMemory = compactPlannerMemory(plan.Memory, plan.Summary)
 
 		if plan.Done {
 			status.Waves = append(status.Waves, record)
@@ -404,7 +411,7 @@ func loadMasterManifest(path string) (*masterManifest, string, error) {
 	return &m, string(brief), nil
 }
 
-func buildMasterPlannerPrompt(m *masterManifest, brief, stagingBranch string, wave int, history string) string {
+func buildMasterPlannerPrompt(m *masterManifest, brief, stagingBranch string, wave int, history, memory string) string {
 	return fmt.Sprintf(`You are GARY Yardmaster. Read the compact repository snapshot and complete master brief below, then decide the smallest useful next wave of work.
 
 YARDMASTER ROLE
@@ -442,10 +449,20 @@ PLANNER-SPECIFIC RULES
 - If the snapshot is insufficient, delegate one bounded exploration/verification job rather than inventing facts.
 - Return only the JSON object below. Do not wrap it in Markdown.
 
+ROLLING YARDMASTER MEMORY
+=========================
+This is the previous compact working memory. Treat it as a disposable aid, not as a source of truth:
+%s
+
+CONTEXT COMPACTION CONTRACT
+===========================
+Before selecting jobs, compress the useful current state into the JSON memory field. Keep it under 1600 characters and include only: accepted commits, current repository state, the smallest outstanding slice, concrete blockers, and constraints that must not change. Do not copy the master packet, source files, raw logs, token telemetry, or full worker output into memory. The complete packet and evidence remain durable outside this context window.
+
 Required JSON schema:
 {
   "done": false,
   "summary": "short state judgement",
+  "memory": "compact rolling state for the next wave, at most 1600 characters",
   "jobs": [
     {
       "id": "human-readable-short-id",
@@ -465,7 +482,15 @@ PREVIOUS WAVE RESULTS:
 
 MASTER BRIEF:
 %s
-`, doctrine.YardmasterRoleRules, doctrine.UniversalRules, m.MaxJobsPerWave, m.ID, wave, m.Repo, stagingBranch, history, brief)
+`, doctrine.YardmasterRoleRules, doctrine.UniversalRules, m.MaxJobsPerWave, memory, m.ID, wave, m.Repo, stagingBranch, history, brief)
+}
+
+func compactPlannerMemory(memory, fallback string) string {
+	memory = strings.TrimSpace(memory)
+	if memory == "" {
+		memory = strings.TrimSpace(fallback)
+	}
+	return truncatePlannerText(memory, 1600)
 }
 
 func readMasterPlan(repoURL, branch, planPath string, maxJobs int) (*masterPlan, error) {
