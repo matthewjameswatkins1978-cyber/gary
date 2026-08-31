@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-31T10:55:02Z",
+  "updated_at": "2026-08-31T10:58:53Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -41,33 +41,9 @@
       "result_branch": "gary/judgement-call-b-w10-j1-a9ff29c1",
       "started_at": "2026-08-30T03:22:32Z",
       "attempts": 2
-    },
-    {
-      "id": "book-burner-laun-w5-j1",
-      "project_id": "book-burner",
-      "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
-      "project_manual_version": 1,
-      "batch_job_id": "gary-run-book-burner-laun-w5-j1-2-20260831-105502",
-      "state": "retrying",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/book-burner.git",
-      "base_branch": "gary/master-book-burner-laun-f29441",
-      "result_branch": "gary/book-burner-laun-w5-j1-9e565d99",
-      "started_at": "2026-08-31T10:51:21Z",
-      "attempts": 2
     }
   ],
   "recent_jobs": [
-    {
-      "id": "judgement-call-b-w1-j1",
-      "batch_job_id": "gary-run-judgement-call-b-w1-j1-2-20260829-193933",
-      "state": "accepted",
-      "result_branch": "gary/judgement-call-b-w1-j1-da9f3dee",
-      "result_commit": "2e862f8",
-      "finished_at": "2026-08-29T19:47:20Z",
-      "attempts": 2,
-      "est_cost": 0.05268340573015626,
-      "summary": "DONE"
-    },
     {
       "id": "judgement-call-b-w2-j1",
       "state": "failed",
@@ -505,6 +481,73 @@
             "compute_cost_usd": 0.00150314030467575,
             "total_cost_usd": 0.13660516030467573,
             "runtime_seconds": 261.415705161,
+            "machine_type": "e2-small",
+            "provisioning_model": "STANDARD",
+            "pricing_version": "2026-08-30",
+            "pricing_effective_date": "2026-08-30",
+            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+            "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+          }
+        ],
+        "unmetered_components": [
+          "Batch compute is estimated from observed runtime; invoice data was not queried",
+          "Batch compute is estimated from observed runtime; invoice data was not queried"
+        ]
+      },
+      "summary": "BUDGET_STOPPED"
+    },
+    {
+      "id": "book-burner-laun-w5-j1",
+      "project_id": "book-burner",
+      "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+      "project_manual_version": 1,
+      "state": "failed",
+      "result_branch": "gary/book-burner-laun-w5-j1-9e565d99",
+      "finished_at": "2026-08-31T10:58:53Z",
+      "attempts": 2,
+      "est_cost": 0.20983267010823947,
+      "cost": {
+        "pricing_status": "MIXED",
+        "currency": "USD",
+        "pricing_version": "2026-08-30",
+        "worker_model_cost_usd": 0.20753423999999998,
+        "model_cost_usd": 0.20753423999999998,
+        "compute_cost_usd": 0.0022984301082395,
+        "total_cost_usd": 0.20983267010823947,
+        "components": [
+          {
+            "kind": "worker",
+            "model_requested": "gemini-3.5-flash-lite",
+            "usage_source": "PROVIDER_REPORTED",
+            "input_tokens": 626833,
+            "cached_input_tokens": 422755,
+            "fresh_input_tokens": 204078,
+            "output_tokens": 7036,
+            "total_tokens": 633869,
+            "model_cost_usd": 0.09149605,
+            "compute_cost_usd": 0.00111934436911475,
+            "total_cost_usd": 0.09261539436911474,
+            "runtime_seconds": 194.668585933,
+            "machine_type": "e2-small",
+            "provisioning_model": "STANDARD",
+            "pricing_version": "2026-08-30",
+            "pricing_effective_date": "2026-08-30",
+            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+            "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+          },
+          {
+            "kind": "worker",
+            "model_requested": "gemini-3.5-flash-lite",
+            "usage_source": "PROVIDER_REPORTED",
+            "input_tokens": 872596,
+            "cached_input_tokens": 551243,
+            "fresh_input_tokens": 321353,
+            "output_tokens": 1238,
+            "total_tokens": 873834,
+            "model_cost_usd": 0.11603818999999999,
+            "compute_cost_usd": 0.00117908573912475,
+            "total_cost_usd": 0.11721727573912473,
+            "runtime_seconds": 205.058389413,
             "machine_type": "e2-small",
             "provisioning_model": "STANDARD",
             "pricing_version": "2026-08-30",
