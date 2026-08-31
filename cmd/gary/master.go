@@ -272,6 +272,7 @@ func ensureMasterProject(cfg *config.Config, manifest *masterManifest, brief str
 		if ctx.Project.State == "ACCEPTED" || ctx.Project.State == "ARCHIVED" {
 			return project.ProjectContext{}, manifest.ProjectID, fmt.Errorf("project %s is terminal (%s)", manifest.ProjectID, ctx.Project.State)
 		}
+		ctx, err = ensureMasterAcceptanceContract(store, ctx)
 		return ctx, manifest.ProjectID, err
 	}
 	projectID := manifest.ID
@@ -286,12 +287,23 @@ func ensureMasterProject(cfg *config.Config, manifest *masterManifest, brief str
 		if existing.Repo != "" && existing.Repo != manifest.Repo {
 			return project.ProjectContext{}, projectID, errors.New("project repository mismatch")
 		}
-		return ctx, projectID, nil
+		ctx, err = ensureMasterAcceptanceContract(store, ctx)
+		return ctx, projectID, err
 	}
 	ctx, err := store.CreateAndIngest(context.Background(), projectID, projectID, manifest.Repo, manifest.BaseBranch, []byte(brief), func(ctx context.Context, input project.ProjectContext) (project.ProjectManual, error) {
 		return generateProjectManual(ctx, cfg, input)
 	})
 	return ctx, projectID, err
+}
+
+func ensureMasterAcceptanceContract(store project.Store, ctx project.ProjectContext) (project.ProjectContext, error) {
+	if ctx.Contract.ContractVersion > 0 {
+		return ctx, nil
+	}
+	if _, err := store.EnsureAcceptanceContract(ctx.Project.ProjectID); err != nil {
+		return project.ProjectContext{}, fmt.Errorf("acceptance contract: %w", err)
+	}
+	return store.LoadContext(ctx.Project.ProjectID)
 }
 
 func loadMasterManifest(path string) (*masterManifest, string, error) {

@@ -31,6 +31,9 @@ func (s Store) CreateAndIngest(ctx context.Context, id, name, repo, baseBranch s
 	if err := s.SaveManual(id, manual); err != nil {
 		return input, err
 	}
+	if _, err := s.EnsureAcceptanceContract(id); err != nil {
+		return input, err
+	}
 	state := input.State
 	state.State = "PLANNING"
 	state.CurrentPhase = "planning"
@@ -60,6 +63,14 @@ func (s Store) AmendAndIngest(ctx context.Context, id string, contents []byte, g
 	manual.ManualVersion = input.Project.ProjectManualVersion + 1
 	if err := s.SaveManual(id, manual); err != nil {
 		return input, err
+	}
+	if input.Project.AcceptanceContractVersion > 0 {
+		contract := DeriveAcceptanceContract(input.Project, manual)
+		contract.ContractVersion = input.Project.AcceptanceContractVersion + 1
+		contract.ContractDigest = AcceptanceContractDigest(contract)
+		if err := s.replaceAcceptanceContract(contract); err != nil {
+			return input, err
+		}
 	}
 	return s.LoadContext(id)
 }

@@ -22,10 +22,11 @@ import (
 )
 
 const (
-	ProjectSchema   = "gary.project.v1"
-	ManualSchema    = "gary.project-manual.v1"
-	AmendmentSchema = "gary.project-amendment.v1"
-	StateSchema     = "gary.project-state.v1"
+	ProjectSchema            = "gary.project.v1"
+	ManualSchema             = "gary.project-manual.v1"
+	AmendmentSchema          = "gary.project-amendment.v1"
+	StateSchema              = "gary.project-state.v1"
+	AcceptanceContractSchema = "gary.acceptance-contract.v1"
 )
 
 var projectIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,59}$`)
@@ -39,6 +40,9 @@ var (
 	ErrProjectIDMismatch    = errors.New("PROJECT_ID_MISMATCH")
 	ErrManualVersionInvalid = errors.New("PROJECT_MANUAL_VERSION_INVALID")
 	ErrProjectNotAcceptable = errors.New("PROJECT_NOT_READY_FOR_ACCEPTANCE")
+	ErrAcceptanceMissing    = errors.New("ACCEPTANCE_CONTRACT_MISSING")
+	ErrAcceptanceInvalid    = errors.New("ACCEPTANCE_CONTRACT_INVALID")
+	ErrAcceptanceTampered   = errors.New("ACCEPTANCE_CONTRACT_TAMPERED")
 )
 
 // IsValidID reports whether an ID is safe to use as a project directory name.
@@ -46,19 +50,43 @@ func IsValidID(id string) bool { return projectIDPattern.MatchString(id) }
 
 // Project is the durable identity and current-version pointer for a project.
 type Project struct {
-	Schema               string `json:"schema"`
-	ProjectID            string `json:"project_id"`
-	ProjectName          string `json:"project_name,omitempty"`
-	Repo                 string `json:"repo,omitempty"`
-	BaseBranch           string `json:"base_branch,omitempty"`
-	State                string `json:"state"`
-	MasterPacketDigest   string `json:"master_packet_digest"`
-	MasterPacketVersion  int    `json:"master_packet_version"`
-	ProjectManualVersion int    `json:"project_manual_version"`
-	ManualDigest         string `json:"manual_digest,omitempty"`
-	CreatedAt            string `json:"created_at"`
-	UpdatedAt            string `json:"updated_at"`
-	AcceptedAt           string `json:"accepted_at,omitempty"`
+	Schema                    string `json:"schema"`
+	ProjectID                 string `json:"project_id"`
+	ProjectName               string `json:"project_name,omitempty"`
+	Repo                      string `json:"repo,omitempty"`
+	BaseBranch                string `json:"base_branch,omitempty"`
+	State                     string `json:"state"`
+	MasterPacketDigest        string `json:"master_packet_digest"`
+	MasterPacketVersion       int    `json:"master_packet_version"`
+	ProjectManualVersion      int    `json:"project_manual_version"`
+	ManualDigest              string `json:"manual_digest,omitempty"`
+	AcceptanceContractVersion int    `json:"acceptance_contract_version,omitempty"`
+	AcceptanceContractDigest  string `json:"acceptance_contract_digest,omitempty"`
+	CreatedAt                 string `json:"created_at"`
+	UpdatedAt                 string `json:"updated_at"`
+	AcceptedAt                string `json:"accepted_at,omitempty"`
+}
+
+// AcceptanceContract is the durable observable boundary derived from the
+// project packet and Yardmaster manual. Workers report evidence against it;
+// they never receive an API that can rewrite it.
+type AcceptanceContract struct {
+	SchemaVersion      int               `json:"schema_version"`
+	ProjectID          string            `json:"project_id"`
+	SourcePacketDigest string            `json:"source_packet_digest"`
+	ContractVersion    int               `json:"contract_version"`
+	Claims             []AcceptanceClaim `json:"claims"`
+	ContractDigest     string            `json:"contract_digest"`
+}
+
+type AcceptanceClaim struct {
+	ClaimID             string    `json:"claim_id"`
+	Statement           string    `json:"statement"`
+	Importance          string    `json:"importance"`
+	Boundary            string    `json:"boundary"`
+	EvidenceExpectation string    `json:"evidence_expectation"`
+	Status              string    `json:"status"`
+	Source              SourceRef `json:"source"`
 }
 
 // ProjectState separates transient progress from the durable project manual.
@@ -147,6 +175,7 @@ type ProjectContext struct {
 	Project    Project
 	State      ProjectState
 	Manual     ProjectManual
+	Contract   AcceptanceContract
 	Amendments []Amendment
 	Packet     []byte
 }
@@ -192,6 +221,9 @@ func (s Store) CreateProject(id, name, repo, baseBranch string, packet []byte) (
 		return Project{}, err
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "evidence"), 0o755); err != nil {
+		return Project{}, err
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "acceptance"), 0o755); err != nil {
 		return Project{}, err
 	}
 	if err := os.WriteFile(filepath.Join(dir, "source", "MASTER_PACKET.md"), packet, 0o644); err != nil {
@@ -289,11 +321,15 @@ func (s Store) LoadContext(id string) (ProjectContext, error) {
 	if state.Schema != StateSchema || state.ProjectID != id {
 		return ProjectContext{}, fmt.Errorf("%w: invalid project state", ErrProjectMissing)
 	}
+	contract, contractErr := s.loadAcceptanceContract(p)
+	if contractErr != nil && !errors.Is(contractErr, ErrAcceptanceMissing) {
+		return ProjectContext{}, contractErr
+	}
 	amendments, err := s.LoadAmendments(id)
 	if err != nil {
 		return ProjectContext{}, err
 	}
-	return ProjectContext{Project: p, State: state, Manual: manual, Amendments: amendments, Packet: packet}, nil
+	return ProjectContext{Project: p, State: state, Manual: manual, Contract: contract, Amendments: amendments, Packet: packet}, nil
 }
 
 func (s Store) SaveManual(id string, manual ProjectManual) error {
@@ -327,6 +363,192 @@ func (s Store) SaveManual(id string, manual ProjectManual) error {
 	p.ManualDigest = manual.ManualDigest
 	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	return writeJSON(filepath.Join(s.projectDir(id), "project.json"), p)
+}
+
+// LoadAcceptanceContract returns the protected contract for a project. A
+// legacy project may not have one yet; planning and inspection entrypoints
+// should call EnsureAcceptanceContract at that boundary.
+func (s Store) LoadAcceptanceContract(id string) (AcceptanceContract, error) {
+	p, err := s.LoadProject(id)
+	if err != nil {
+		return AcceptanceContract{}, err
+	}
+	return s.loadAcceptanceContract(p)
+}
+
+func (s Store) loadAcceptanceContract(p Project) (AcceptanceContract, error) {
+	if p.AcceptanceContractVersion < 1 || p.AcceptanceContractDigest == "" {
+		return AcceptanceContract{}, fmt.Errorf("%w: %s", ErrAcceptanceMissing, p.ProjectID)
+	}
+	path := filepath.Join(s.projectDir(p.ProjectID), "acceptance", fmt.Sprintf("contract-v%03d.json", p.AcceptanceContractVersion))
+	var contract AcceptanceContract
+	if err := readJSON(path, &contract); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return AcceptanceContract{}, fmt.Errorf("%w: %s", ErrAcceptanceMissing, p.ProjectID)
+		}
+		return AcceptanceContract{}, fmt.Errorf("%w: %v", ErrAcceptanceInvalid, err)
+	}
+	if err := ValidateAcceptanceContract(contract, p.ProjectID, p.MasterPacketDigest, p.AcceptanceContractVersion); err != nil {
+		return AcceptanceContract{}, fmt.Errorf("%w: %v", ErrAcceptanceInvalid, err)
+	}
+	if contract.ContractDigest != p.AcceptanceContractDigest || AcceptanceContractDigest(contract) != contract.ContractDigest {
+		return AcceptanceContract{}, fmt.Errorf("%w: %s", ErrAcceptanceTampered, p.ProjectID)
+	}
+	return contract, nil
+}
+
+// EnsureAcceptanceContract creates the first contract from the current
+// manual. The write path is private so worker-facing code cannot replace
+// protected claims; amendments will use a separate versioned Yardmaster path.
+func (s Store) EnsureAcceptanceContract(id string) (AcceptanceContract, error) {
+	p, err := s.LoadProject(id)
+	if err != nil {
+		return AcceptanceContract{}, err
+	}
+	if p.AcceptanceContractVersion > 0 || p.AcceptanceContractDigest != "" {
+		return s.loadAcceptanceContract(p)
+	}
+	manual, err := s.LoadCurrentManual(id)
+	if err != nil {
+		return AcceptanceContract{}, err
+	}
+	contract := DeriveAcceptanceContract(p, manual)
+	if err := s.saveAcceptanceContract(contract); err != nil {
+		return AcceptanceContract{}, err
+	}
+	p.AcceptanceContractVersion = contract.ContractVersion
+	p.AcceptanceContractDigest = contract.ContractDigest
+	return s.loadAcceptanceContract(p)
+}
+
+func (s Store) saveAcceptanceContract(contract AcceptanceContract) error {
+	if err := ValidateAcceptanceContract(contract, contract.ProjectID, contract.SourcePacketDigest, contract.ContractVersion); err != nil {
+		return err
+	}
+	p, err := s.LoadProject(contract.ProjectID)
+	if err != nil {
+		return err
+	}
+	if p.AcceptanceContractVersion != 0 || p.AcceptanceContractDigest != "" {
+		return fmt.Errorf("%w: contract already exists", ErrAcceptanceInvalid)
+	}
+	path := filepath.Join(s.projectDir(contract.ProjectID), "acceptance", fmt.Sprintf("contract-v%03d.json", contract.ContractVersion))
+	if err := writeJSON(path, contract); err != nil {
+		return err
+	}
+	p.AcceptanceContractVersion = contract.ContractVersion
+	p.AcceptanceContractDigest = contract.ContractDigest
+	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return writeJSON(filepath.Join(s.projectDir(contract.ProjectID), "project.json"), p)
+}
+
+func (s Store) replaceAcceptanceContract(contract AcceptanceContract) error {
+	if err := ValidateAcceptanceContract(contract, contract.ProjectID, contract.SourcePacketDigest, contract.ContractVersion); err != nil {
+		return err
+	}
+	p, err := s.LoadProject(contract.ProjectID)
+	if err != nil {
+		return err
+	}
+	if contract.ContractVersion != p.AcceptanceContractVersion+1 {
+		return fmt.Errorf("%w: contract version must advance from %d", ErrAcceptanceInvalid, p.AcceptanceContractVersion)
+	}
+	path := filepath.Join(s.projectDir(contract.ProjectID), "acceptance", fmt.Sprintf("contract-v%03d.json", contract.ContractVersion))
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("%w: contract version %d already exists", ErrAcceptanceInvalid, contract.ContractVersion)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := writeJSON(path, contract); err != nil {
+		return err
+	}
+	p.AcceptanceContractVersion = contract.ContractVersion
+	p.AcceptanceContractDigest = contract.ContractDigest
+	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return writeJSON(filepath.Join(s.projectDir(contract.ProjectID), "project.json"), p)
+}
+
+// DeriveAcceptanceContract is deterministic and compact. It turns the
+// Yardmaster's structured acceptance criteria into observable claims without
+// spending another model call or giving a worker a way to move the goalposts.
+func DeriveAcceptanceContract(p Project, manual ProjectManual) AcceptanceContract {
+	claims := make([]AcceptanceClaim, 0, len(manual.AcceptanceCriteria))
+	seen := map[string]bool{}
+	for i, requirement := range manual.AcceptanceCriteria {
+		id := requirement.ID
+		if !strings.HasPrefix(strings.ToUpper(id), "AC-") || seen[id] {
+			id = fmt.Sprintf("AC-%02d", i+1)
+		}
+		seen[id] = true
+		claims = append(claims, AcceptanceClaim{
+			ClaimID: id, Statement: strings.TrimSpace(requirement.Text), Importance: "required",
+			Boundary: acceptanceBoundary(requirement.Text), EvidenceExpectation: acceptanceEvidenceExpectation(requirement.Text),
+			Status: "OPEN", Source: requirement.Source,
+		})
+	}
+	if len(claims) == 0 && strings.TrimSpace(manual.DefinitionOfDone) != "" {
+		claims = append(claims, AcceptanceClaim{
+			ClaimID: "AC-01", Statement: strings.TrimSpace(manual.DefinitionOfDone), Importance: "required",
+			Boundary: "application", EvidenceExpectation: "direct_when_available", Status: "OPEN",
+			Source: SourceRef{PacketDigest: p.MasterPacketDigest, Locator: "project-manual.definition_of_done"},
+		})
+	}
+	contract := AcceptanceContract{SchemaVersion: 1, ProjectID: p.ProjectID, SourcePacketDigest: p.MasterPacketDigest, ContractVersion: 1, Claims: claims}
+	contract.ContractDigest = AcceptanceContractDigest(contract)
+	return contract
+}
+
+func ValidateAcceptanceContract(contract AcceptanceContract, projectID, packetDigest string, version int) error {
+	if contract.SchemaVersion != 1 || contract.ProjectID != projectID || contract.SourcePacketDigest != packetDigest || contract.ContractVersion != version || version < 1 {
+		return errors.New("schema, project, source digest, or version mismatch")
+	}
+	if len(contract.Claims) == 0 {
+		return errors.New("acceptance contract has no claims")
+	}
+	seen := map[string]bool{}
+	for _, claim := range contract.Claims {
+		if strings.TrimSpace(claim.ClaimID) == "" || strings.TrimSpace(claim.Statement) == "" || seen[claim.ClaimID] {
+			return errors.New("acceptance claim is empty or repeated")
+		}
+		seen[claim.ClaimID] = true
+		if claim.Importance != "required" && claim.Importance != "advisory" {
+			return fmt.Errorf("claim %s has invalid importance", claim.ClaimID)
+		}
+		if strings.TrimSpace(claim.Boundary) == "" || strings.TrimSpace(claim.EvidenceExpectation) == "" || claim.Status == "" {
+			return fmt.Errorf("claim %s lacks boundary, evidence expectation, or status", claim.ClaimID)
+		}
+		if claim.Source.PacketDigest != packetDigest || strings.TrimSpace(claim.Source.Locator) == "" {
+			return fmt.Errorf("claim %s lacks source traceability", claim.ClaimID)
+		}
+	}
+	return nil
+}
+
+func AcceptanceContractDigest(contract AcceptanceContract) string {
+	contract.ContractDigest = ""
+	b, _ := json.Marshal(contract)
+	return Digest(b)
+}
+
+func acceptanceBoundary(statement string) string {
+	lower := strings.ToLower(statement)
+	switch {
+	case strings.Contains(lower, "physical"), strings.Contains(lower, "iphone"), strings.Contains(lower, "camera"), strings.Contains(lower, "barcode"):
+		return "physical_device"
+	case strings.Contains(lower, "provider"), strings.Contains(lower, "metadata"), strings.Contains(lower, "network"):
+		return "real_external_service"
+	case strings.Contains(lower, "restart"), strings.Contains(lower, "reopen"), strings.Contains(lower, "persist"):
+		return "process_and_persistent_store"
+	default:
+		return "application"
+	}
+}
+
+func acceptanceEvidenceExpectation(statement string) string {
+	if acceptanceBoundary(statement) == "physical_device" {
+		return "human_or_environment_real"
+	}
+	return "direct_when_available"
 }
 
 func (s Store) LoadAmendments(id string) ([]Amendment, error) {

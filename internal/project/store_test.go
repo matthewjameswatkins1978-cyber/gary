@@ -190,6 +190,12 @@ func TestAmendmentVersionsAndArchiveLifecycle(t *testing.T) {
 	if ctx.Project.ProjectManualVersion != 2 || ctx.Manual.ManualVersion != 2 || ctx.Manual.Objective != "Build the amended book burner" {
 		t.Fatalf("amendment did not create version 2: %+v", ctx)
 	}
+	if ctx.Project.AcceptanceContractVersion != 2 {
+		t.Fatalf("amendment did not create contract version 2: %+v", ctx.Project)
+	}
+	if _, err := os.Stat(filepath.Join(store.Root(), "amend", "acceptance", "contract-v001.json")); err != nil {
+		t.Fatalf("historical acceptance contract missing: %v", err)
+	}
 	currentOld, err := os.ReadFile(filepath.Join(store.Root(), "amend", "manuals", "project-manual-v001.json"))
 	if err != nil || string(currentOld) != string(old) {
 		t.Fatal("historical manual was rewritten")
@@ -238,4 +244,74 @@ func TestChildContextIsNarrowAndProvenanceBound(t *testing.T) {
 	if strings.Contains(childTask, "Normal capture requires no typing") == false || !strings.Contains(childTask, `"child_task_id": "job-001"`) {
 		t.Fatal("hard constraint was not preserved in child context")
 	}
+}
+
+func TestAcceptanceContractIsDerivedAndPersisted(t *testing.T) {
+	store := NewStore(t.TempDir())
+	ctx, err := store.CreateAndIngest(context.Background(), "contract", "Contract", "", "", []byte("packet"), testManual)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Contract.SchemaVersion != 1 || ctx.Contract.ContractVersion != 1 || len(ctx.Contract.Claims) != 1 {
+		t.Fatalf("contract = %+v", ctx.Contract)
+	}
+	claim := ctx.Contract.Claims[0]
+	if claim.ClaimID != "AC-01" || claim.Boundary != "application" || claim.Status != "OPEN" {
+		t.Fatalf("derived claim = %+v", claim)
+	}
+	loaded, err := store.LoadAcceptanceContract("contract")
+	if err != nil || loaded.ContractDigest != ctx.Contract.ContractDigest {
+		t.Fatalf("loaded contract = %+v err=%v", loaded, err)
+	}
+	p, err := store.LoadProject("contract")
+	if err != nil || p.AcceptanceContractDigest == "" || p.AcceptanceContractVersion != 1 {
+		t.Fatalf("project contract pointer = %+v err=%v", p, err)
+	}
+}
+
+func TestAcceptanceContractTamperFailsClosed(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if _, err := store.CreateAndIngest(context.Background(), "contract-tamper", "Contract", "", "", []byte("packet"), testManual); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(store.Root(), "contract-tamper", "acceptance", "contract-v001.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(string(data), "focused test suite", "false claim", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LoadContext("contract-tamper"); !strings.Contains(err.Error(), ErrAcceptanceTampered.Error()) && !strings.Contains(err.Error(), ErrAcceptanceInvalid.Error()) {
+		t.Fatalf("tampered contract error = %v", err)
+	}
+}
+
+func TestLegacyProjectCanBeUpgradedAtInspectionBoundary(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if _, err := store.CreateAndIngest(context.Background(), "legacy-contract", "Legacy", "", "", []byte("packet"), testManual); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(store.Root(), "legacy-contract", "project.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = []byte(strings.Replace(string(data), `  "acceptance_contract_version": 1,\n`, "", 1))
+	data = []byte(strings.Replace(string(data), `  "acceptance_contract_digest": "`+ctxDigestForTest(store, "legacy-contract")+`",\n`, "", 1))
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LoadContext("legacy-contract"); err != nil {
+		t.Fatal(err)
+	}
+	contract, err := store.EnsureAcceptanceContract("legacy-contract")
+	if err != nil || contract.ContractVersion != 1 {
+		t.Fatalf("legacy upgrade contract = %+v err=%v", contract, err)
+	}
+}
+
+func ctxDigestForTest(store Store, id string) string {
+	p, _ := store.LoadProject(id)
+	return p.AcceptanceContractDigest
 }

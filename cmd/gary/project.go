@@ -107,6 +107,13 @@ func cmdProjectRead(mode string) {
 	} else {
 		ctx, err = project.DefaultStore().LoadContext(fs.Arg(0))
 	}
+	if err == nil && mode == "inspect" && ctx.Contract.ContractVersion == 0 {
+		if _, contractErr := project.DefaultStore().EnsureAcceptanceContract(fs.Arg(0)); contractErr != nil {
+			err = contractErr
+		} else {
+			ctx, err = project.DefaultStore().LoadContext(fs.Arg(0))
+		}
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "project %s: %v\n", mode, err)
 		os.Exit(1)
