@@ -201,9 +201,10 @@ func cmdMaster() {
 		_ = saveMasterStatus(status)
 		childJobs := make([]*jobs.Job, 0, len(plan.Jobs))
 		for i, child := range plan.Jobs {
-			childContext := projectCtx.ChildTaskForID(child.Task, child.ID)
+			runtimeID := masterRuntimeID("job", manifest.ID, wave, i+1)
+			childContext := projectCtx.ChildTaskForID(child.Task, runtimeID)
 			childJobs = append(childJobs, &jobs.Job{
-				ID:                   masterRuntimeID("job", manifest.ID, wave, i+1),
+				ID:                   runtimeID,
 				Repo:                 manifest.Repo,
 				BaseBranch:           stagingBranch,
 				Task:                 child.Task,
