@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-31T11:56:37Z",
+  "updated_at": "2026-08-31T11:56:39Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -47,11 +47,13 @@
       "project_id": "book-burner",
       "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
       "project_manual_version": 1,
+      "batch_job_id": "gary-run-book-burner-laun-w7-j1-1-20260831-115639",
       "state": "running",
       "repo": "https://github.com/matthewjameswatkins1978-cyber/book-burner.git",
       "base_branch": "gary/master-book-burner-laun-f29441",
       "result_branch": "gary/book-burner-laun-w7-j1-15996270",
-      "started_at": "2026-08-31T11:56:37Z"
+      "started_at": "2026-08-31T11:56:37Z",
+      "attempts": 1
     }
   ],
   "recent_jobs": [
