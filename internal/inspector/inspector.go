@@ -29,10 +29,11 @@ type PromptInput struct {
 // prose and conversational history are intentionally not parameters.
 func BuildPrompt(input PromptInput) string {
 	b, _ := json.MarshalIndent(struct {
-		Project  project.Project            `json:"project"`
-		Manual   project.ProjectManual      `json:"manual"`
-		Contract project.AcceptanceContract `json:"acceptance_contract"`
-	}{input.Context.Project, input.Context.Manual, input.Context.Contract}, "", "  ")
+		Project      project.Project              `json:"project"`
+		Manual       project.ProjectManual        `json:"manual"`
+		Contract     project.AcceptanceContract   `json:"acceptance_contract"`
+		Architecture project.ArchitectureManifest `json:"architecture_manifest,omitempty"`
+	}{input.Context.Project, input.Context.Manual, input.Context.Contract, input.Context.Architecture}, "", "  ")
 	claims := strings.Join(input.BuilderClaims, "\n- ")
 	if claims == "" {
 		claims = "none supplied"

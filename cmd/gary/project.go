@@ -158,12 +158,13 @@ func printProjectContext(ctx project.ProjectContext, jsonOutput bool) {
 	}
 	if jsonOutput {
 		_ = json.NewEncoder(os.Stdout).Encode(struct {
-			Project    project.Project            `json:"project"`
-			State      project.ProjectState       `json:"state"`
-			Manual     project.ProjectManual      `json:"manual"`
-			Contract   project.AcceptanceContract `json:"acceptance_contract,omitempty"`
-			Inspection project.InspectionLedger   `json:"latest_inspection,omitempty"`
-		}{ctx.Project, ctx.State, ctx.Manual, ctx.Contract, ledger})
+			Project      project.Project              `json:"project"`
+			State        project.ProjectState         `json:"state"`
+			Manual       project.ProjectManual        `json:"manual"`
+			Contract     project.AcceptanceContract   `json:"acceptance_contract,omitempty"`
+			Architecture project.ArchitectureManifest `json:"architecture_manifest,omitempty"`
+			Inspection   project.InspectionLedger     `json:"latest_inspection,omitempty"`
+		}{ctx.Project, ctx.State, ctx.Manual, ctx.Contract, ctx.Architecture, ledger})
 		return
 	}
 	fmt.Printf("Project: %s\nState: %s\nMaster packet: %s\nManual: v%d\nPhase: %s\n", ctx.Project.ProjectID, ctx.Project.State, ctx.Project.MasterPacketDigest, ctx.Project.ProjectManualVersion, ctx.State.CurrentPhase)
@@ -173,6 +174,9 @@ func printProjectContext(ctx project.ProjectContext, jsonOutput bool) {
 		for _, claim := range ctx.Contract.Claims {
 			fmt.Printf("  [%s] %s\n", claim.Importance, claim.Statement)
 		}
+	}
+	if ctx.Architecture.ManifestVersion > 0 {
+		fmt.Printf("Architecture manifest: v%d (%s)\n", ctx.Architecture.ManifestVersion, ctx.Architecture.ManifestDigest)
 	}
 	if ledger.InspectorRunID != "" {
 		fmt.Printf("Latest Inspector: %s (%s)\n", ledger.InspectorRunID, ledger.LedgerDigest)

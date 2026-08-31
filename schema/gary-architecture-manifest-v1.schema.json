@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gary.agent-yard.local/schema/gary-architecture-manifest-v1.schema.json",
+  "title": "GARY Architecture Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "contract_version", "contract_digest", "manifest_version", "components", "manifest_digest"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "project_id": { "type": "string", "minLength": 1 },
+    "contract_version": { "type": "integer", "minimum": 1 },
+    "contract_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "manifest_version": { "type": "integer", "minimum": 1 },
+    "manifest_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "supports", "justification_type"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "supports": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+          "justification_type": { "enum": ["explicit_requirement", "derived_obligation", "verification_support", "engineering_necessity"] },
+          "failure_if_omitted": { "type": "string" }
+        }
+      }
+    }
+  }
+}

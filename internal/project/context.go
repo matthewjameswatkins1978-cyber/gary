@@ -10,11 +10,12 @@ import (
 // PlannerInput is the normal compact context for a Yardmaster decision.
 func (c ProjectContext) PlannerInput() string {
 	b, _ := json.MarshalIndent(struct {
-		Project  Project            `json:"project"`
-		State    ProjectState       `json:"state"`
-		Manual   ProjectManual      `json:"manual"`
-		Contract AcceptanceContract `json:"acceptance_contract,omitempty"`
-	}{c.Project, c.State, c.Manual, c.Contract}, "", "  ")
+		Project      Project              `json:"project"`
+		State        ProjectState         `json:"state"`
+		Manual       ProjectManual        `json:"manual"`
+		Contract     AcceptanceContract   `json:"acceptance_contract,omitempty"`
+		Architecture ArchitectureManifest `json:"architecture_manifest,omitempty"`
+	}{c.Project, c.State, c.Manual, c.Contract, c.Architecture}, "", "  ")
 	return "DURABLE GARY PROJECT CONTEXT\n=============================\n" + string(b)
 }
 
@@ -26,18 +27,19 @@ func (c ProjectContext) PlannerInputWithSource() string {
 }
 
 type ChildContext struct {
-	ProjectID          string             `json:"project_id"`
-	MasterPacketDigest string             `json:"master_packet_digest"`
-	ManualVersion      int                `json:"project_manual_version"`
-	ChildTaskID        string             `json:"child_task_id"`
-	Task               string             `json:"task"`
-	Objective          string             `json:"objective"`
-	HardConstraints    []Requirement      `json:"hard_constraints,omitempty"`
-	Requirements       []Requirement      `json:"relevant_requirements,omitempty"`
-	AcceptanceCriteria []Requirement      `json:"acceptance_criteria,omitempty"`
-	Dependencies       []Requirement      `json:"known_dependencies,omitempty"`
-	ForbiddenChanges   []Requirement      `json:"forbidden_changes,omitempty"`
-	AcceptanceContract AcceptanceContract `json:"acceptance_contract,omitempty"`
+	ProjectID          string               `json:"project_id"`
+	MasterPacketDigest string               `json:"master_packet_digest"`
+	ManualVersion      int                  `json:"project_manual_version"`
+	ChildTaskID        string               `json:"child_task_id"`
+	Task               string               `json:"task"`
+	Objective          string               `json:"objective"`
+	HardConstraints    []Requirement        `json:"hard_constraints,omitempty"`
+	Requirements       []Requirement        `json:"relevant_requirements,omitempty"`
+	AcceptanceCriteria []Requirement        `json:"acceptance_criteria,omitempty"`
+	Dependencies       []Requirement        `json:"known_dependencies,omitempty"`
+	ForbiddenChanges   []Requirement        `json:"forbidden_changes,omitempty"`
+	AcceptanceContract AcceptanceContract   `json:"acceptance_contract,omitempty"`
+	Architecture       ArchitectureManifest `json:"architecture_manifest,omitempty"`
 }
 
 // BuildChildContext keeps the always-safety-critical material and selects
@@ -56,6 +58,7 @@ func (c ProjectContext) BuildChildContextForID(task, childTaskID string) ChildCo
 		AcceptanceCriteria: c.Manual.AcceptanceCriteria, Dependencies: c.Manual.KnownDependencies,
 		ForbiddenChanges:   c.Manual.ForbiddenChanges,
 		AcceptanceContract: c.Contract,
+		Architecture:       c.Architecture,
 	}
 	for _, r := range append(append([]Requirement{}, c.Manual.FunctionalRequirements...), c.Manual.NonFunctionalRequirements...) {
 		if relevant(r.Text, task) {

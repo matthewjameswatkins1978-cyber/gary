@@ -50,23 +50,25 @@ func IsValidID(id string) bool { return projectIDPattern.MatchString(id) }
 
 // Project is the durable identity and current-version pointer for a project.
 type Project struct {
-	Schema                     string `json:"schema"`
-	ProjectID                  string `json:"project_id"`
-	ProjectName                string `json:"project_name,omitempty"`
-	Repo                       string `json:"repo,omitempty"`
-	BaseBranch                 string `json:"base_branch,omitempty"`
-	State                      string `json:"state"`
-	MasterPacketDigest         string `json:"master_packet_digest"`
-	MasterPacketVersion        int    `json:"master_packet_version"`
-	ProjectManualVersion       int    `json:"project_manual_version"`
-	ManualDigest               string `json:"manual_digest,omitempty"`
-	AcceptanceContractVersion  int    `json:"acceptance_contract_version,omitempty"`
-	AcceptanceContractDigest   string `json:"acceptance_contract_digest,omitempty"`
-	LatestInspectorRunID       string `json:"latest_inspector_run_id,omitempty"`
-	LatestEvidenceLedgerDigest string `json:"latest_evidence_ledger_digest,omitempty"`
-	CreatedAt                  string `json:"created_at"`
-	UpdatedAt                  string `json:"updated_at"`
-	AcceptedAt                 string `json:"accepted_at,omitempty"`
+	Schema                      string `json:"schema"`
+	ProjectID                   string `json:"project_id"`
+	ProjectName                 string `json:"project_name,omitempty"`
+	Repo                        string `json:"repo,omitempty"`
+	BaseBranch                  string `json:"base_branch,omitempty"`
+	State                       string `json:"state"`
+	MasterPacketDigest          string `json:"master_packet_digest"`
+	MasterPacketVersion         int    `json:"master_packet_version"`
+	ProjectManualVersion        int    `json:"project_manual_version"`
+	ManualDigest                string `json:"manual_digest,omitempty"`
+	AcceptanceContractVersion   int    `json:"acceptance_contract_version,omitempty"`
+	AcceptanceContractDigest    string `json:"acceptance_contract_digest,omitempty"`
+	ArchitectureManifestVersion int    `json:"architecture_manifest_version,omitempty"`
+	ArchitectureManifestDigest  string `json:"architecture_manifest_digest,omitempty"`
+	LatestInspectorRunID        string `json:"latest_inspector_run_id,omitempty"`
+	LatestEvidenceLedgerDigest  string `json:"latest_evidence_ledger_digest,omitempty"`
+	CreatedAt                   string `json:"created_at"`
+	UpdatedAt                   string `json:"updated_at"`
+	AcceptedAt                  string `json:"accepted_at,omitempty"`
 }
 
 // AcceptanceContract is the durable observable boundary derived from the
@@ -89,6 +91,23 @@ type AcceptanceClaim struct {
 	EvidenceExpectation string    `json:"evidence_expectation"`
 	Status              string    `json:"status"`
 	Source              SourceRef `json:"source"`
+}
+
+type ArchitectureManifest struct {
+	SchemaVersion   int                     `json:"schema_version"`
+	ProjectID       string                  `json:"project_id"`
+	ContractVersion int                     `json:"contract_version"`
+	ContractDigest  string                  `json:"contract_digest"`
+	ManifestVersion int                     `json:"manifest_version"`
+	Components      []ArchitectureComponent `json:"components"`
+	ManifestDigest  string                  `json:"manifest_digest"`
+}
+
+type ArchitectureComponent struct {
+	ID                string   `json:"id"`
+	Supports          []string `json:"supports"`
+	JustificationType string   `json:"justification_type"`
+	FailureIfOmitted  string   `json:"failure_if_omitted,omitempty"`
 }
 
 // ProjectState separates transient progress from the durable project manual.
@@ -174,12 +193,13 @@ type Amendment struct {
 }
 
 type ProjectContext struct {
-	Project    Project
-	State      ProjectState
-	Manual     ProjectManual
-	Contract   AcceptanceContract
-	Amendments []Amendment
-	Packet     []byte
+	Project      Project
+	State        ProjectState
+	Manual       ProjectManual
+	Contract     AcceptanceContract
+	Architecture ArchitectureManifest
+	Amendments   []Amendment
+	Packet       []byte
 }
 
 type Store struct{ root string }
@@ -226,6 +246,9 @@ func (s Store) CreateProject(id, name, repo, baseBranch string, packet []byte) (
 		return Project{}, err
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "acceptance"), 0o755); err != nil {
+		return Project{}, err
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "architecture"), 0o755); err != nil {
 		return Project{}, err
 	}
 	if err := os.WriteFile(filepath.Join(dir, "source", "MASTER_PACKET.md"), packet, 0o644); err != nil {
@@ -327,11 +350,15 @@ func (s Store) LoadContext(id string) (ProjectContext, error) {
 	if contractErr != nil && !errors.Is(contractErr, ErrAcceptanceMissing) {
 		return ProjectContext{}, contractErr
 	}
+	architecture, architectureErr := s.loadArchitectureManifest(p)
+	if architectureErr != nil && !errors.Is(architectureErr, ErrAcceptanceMissing) {
+		return ProjectContext{}, architectureErr
+	}
 	amendments, err := s.LoadAmendments(id)
 	if err != nil {
 		return ProjectContext{}, err
 	}
-	return ProjectContext{Project: p, State: state, Manual: manual, Contract: contract, Amendments: amendments, Packet: packet}, nil
+	return ProjectContext{Project: p, State: state, Manual: manual, Contract: contract, Architecture: architecture, Amendments: amendments, Packet: packet}, nil
 }
 
 func (s Store) SaveManual(id string, manual ProjectManual) error {
@@ -376,6 +403,96 @@ func (s Store) LoadAcceptanceContract(id string) (AcceptanceContract, error) {
 		return AcceptanceContract{}, err
 	}
 	return s.loadAcceptanceContract(p)
+}
+
+func (s Store) LoadArchitectureManifest(id string) (ArchitectureManifest, error) {
+	p, err := s.LoadProject(id)
+	if err != nil {
+		return ArchitectureManifest{}, err
+	}
+	return s.loadArchitectureManifest(p)
+}
+
+func (s Store) loadArchitectureManifest(p Project) (ArchitectureManifest, error) {
+	if p.ArchitectureManifestVersion < 1 || p.ArchitectureManifestDigest == "" {
+		return ArchitectureManifest{}, fmt.Errorf("%w: architecture manifest for %s", ErrAcceptanceMissing, p.ProjectID)
+	}
+	path := filepath.Join(s.projectDir(p.ProjectID), "architecture", fmt.Sprintf("manifest-v%03d.json", p.ArchitectureManifestVersion))
+	var manifest ArchitectureManifest
+	if err := readJSON(path, &manifest); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return ArchitectureManifest{}, fmt.Errorf("%w: architecture manifest for %s", ErrAcceptanceMissing, p.ProjectID)
+		}
+		return ArchitectureManifest{}, fmt.Errorf("%w: %v", ErrAcceptanceInvalid, err)
+	}
+	if err := ValidateArchitectureManifest(manifest, p.ProjectID, p.AcceptanceContractVersion, p.AcceptanceContractDigest, p.ArchitectureManifestVersion); err != nil {
+		return ArchitectureManifest{}, fmt.Errorf("%w: %v", ErrAcceptanceInvalid, err)
+	}
+	if manifest.ManifestDigest != p.ArchitectureManifestDigest || ArchitectureManifestDigest(manifest) != manifest.ManifestDigest {
+		return ArchitectureManifest{}, fmt.Errorf("%w: architecture manifest for %s", ErrAcceptanceTampered, p.ProjectID)
+	}
+	return manifest, nil
+}
+
+// SaveArchitectureManifest is a versioned control-plane path. The manifest
+// must be bound to the current protected Acceptance Contract and cannot be
+// overwritten once published.
+func (s Store) SaveArchitectureManifest(manifest ArchitectureManifest) error {
+	p, err := s.LoadProject(manifest.ProjectID)
+	if err != nil {
+		return err
+	}
+	if manifest.ManifestVersion != p.ArchitectureManifestVersion+1 || manifest.ContractVersion != p.AcceptanceContractVersion || manifest.ContractDigest != p.AcceptanceContractDigest {
+		return fmt.Errorf("%w: architecture manifest provenance or version mismatch", ErrAcceptanceInvalid)
+	}
+	if err := ValidateArchitectureManifest(manifest, p.ProjectID, p.AcceptanceContractVersion, p.AcceptanceContractDigest, manifest.ManifestVersion); err != nil {
+		return err
+	}
+	path := filepath.Join(s.projectDir(manifest.ProjectID), "architecture", fmt.Sprintf("manifest-v%03d.json", manifest.ManifestVersion))
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("%w: architecture manifest version already exists", ErrAcceptanceInvalid)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := writeJSON(path, manifest); err != nil {
+		return err
+	}
+	p.ArchitectureManifestVersion = manifest.ManifestVersion
+	p.ArchitectureManifestDigest = manifest.ManifestDigest
+	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return writeJSON(filepath.Join(s.projectDir(manifest.ProjectID), "project.json"), p)
+}
+
+func ValidateArchitectureManifest(manifest ArchitectureManifest, projectID string, contractVersion int, contractDigest string, version int) error {
+	if manifest.SchemaVersion != 1 || manifest.ProjectID != projectID || manifest.ContractVersion != contractVersion || manifest.ContractDigest != contractDigest || manifest.ManifestVersion != version || version < 1 {
+		return errors.New("architecture manifest provenance or version mismatch")
+	}
+	if len(manifest.Components) == 0 {
+		return errors.New("architecture manifest has no components")
+	}
+	seen := map[string]bool{}
+	for _, component := range manifest.Components {
+		if strings.TrimSpace(component.ID) == "" || seen[component.ID] || len(component.Supports) == 0 {
+			return fmt.Errorf("architecture component %q lacks unique identity or acceptance lineage", component.ID)
+		}
+		seen[component.ID] = true
+		switch component.JustificationType {
+		case "explicit_requirement", "derived_obligation", "verification_support":
+		case "engineering_necessity":
+			if strings.TrimSpace(component.FailureIfOmitted) == "" {
+				return fmt.Errorf("architecture component %s lacks failure_if_omitted", component.ID)
+			}
+		default:
+			return fmt.Errorf("architecture component %s has invalid justification type", component.ID)
+		}
+	}
+	return nil
+}
+
+func ArchitectureManifestDigest(manifest ArchitectureManifest) string {
+	manifest.ManifestDigest = ""
+	b, _ := json.Marshal(manifest)
+	return Digest(b)
 }
 
 func (s Store) loadAcceptanceContract(p Project) (AcceptanceContract, error) {
