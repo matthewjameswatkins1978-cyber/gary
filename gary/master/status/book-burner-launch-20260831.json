@@ -3,13 +3,12 @@
   "project_id": "book-burner",
   "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
   "project_manual_version": 1,
-  "state": "failed",
-  "updated_at": "2026-08-31T12:11:07Z",
+  "state": "done",
+  "updated_at": "2026-08-31T12:26:40Z",
   "staging_branch": "gary/master-book-burner-laun-f29441",
-  "wave": 8,
-  "summary": "Core domain, metadata integration, and capture workflow with atomic photo store are accepted. Scheduling the Export \u0026 Archiving subsystem (CSV/JSON/Manifest generation and ZIP archive packaging).",
-  "error": "Master run was canceled after Wave 7 integration before Wave 8 worker dispatch; preserved staging is resumable.",
-  "planner_memory": "Accepted: Core domain models (c199371), Metadata provider adapters \u0026 composite fallback (ff2c2d6), Barcode scanner seam, capture state machine, and atomic photo store (78f0c15). Next slice: Export and Archiving engine (books.csv, books.json, manifest.json, ZIP packaging with photos). Outstanding after: SwiftUI UI views (Capture, Books List, Book Detail, Export share sheet).",
+  "wave": 11,
+  "summary": "Book Burner 0.1 Capture Edition is code-complete with all domain models, async metadata providers, continuous capture state machine, atomic photo storage, ZIP export engine, SwiftUI views, unit test suites, and master verification runner implemented and documented as CODE COMPLETE, PHYSICAL ACCEPTANCE PENDING.",
+  "planner_memory": "Accepted commits: c199371 (core domain \u0026 BBID allocator), ff2c2d6 (metadata integration \u0026 fallback), 78f0c15 (barcode seam, capture state machine, photo store), 23879c0 (ZIP export engine), be498d1 (SwiftUI views \u0026 state), 2cca14b (verify_all.py \u0026 README physical acceptance documentation). Current state: All subsystems implemented, tested, and mechanically verified. Physical iPhone 25-book and 50-book acceptance protocols documented. Ready for physical deployment.",
   "waves": [
     {
       "wave": 1,
@@ -667,17 +666,221 @@
       "integrated": [
         "book-burner-laun-w7-j1"
       ]
+    },
+    {
+      "wave": 8,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 8.512024035,
+      "plan_summary": "Core domain, metadata integration, barcode acquisition seam, capture state machine, and atomic photo storage are implemented and verified. Scheduling Wave 8 to implement the ZIP export engine (books.csv, books.json, manifest.json, photos/ directory).",
+      "results": [
+        {
+          "job_id": "book-burner-laun-w8-j1",
+          "batch_job_id": "gary-run-book-burner-laun-w8-j1-1-20260831-121259",
+          "branch": "gary/book-burner-laun-w8-j1-391ed5f6",
+          "commit_sha": "23879c0",
+          "accepted": true,
+          "duration_seconds": 339.033137198,
+          "estimated_minutes": 6,
+          "patch_bytes": 36787036,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "project_id": "book-burner",
+          "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+          "project_manual_version": 1,
+          "model_cost_estimated": 0.10298862,
+          "compute_cost_estimated": 0.0016965564850855,
+          "total_cost_estimated": 0.1046851764850855,
+          "cost": {
+            "pricing_status": "MIXED",
+            "currency": "USD",
+            "pricing_version": "2026-08-30",
+            "worker_model_cost_usd": 0.10298862,
+            "model_cost_usd": 0.10298862,
+            "compute_cost_usd": 0.0016965564850855,
+            "total_cost_usd": 0.1046851764850855,
+            "components": [
+              {
+                "kind": "worker",
+                "model_requested": "gemini-3.5-flash-lite",
+                "usage_source": "PROVIDER_REPORTED",
+                "input_tokens": 757462,
+                "cached_input_tokens": 520074,
+                "fresh_input_tokens": 237388,
+                "output_tokens": 6468,
+                "total_tokens": 763930,
+                "model_cost_usd": 0.10298862,
+                "compute_cost_usd": 0.0016965564850855,
+                "total_cost_usd": 0.1046851764850855,
+                "runtime_seconds": 295.053301754,
+                "machine_type": "e2-small",
+                "provisioning_model": "STANDARD",
+                "pricing_version": "2026-08-30",
+                "pricing_effective_date": "2026-08-30",
+                "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+                "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+              }
+            ],
+            "unmetered_components": [
+              "Batch compute is estimated from observed runtime; invoice data was not queried"
+            ]
+          }
+        }
+      ],
+      "integrated": [
+        "book-burner-laun-w8-j1"
+      ]
+    },
+    {
+      "wave": 9,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 11.786372943,
+      "plan_summary": "Core domain, metadata integration, rapid capture workflow, atomic photo store, and ZIP export engine are all accepted. Now scheduling Wave 9 to implement the SwiftUI presentation layer (MainTabView, CaptureView, BooksListView, BookDetailView, LocationPickerView, and ExportView) with search, filtering, accessibility, and state management.",
+      "results": [
+        {
+          "job_id": "book-burner-laun-w9-j1",
+          "batch_job_id": "gary-run-book-burner-laun-w9-j1-1-20260831-121858",
+          "branch": "gary/book-burner-laun-w9-j1-7511a1ea",
+          "commit_sha": "be498d1",
+          "accepted": true,
+          "duration_seconds": 228.188013292,
+          "estimated_minutes": 6,
+          "patch_bytes": 40350,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "project_id": "book-burner",
+          "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+          "project_manual_version": 1,
+          "model_cost_estimated": 0.11956996,
+          "compute_cost_estimated": 0.0011314769645359999,
+          "total_cost_estimated": 0.120701436964536,
+          "cost": {
+            "pricing_status": "MIXED",
+            "currency": "USD",
+            "pricing_version": "2026-08-30",
+            "worker_model_cost_usd": 0.11956996,
+            "model_cost_usd": 0.11956996,
+            "compute_cost_usd": 0.0011314769645359999,
+            "total_cost_usd": 0.120701436964536,
+            "components": [
+              {
+                "kind": "worker",
+                "model_requested": "gemini-3.5-flash-lite",
+                "usage_source": "PROVIDER_REPORTED",
+                "input_tokens": 872642,
+                "cached_input_tokens": 617732,
+                "fresh_input_tokens": 254910,
+                "output_tokens": 9826,
+                "total_tokens": 882468,
+                "model_cost_usd": 0.11956996,
+                "compute_cost_usd": 0.0011314769645359999,
+                "total_cost_usd": 0.120701436964536,
+                "runtime_seconds": 196.778602528,
+                "machine_type": "e2-small",
+                "provisioning_model": "STANDARD",
+                "pricing_version": "2026-08-30",
+                "pricing_effective_date": "2026-08-30",
+                "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+                "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+              }
+            ],
+            "unmetered_components": [
+              "Batch compute is estimated from observed runtime; invoice data was not queried"
+            ]
+          }
+        }
+      ],
+      "integrated": [
+        "book-burner-laun-w9-j1"
+      ]
+    },
+    {
+      "wave": 10,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 12.459964211,
+      "plan_summary": "Core domain, metadata integration, rapid capture workflow, atomic photo store, ZIP export engine, and SwiftUI presentation layer are all implemented. Scheduling Wave 10 to create the master end-to-end verification script and document the physical acceptance checklist, architecture summary, build instructions, and export schema in README.md.",
+      "results": [
+        {
+          "job_id": "book-burner-laun-w10-j1",
+          "batch_job_id": "gary-run-book-burner-laun-w10-j1-1-20260831-122304",
+          "branch": "gary/book-burner-laun-w10-j1-ff1f07cd",
+          "commit_sha": "2cca14b",
+          "accepted": true,
+          "duration_seconds": 204.007953311,
+          "estimated_minutes": 5,
+          "patch_bytes": 12804,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "project_id": "book-burner",
+          "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
+          "project_manual_version": 1,
+          "model_cost_estimated": 0.04635239000000001,
+          "compute_cost_estimated": 0.00105695188250775,
+          "total_cost_estimated": 0.047409341882507755,
+          "cost": {
+            "pricing_status": "MIXED",
+            "currency": "USD",
+            "pricing_version": "2026-08-30",
+            "worker_model_cost_usd": 0.04635239000000001,
+            "model_cost_usd": 0.04635239000000001,
+            "compute_cost_usd": 0.00105695188250775,
+            "total_cost_usd": 0.047409341882507755,
+            "components": [
+              {
+                "kind": "worker",
+                "model_requested": "gemini-3.5-flash-lite",
+                "usage_source": "PROVIDER_REPORTED",
+                "input_tokens": 285317,
+                "cached_input_tokens": 178973,
+                "fresh_input_tokens": 106344,
+                "output_tokens": 3632,
+                "total_tokens": 288949,
+                "model_cost_usd": 0.04635239000000001,
+                "compute_cost_usd": 0.00105695188250775,
+                "total_cost_usd": 0.047409341882507755,
+                "runtime_seconds": 183.817718697,
+                "machine_type": "e2-small",
+                "provisioning_model": "STANDARD",
+                "pricing_version": "2026-08-30",
+                "pricing_effective_date": "2026-08-30",
+                "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+                "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+              }
+            ],
+            "unmetered_components": [
+              "Batch compute is estimated from observed runtime; invoice data was not queried"
+            ]
+          }
+        }
+      ],
+      "integrated": [
+        "book-burner-laun-w10-j1"
+      ]
+    },
+    {
+      "wave": 11,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 7.049619762,
+      "plan_summary": "Book Burner 0.1 Capture Edition is code-complete with all domain models, async metadata providers, continuous capture state machine, atomic photo storage, ZIP export engine, SwiftUI views, unit test suites, and master verification runner implemented and documented as CODE COMPLETE, PHYSICAL ACCEPTANCE PENDING."
     }
   ],
   "cost": {
     "pricing_status": "MIXED",
     "currency": "USD",
     "pricing_version": "2026-08-30",
-    "yardmaster_model_cost_usd": 0.41662950000000004,
-    "worker_model_cost_usd": 1.33531818,
-    "model_cost_usd": 1.75194768,
-    "compute_cost_usd": 0.017159641717069,
-    "total_cost_usd": 1.7691073217170694,
+    "yardmaster_model_cost_usd": 0.5155402500000001,
+    "worker_model_cost_usd": 1.60422915,
+    "model_cost_usd": 2.1197694,
+    "compute_cost_usd": 0.021044627049198253,
+    "total_cost_usd": 2.140814027049199,
     "components": [
       {
         "kind": "yardmaster",
@@ -1102,9 +1305,144 @@
         "pricing_effective_date": "2026-08-30",
         "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
         "provider_response_id": "QG2Vasi5JoLe8-0PvJDrgAY"
+      },
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 27942,
+        "fresh_input_tokens": 27942,
+        "output_tokens": 541,
+        "thinking_tokens": 416,
+        "total_tokens": 28899,
+        "model_cost_usd": 0.02298525,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.02298525,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "wm-VapnEE-aPq8YP7cnO4Aw"
+      },
+      {
+        "kind": "worker",
+        "model_requested": "gemini-3.5-flash-lite",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 757462,
+        "cached_input_tokens": 520074,
+        "fresh_input_tokens": 237388,
+        "output_tokens": 6468,
+        "total_tokens": 763930,
+        "model_cost_usd": 0.10298862,
+        "compute_cost_usd": 0.0016965564850855,
+        "total_cost_usd": 0.1046851764850855,
+        "runtime_seconds": 295.053301754,
+        "machine_type": "e2-small",
+        "provisioning_model": "STANDARD",
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+      },
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 30041,
+        "fresh_input_tokens": 30041,
+        "output_tokens": 591,
+        "thinking_tokens": 808,
+        "total_tokens": 31440,
+        "model_cost_usd": 0.024747,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.024747,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "JXGVaqj5EoibpucPlLCgqQE"
+      },
+      {
+        "kind": "worker",
+        "model_requested": "gemini-3.5-flash-lite",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 872642,
+        "cached_input_tokens": 617732,
+        "fresh_input_tokens": 254910,
+        "output_tokens": 9826,
+        "total_tokens": 882468,
+        "model_cost_usd": 0.11956996,
+        "compute_cost_usd": 0.0011314769645359999,
+        "total_cost_usd": 0.120701436964536,
+        "runtime_seconds": 196.778602528,
+        "machine_type": "e2-small",
+        "provisioning_model": "STANDARD",
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+      },
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 31124,
+        "fresh_input_tokens": 31124,
+        "output_tokens": 423,
+        "thinking_tokens": 788,
+        "total_tokens": 32335,
+        "model_cost_usd": 0.02492925,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.02492925,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "G3KVapizIOOPq8YPvOfjiAk"
+      },
+      {
+        "kind": "worker",
+        "model_requested": "gemini-3.5-flash-lite",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 285317,
+        "cached_input_tokens": 178973,
+        "fresh_input_tokens": 106344,
+        "output_tokens": 3632,
+        "total_tokens": 288949,
+        "model_cost_usd": 0.04635239000000001,
+        "compute_cost_usd": 0.00105695188250775,
+        "total_cost_usd": 0.047409341882507755,
+        "runtime_seconds": 183.817718697,
+        "machine_type": "e2-small",
+        "provisioning_model": "STANDARD",
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+      },
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 33924,
+        "fresh_input_tokens": 33924,
+        "output_tokens": 215,
+        "thinking_tokens": 243,
+        "total_tokens": 34382,
+        "model_cost_usd": 0.026249250000000002,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.026249250000000002,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "-XKVap7DLvagpucP2vmm-Ao"
       }
     ],
     "unmetered_components": [
+      "Batch compute is estimated from observed runtime; invoice data was not queried",
+      "Batch compute is estimated from observed runtime; invoice data was not queried",
+      "Batch compute is estimated from observed runtime; invoice data was not queried",
       "Batch compute is estimated from observed runtime; invoice data was not queried",
       "Batch compute is estimated from observed runtime; invoice data was not queried",
       "Batch compute is estimated from observed runtime; invoice data was not queried",
