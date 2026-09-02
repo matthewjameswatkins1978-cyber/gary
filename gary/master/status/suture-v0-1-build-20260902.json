@@ -7,9 +7,9 @@
   "updated_at": "2026-09-02T14:26:52Z",
   "staging_branch": "gary/master-suture-v0-1-buil-84399e",
   "wave": 13,
-  "summary": "Core execution pipeline accepted. Implementing Stage C Strict JSON provider in src/provider/json.rs with source-preserving mutations and validation.",
+  "summary": "Core pipeline is built; repair JSON source preservation before continuing remaining Suture stages.",
   "error": "master job exhausted this run's wave budget (6 waves, through wave 13) without completion",
-  "planner_memory": "ACCEPTED: d3bdbfd (Stage A foundation), 4608d94 (src/engine.rs), 7b2d13a (src/workspace.rs), b863b55 (src/provider/text.rs), 865ad20 (src/pipeline.rs).\nCURRENT STATE: All core engine, workspace, text provider, and execution pipeline tests passing.\nCURRENT STAGE: Stage C Strict JSON provider.\nOUTSTANDING SLICE: Implement `src/provider/json.rs` with JsonProvider, JsonOperation (Set, Insert, Delete, RenameKey), JSON pointer/key targeting, strict JSON validation, byte-span plan generation, and unit tests.\nCONSTRAINTS: Single crate suture v0.1.0, #![forbid(unsafe_code)], clean cargo test/clippy, source-preserving JSON mutations.",
+  "planner_memory": "ACCEPTED: d3bdbfd foundation; 4608d94 engine; 7b2d13a workspace; b863b55 text provider; 865ad20 pipeline; 17cea62 JSON provider provisionally integrated. REQUIRED REPAIR BEFORE STAGE D: audit src/provider/json.rs against packet Invariant 5/source-preservation. Current implementation reserializes the whole JSON document into one full-file ByteEdit, so unrelated whitespace/formatting can change. Replace with target-span/source-preserving edits and add a regression test proving untouched byte regions remain byte-for-byte identical. THEN continue Stage D TOML, Stage E platform/path hardening, Stage F adversarial benchmark, Stage G docs/package/release. Do not declare done until full packet acceptance passes.",
   "waves": [
     {
       "wave": 1,
