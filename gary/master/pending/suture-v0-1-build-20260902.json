@@ -12,5 +12,6 @@
     "cargo test",
     "cargo clippy --all-targets --all-features -- -D warnings"
   ],
-  "_owner_terminated": true
+  "_owner_terminated": true,
+  "_termination_nonce": 2
 }
