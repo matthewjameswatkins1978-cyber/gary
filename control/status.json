@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-02T18:28:17Z",
+  "updated_at": "2026-09-02T22:58:42Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -93,6 +93,17 @@
       "result_branch": "gary/telltail-v03-gar-w1-j1-18982f3b",
       "started_at": "2026-09-02T18:28:15Z",
       "attempts": 1
+    },
+    {
+      "id": "telltail-v03-fre-w1-j1",
+      "project_id": "telltail-v03-fresh",
+      "master_packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+      "project_manual_version": 1,
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
+      "base_branch": "gary/master-telltail-v03-fre-3ed4ed",
+      "result_branch": "gary/telltail-v03-fre-w1-j1-817ee999",
+      "started_at": "2026-09-02T22:58:42Z"
     }
   ],
   "recent_jobs": [
