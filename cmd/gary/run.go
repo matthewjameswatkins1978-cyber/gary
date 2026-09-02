@@ -225,6 +225,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	var lastProgressState string
 	var prevGCSPatch string
 	lastBatchJobID := ""
+	lastBatchState := ""
 	progressHistory := make([]string, 0)
 	lowProgressStreak := 0
 	repairCount := 0
@@ -356,12 +357,14 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		attemptCost := workerCostComponent(model, usageText, attemptRuntime)
 		runCost.Add(attemptCost)
 
-		batchSucceeded := status.State() == "SUCCEEDED"
+		batchState := status.State()
+		lastBatchState = batchState
+		batchSucceeded := batchState == "SUCCEEDED"
 
 		patchData := downloadGCSFile(attemptDir, attemptGCSPath+"/result.patch")
 		acceptOutput := downloadGCSFile(attemptDir, attemptGCSPath+"/acceptance_output.txt")
 
-		// If GCS download failed, try to extract from batch logs
+		// If GCS download failed, recover from Batch logs where possible.
 		if patchData == "" {
 			patchData = extractFromBatchLogs(cfg.GCPProject, cfg.GCPRegion, jobName, "GARY_PATCH_B64")
 		}
@@ -377,7 +380,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			lastAcceptance = acceptOutput
 		}
 
-		if batchSucceeded && strings.Contains(lastAcceptance, "SUPERVISION_TERMINAL=STOP_AND_REPLAN") {
+		if strings.Contains(lastAcceptance, "SUPERVISION_TERMINAL=STOP_AND_REPLAN") {
 			lastFailure = fmt.Sprintf("Yardmaster stopped worker for replan; partial patch/evidence preserved at %s", attemptGCSPath)
 			finalStatus = "REPLAN_REQUIRED"
 			logPrint(prefix, "  %s", lastFailure)
@@ -385,33 +388,23 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			break
 		}
 
-		if batchSucceeded && strings.TrimSpace(patchData) == "" {
-			batchSucceeded = false
-			lastFailure = "worker completed without a non-empty result patch"
-			logPrintln(prefix, "  BATCH SUCCEEDED but produced no patch — refusing empty writeback")
-		}
-
-		if batchSucceeded {
-			logPrintln(prefix, "  BATCH SUCCEEDED — verifying locally")
-
-			// If GCS upload failed (patchData empty), try to get patch from GitHub
-			if patchData == "" {
-				logPrintln(prefix, "  No patch from GCS — pulling from GitHub")
-				workDir := filepath.Join(attemptDir, "repo")
-				if err := gitops.Clone(job.Repo, workDir); err == nil {
-					if err := gitops.FetchBranch(workDir, "origin", garyBranch); err == nil {
-						if err := gitops.Checkout(workDir, garyBranch); err == nil {
-							patchData, _ = gitops.FormatPatch(workDir, job.BaseBranch)
-						}
-					}
-				}
+		// Handover invariant: Batch state is transport evidence, not product
+		// acceptance. Whenever a recoverable candidate exists, the trusted
+		// control layer reruns the child's acceptance in a fresh clone before
+		// deciding whether the work passed, failed, or needs repair.
+		candidateAvailable := strings.TrimSpace(patchData) != ""
+		if candidateAvailable {
+			if batchSucceeded {
+				logPrintln(prefix, "  BATCH SUCCEEDED — independently verifying candidate")
+			} else {
+				logPrint(prefix, "  BATCH %s BUT CANDIDATE EXISTS — independently verifying candidate", batchState)
 			}
 
 			localResult := runLocalAcceptanceClassified(attemptDir, job, garyBranch, patchData, prefix)
 			if localResult.blocker {
 				finalStatus = "BLOCKED"
 				lastFailure = localResult.err.Error()
-				logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
+				logPrint(prefix, "  TRUSTED VERIFICATION BLOCKED: %s", lastFailure)
 				break
 			}
 			if localResult.passed {
@@ -433,6 +426,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 					MasterPacketDigest:   job.MasterPacketDigest,
 					ProjectManualVersion: job.ProjectManualVersion,
 					BatchJobID:           jobName,
+					BatchState:           batchState,
 					Branch:               garyBranch,
 					CommitSHA:            commitSHA,
 					Accepted:             true,
@@ -453,10 +447,16 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				snapshotJobComplete(job.ID, result)
 				return result
 			}
-			lastFailure = "Local acceptance failed after Batch success.\n" + lastAcceptance
-		} else {
-			logPrint(prefix, "  BATCH %s", status.State())
-			lastFailure = fmt.Sprintf("Batch job ended with state: %s\n", status.State())
+			lastFailure = fmt.Sprintf("trusted acceptance rejected recovered candidate after Batch state %s: %v", batchState, localResult.err)
+		}
+
+		if !batchSucceeded {
+			logPrint(prefix, "  BATCH %s", batchState)
+			if lastFailure == "" {
+				lastFailure = fmt.Sprintf("Batch job ended with state: %s\n", batchState)
+			} else {
+				lastFailure += fmt.Sprintf("\nBatch job ended with state: %s\n", batchState)
+			}
 			failureLogs := ""
 			if status.UID != "" {
 				if logs, logErr := batch.RecentLogs(cfg.GCPProject, status.UID, 12); logErr == nil {
@@ -470,8 +470,6 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			if lastAcceptance != "" {
 				lastFailure += "\nWorker acceptance output:\n" + lastAcceptance
 			}
-			// Only strong infrastructure/auth signatures in the worker execution logs
-			// stop the reasoning loop. Test/API failures remain repair evidence.
 			if isServiceEnvironmentBlocker(failureLogs) {
 				finalStatus = "BLOCKED"
 				if actualAttempts > 0 {
@@ -480,8 +478,10 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", strings.TrimSpace(failureLogs))
 				break
 			}
+		} else if !candidateAvailable {
+			lastFailure = "worker completed without a recoverable result patch"
+			logPrintln(prefix, "  BATCH SUCCEEDED but produced no patch — refusing empty writeback")
 		}
-
 		os.RemoveAll(attemptDir)
 
 		progressState := "unknown"
@@ -611,6 +611,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		JobID:                job.ID,
 		ProjectID:            job.ProjectID,
 		BatchJobID:           lastBatchJobID,
+		BatchState:           lastBatchState,
 		MasterPacketDigest:   job.MasterPacketDigest,
 		ProjectManualVersion: job.ProjectManualVersion,
 		Branch:               garyBranch,
@@ -927,22 +928,12 @@ func runLocalAcceptanceClassified(tmpDir string, job *jobs.Job, garyBranch, patc
 	defer cleanupPython()
 
 	for _, command := range job.Acceptance {
-		for _, cmd := range acceptanceCommandSegments(command) {
-			parts := acceptanceCommandParts(cmd, pythonBin)
-			if len(parts) == 0 {
-				err := errors.New("empty acceptance command")
-				logPrint(prefix, "    LOCAL ENVIRONMENT BLOCKED: %v", err)
-				return fail(err, true)
-			}
-			c := exec.Command(parts[0], parts[1:]...)
-			c.Dir = workDir
-			out, err := c.CombinedOutput()
-			if err != nil {
-				logPrint(prefix, "    LOCAL FAIL: %s", strings.TrimSpace(string(out)))
-				return fail(fmt.Errorf("local acceptance command %q failed: %w", cmd, err), false)
-			}
-			logPrintln(prefix, "    LOCAL PASS")
+		out, err := runAcceptanceCommand(workDir, command, pythonBin)
+		if err != nil {
+			logPrint(prefix, "    LOCAL FAIL: %s", strings.TrimSpace(string(out)))
+			return fail(fmt.Errorf("local acceptance command %q failed: %w", command, err), false)
 		}
+		logPrintln(prefix, "    LOCAL PASS")
 	}
 
 	if err := cleanupDisposableWorkerArtifacts(workDir); err != nil {
