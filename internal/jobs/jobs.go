@@ -21,6 +21,8 @@ type Job struct {
 type RunResult struct {
 	JobID            string  `json:"job_id"`
 	BatchJobID       string  `json:"batch_job_id"`
+	// BatchState is transport/execution-wrapper evidence, not product acceptance.
+	BatchState       string  `json:"batch_state,omitempty"`
 	Branch           string  `json:"branch"`
 	CommitSHA        string  `json:"commit_sha"`
 	Accepted         bool    `json:"accepted"`
