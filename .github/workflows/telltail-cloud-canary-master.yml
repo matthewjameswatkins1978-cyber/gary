@@ -1,0 +1,72 @@
+name: Telltail cloud canary master
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/telltail-cloud-canary-master.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  cloud-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GARY_GCP_PROJECT: ${{ vars.GARY_GCP_PROJECT }}
+      GARY_GCP_REGION: ${{ vars.GARY_GCP_REGION }}
+      GARY_WIF_PROVIDER: ${{ vars.GARY_WIF_PROVIDER }}
+      GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate to Google Cloud with OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GARY_WIF_PROVIDER }}
+          service_account: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Submit Telltail Batch canary
+        id: submit
+        run: |
+          set -euo pipefail
+          JOB_ID="telltail-canary-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
+          cat > /tmp/telltail-job.json <<JSON
+          {
+            "taskGroups": [{
+              "taskSpec": {
+                "runnables": [{
+                  "container": {
+                    "imageUri": "gcr.io/google-containers/busybox",
+                    "entrypoint": "/bin/sh",
+                    "commands": ["-lc", "echo TELLTAIL_CLOUD_CANARY_OK; sleep 1"]
+                  }
+                }],
+                "computeResource": {"cpuMilli": 1000, "memoryMib": 512},
+                "maxRetryCount": 0,
+                "maxRunDuration": "120s"
+              },
+              "taskCount": 1,
+              "parallelism": 1
+            }],
+            "logsPolicy": {"destination": "CLOUD_LOGGING"},
+            "labels": {"app": "telltail", "kind": "cloud-canary"}
+          }
+          JSON
+          gcloud batch jobs submit "$JOB_ID" --project "$GARY_GCP_PROJECT" --location "$GARY_GCP_REGION" --config /tmp/telltail-job.json
+      - name: Wait for Batch success
+        run: |
+          set -euo pipefail
+          JOB_ID="${{ steps.submit.outputs.job_id }}"
+          for i in $(seq 1 60); do
+            STATE="$(gcloud batch jobs describe "$JOB_ID" --project "$GARY_GCP_PROJECT" --location "$GARY_GCP_REGION" --format='value(status.state)')"
+            echo "state=$STATE"
+            case "$STATE" in
+              SUCCEEDED) exit 0 ;;
+              FAILED|DELETION_IN_PROGRESS) exit 1 ;;
+            esac
+            sleep 10
+          done
+          exit 1
