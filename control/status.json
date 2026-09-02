@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-02T13:06:34Z",
+  "updated_at": "2026-09-02T13:11:50Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -41,28 +41,9 @@
       "result_branch": "gary/judgement-call-b-w10-j1-a9ff29c1",
       "started_at": "2026-08-30T03:22:32Z",
       "attempts": 2
-    },
-    {
-      "id": "rust-clean-canary-20260902",
-      "batch_job_id": "gary-run-rust-clean-canary-20260902-1-20260902-130634",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
-      "base_branch": "master",
-      "result_branch": "gary/rust-clean-canary-20260902-8d183dbb",
-      "started_at": "2026-09-02T13:06:33Z",
-      "attempts": 1
     }
   ],
   "recent_jobs": [
-    {
-      "id": "calle-tethers-ga-w3-j1",
-      "state": "failed",
-      "result_branch": "gary/calle-tethers-ga-w3-j1-5bed2311",
-      "finished_at": "2026-08-30T13:46:16Z",
-      "attempts": 2,
-      "est_cost": 0.05349703773674401,
-      "summary": "BUDGET_STOPPED"
-    },
     {
       "id": "book-burner-laun-w1-j1",
       "project_id": "book-burner",
@@ -1091,6 +1072,50 @@
             "compute_cost_usd": 0.00176834931203675,
             "total_cost_usd": 0.047200849312036754,
             "runtime_seconds": 307.539010789,
+            "machine_type": "e2-small",
+            "provisioning_model": "STANDARD",
+            "pricing_version": "2026-08-30",
+            "pricing_effective_date": "2026-08-30",
+            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+            "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+          }
+        ],
+        "unmetered_components": [
+          "Batch compute is estimated from observed runtime; invoice data was not queried"
+        ]
+      },
+      "summary": "DONE"
+    },
+    {
+      "id": "rust-clean-canary-20260902",
+      "batch_job_id": "gary-run-rust-clean-canary-20260902-1-20260902-130634",
+      "state": "accepted",
+      "result_branch": "gary/rust-clean-canary-20260902-8d183dbb",
+      "result_commit": "0f9e796",
+      "finished_at": "2026-09-02T13:11:50Z",
+      "attempts": 1,
+      "est_cost": 0.062713834795953,
+      "cost": {
+        "pricing_status": "MIXED",
+        "currency": "USD",
+        "pricing_version": "2026-08-30",
+        "worker_model_cost_usd": 0.061233199999999995,
+        "model_cost_usd": 0.061233199999999995,
+        "compute_cost_usd": 0.0014806347959529997,
+        "total_cost_usd": 0.062713834795953,
+        "components": [
+          {
+            "kind": "worker",
+            "model_requested": "gemini-3.5-flash-lite",
+            "usage_source": "PROVIDER_REPORTED",
+            "input_tokens": 196069,
+            "fresh_input_tokens": 196069,
+            "output_tokens": 965,
+            "total_tokens": 197034,
+            "model_cost_usd": 0.061233199999999995,
+            "compute_cost_usd": 0.0014806347959529997,
+            "total_cost_usd": 0.062713834795953,
+            "runtime_seconds": 257.501703644,
             "machine_type": "e2-small",
             "provisioning_model": "STANDARD",
             "pricing_version": "2026-08-30",
