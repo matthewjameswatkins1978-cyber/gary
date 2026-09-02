@@ -127,6 +127,10 @@ func TestMasterWorkflowAutoContinuesPausedRunsAndPersistsProjectContext(t *testi
 		`paused)`,
 		"gary/projects",
 		"Continuing paused master",
+		"Project terminality is monotonic",
+		"Preserving terminal/newer remote project state",
+		`remote_state == "ARCHIVED"`,
+		`remote_state == "ACCEPTED"`,
 	} {
 		if !strings.Contains(workflow, required) {
 			t.Fatalf("master workflow missing long-project continuity marker %q", required)
