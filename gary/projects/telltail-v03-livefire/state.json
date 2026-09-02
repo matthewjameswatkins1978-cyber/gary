@@ -1,0 +1,9 @@
+{
+  "schema": "gary.project-state.v1",
+  "project_id": "telltail-v03-livefire",
+  "state": "PLANNING",
+  "current_phase": "planning",
+  "current_strategy": "Implement core domain models (scenarios, events, hash-chain trajectories, detectors, profiler, dossiers), local runner, GCP Batch provider, Mirror Shift scoring engine, and CLI commands in idiomatic Go standard library style, verify with deterministic tests and fault injection, followed by executing the real GCP Batch canary.",
+  "last_event": "planning wave 1",
+  "updated_at": "2026-09-02T18:30:48Z"
+}
