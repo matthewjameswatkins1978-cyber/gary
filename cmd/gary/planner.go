@@ -17,6 +17,7 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/supervisor"
 )
 
@@ -292,6 +293,114 @@ func callWorkerSupervisorAPI(ctx context.Context, cfg *config.Config, prompt str
 		return supervisor.Decision{}, component, err
 	}
 	return decision, component, nil
+}
+
+func runChildQualityInspection(cfg *config.Config, job *jobs.Job, result jobs.RunResult) (*masterPlan, cost.Component, error) {
+	component := estimatedComponent("child-quality-inspector", cfg.MasterModel, "child quality inspector did not return provider usage")
+	tmp, err := os.MkdirTemp("", "gary-child-inspector-*")
+	if err != nil {
+		return nil, component, err
+	}
+	defer os.RemoveAll(tmp)
+
+	if err := gitops.CloneBranch(job.Repo, result.Branch, tmp); err != nil {
+		return nil, component, fmt.Errorf("child inspector clone: %w", err)
+	}
+	head, err := gitops.CommitSHA(tmp)
+	if err != nil {
+		return nil, component, fmt.Errorf("child inspector candidate SHA: %w", err)
+	}
+	if strings.TrimSpace(result.CommitSHA) == "" || head != result.CommitSHA {
+		return nil, component, fmt.Errorf("child inspector candidate moved: expected %s, got %s", result.CommitSHA, head)
+	}
+	if err := gitops.FetchBranch(tmp, "origin", job.BaseBranch); err != nil {
+		return nil, component, fmt.Errorf("child inspector fetch base: %w", err)
+	}
+
+	repoContext, err := buildYardmasterRepoContext(tmp, yardmasterContextMaxBytes)
+	if err != nil {
+		return nil, component, fmt.Errorf("child inspector repository snapshot: %w", err)
+	}
+	diffStat, _ := plannerCommandOutput(tmp, "git", "diff", "--stat", "origin/"+job.BaseBranch+"...HEAD")
+	diffText, _ := plannerCommandOutput(tmp, "git", "diff", "--find-renames", "origin/"+job.BaseBranch+"...HEAD")
+	if len(diffText) > 70000 {
+		diffText = diffText[:70000] + "\n[diff truncated]\n"
+	}
+
+	prompt := fmt.Sprintf(`You are GARY Yardmaster acting as the independent quality gate for a completed child job.
+
+The trusted control layer has already rerun the child's stated mechanical acceptance checks on this exact candidate commit in a fresh clone. Those checks passing is necessary but not sufficient for integration.
+
+Decide whether this bounded change is genuinely merge-worthy and up to a reasonable professional engineering standard for the assigned child objective.
+
+PASS only when the actual implementation:
+- materially satisfies the child objective, not merely the literal narrow check;
+- is coherent, maintainable and appropriately idiomatic for the existing project;
+- does not weaken tests, acceptance, safety boundaries or frozen constraints;
+- does not contain obvious hacks, placeholders, dead-end scaffolding or unjustified scope expansion;
+- does not leave an obvious material correctness, security, portability or integration defect that should be fixed before dependent work builds on it.
+
+Do not demand optional polish, personal stylistic preferences, broad redesign, speculative future-proofing, or unrelated cleanup. This is a bounded merge review, not a search for perfection. Reject only for a material reason that makes the child result not good enough to integrate.
+
+Do not trust worker prose or Batch status. Judge the exact candidate commit, its diff, the repository evidence, the child objective and the supplied project context.
+
+Return exactly:
+{
+  "done": true,
+  "summary": "PASS: concise evidence basis",
+  "memory": "short merge-quality evidence",
+  "jobs": []
+}
+
+or, if it should not be merged:
+
+{
+  "done": false,
+  "summary": "REJECT: concise material reason",
+  "memory": "specific repair guidance: what to keep, what must change, and why",
+  "jobs": []
+}
+
+CHILD JOB ID: %s
+BASE BRANCH: %s
+CANDIDATE BRANCH: %s
+CANDIDATE COMMIT: %s
+
+CHILD OBJECTIVE
+===============
+%s
+
+CHILD ACCEPTANCE ALREADY RERUN BY TRUSTED CONTROL
+=================================================
+%s
+
+PROJECT CONTEXT / CONSTRAINTS
+=============================
+%s
+
+DIFF STAT
+=========
+%s
+
+CANDIDATE DIFF
+==============
+%s
+
+CURRENT CANDIDATE REPOSITORY SNAPSHOT
+=====================================
+%s
+`, job.ID, job.BaseBranch, result.Branch, result.CommitSHA, job.Task, strings.Join(job.Acceptance, "\n"), job.ProjectContext, diffStat, diffText, repoContext)
+
+	ctx, cancel := context.WithTimeout(context.Background(), yardmasterPlannerTimeout)
+	defer cancel()
+	plan, component, err := callYardmasterAPI(ctx, cfg, prompt, 0)
+	if err != nil {
+		return nil, component, fmt.Errorf("child quality inspector: %w", err)
+	}
+	if len(plan.Jobs) != 0 {
+		return nil, component, fmt.Errorf("child quality inspector returned jobs; expected verdict only")
+	}
+	return plan, component, nil
 }
 
 func runFinalSemanticInspection(cfg *config.Config, manifest *masterManifest, brief, stagingBranch string) (*masterPlan, cost.Component, error) {
