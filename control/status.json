@@ -1,28 +1,7 @@
 {
-  "updated_at": "2026-09-02T17:17:11Z",
-  "yard_state": "running",
-  "active_jobs": [
-    {
-      "id": "telltail-protocol-test",
-      "batch_job_id": "gary-run-telltail-protocol-test-1-20260902-181711",
-      "state": "running",
-      "repo": "https://github.com/example/example.git",
-      "base_branch": "main",
-      "result_branch": "gary/telltail-protocol-test-8c1ae7bc",
-      "started_at": "2026-09-02T17:17:09Z",
-      "attempts": 1
-    }
-  ],
+  "updated_at": "2026-09-02T17:17:13Z",
+  "yard_state": "idle",
   "recent_jobs": [
-    {
-      "id": "resolve-google-a-w1-j3",
-      "state": "failed",
-      "result_branch": "gary/resolve-google-a-w1-j3-73f8fbcf",
-      "finished_at": "2026-08-29T10:46:09Z",
-      "attempts": 3,
-      "est_cost": 0.079573803820463,
-      "summary": "FAILED"
-    },
     {
       "id": "resolve-google-a-w1-j2",
       "state": "failed",
@@ -415,6 +394,21 @@
         ]
       },
       "summary": "FAILED"
+    },
+    {
+      "id": "telltail-protocol-test",
+      "state": "failed",
+      "result_branch": "gary/telltail-protocol-test-8c1ae7bc",
+      "finished_at": "2026-09-02T17:17:13Z",
+      "cost": {
+        "pricing_status": "ESTIMATED",
+        "currency": "USD",
+        "pricing_version": "2026-08-30",
+        "model_cost_usd": 0,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0
+      },
+      "summary": "BLOCKED"
     }
   ]
 }
