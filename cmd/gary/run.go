@@ -316,10 +316,12 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 		logPrint(prefix, "  SUBMITTED %s", batchJobID)
 
-		status, finishedAt, err := batch.WaitForTerminal(
-			cfg.GCPProject, cfg.GCPRegion, jobName,
-			10*time.Second, time.Duration(maxRunDurSec+batchSchedulingGraceSec)*time.Second,
+		status, finishedAt, supervisionCosts, err := waitForSupervisedWorker(
+			cfg, job, attemptTask, acceptanceStr, jobName, attemptGCSPath, prefix, maxRunDurSec,
 		)
+		for _, component := range supervisionCosts {
+			runCost.Add(component)
+		}
 		if err != nil {
 			logPrint(prefix, "  polling failed: %v", err)
 			lastFailure = fmt.Sprintf("Batch polling failed for %s: %v", jobName, err)
@@ -622,6 +624,160 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	snapshotJobComplete(job.ID, result)
 	return result
 }
+func waitForSupervisedWorker(cfg *config.Config, job *jobs.Job, task, acceptance, jobName, gcsPath, prefix string, maxRunDurSec int) (*batch.JobStatus, time.Time, []cost.Component, error) {
+	deadline := time.Now().Add(time.Duration(maxRunDurSec+batchSchedulingGraceSec) * time.Second)
+	lastState := ""
+	lastReviewID := ""
+	lastReviewAt := time.Time{}
+	generation := 0
+	components := make([]cost.Component, 0)
+
+	for {
+		if time.Now().After(deadline) {
+			return nil, time.Time{}, components, fmt.Errorf("emergency infrastructure ceiling reached while waiting for supervised job %s", jobName)
+		}
+
+		status, err := batch.DescribeJob(cfg.GCPProject, cfg.GCPRegion, jobName)
+		if err != nil {
+			return nil, time.Time{}, components, fmt.Errorf("describe supervised job: %w", err)
+		}
+		if status.State() != lastState {
+			logPrint(prefix, "  BATCH STATE %s", status.State())
+			lastState = status.State()
+		}
+		if batch.IsTerminal(status.State()) {
+			return status, time.Now(), components, nil
+		}
+
+		telemetry, ok := readWorkerTelemetry(gcsPath + "/telemetry.json")
+		if ok {
+			now := time.Now()
+			due := false
+			switch telemetry.Phase {
+			case "candidate_ready", "turn_complete":
+				due = telemetry.ReviewID != lastReviewID
+			case "running":
+				due = telemetry.ElapsedActiveSeconds >= int(workerSupervisionInterval.Seconds()) &&
+					telemetry.ReviewID != lastReviewID &&
+					(lastReviewAt.IsZero() || now.Sub(lastReviewAt) >= workerSupervisionInterval)
+			}
+			if due {
+				generation++
+				decision, component, superviseErr := runWorkerSupervision(
+					cfg, task, acceptance, job.ProjectContext, telemetry, generation,
+				)
+				components = append(components, component)
+				if superviseErr != nil {
+					// Supervision failures must not kill productive work. Keep a
+					// running worker alive; let a naturally completed turn resume,
+					// and let a mechanically ready candidate proceed to inspection.
+					decision = fallbackSupervisionDecision(telemetry, generation, superviseErr)
+					logPrint(prefix, "  YARDMASTER SUPERVISION UNAVAILABLE: %v; fallback=%s", superviseErr, decision.Action)
+				} else {
+					logPrint(prefix, "  YARDMASTER %s: %s", decision.Action, decision.Reason)
+					if decision.Action == supervisor.ActionGuide {
+						logPrint(prefix, "  YARDMASTER GUIDANCE: %s", decision.Guidance)
+					}
+				}
+				if err := writeWorkerControl(gcsPath+"/control.json", decision); err != nil {
+					return nil, time.Time{}, components, fmt.Errorf("publish Yardmaster control: %w", err)
+				}
+				lastReviewID = telemetry.ReviewID
+				lastReviewAt = now
+			}
+		}
+
+		time.Sleep(workerSupervisionPollPeriod)
+	}
+}
+
+func fallbackSupervisionDecision(telemetry supervisor.Telemetry, generation int, cause error) supervisor.Decision {
+	action := supervisor.ActionContinue
+	reason := "supervisor call unavailable; preserve productive work and continue"
+	if telemetry.Phase == "candidate_ready" {
+		action = supervisor.ActionReadyForInspection
+		reason = "supervisor call unavailable after mechanical candidate readiness; hand candidate to independent/local inspection"
+	}
+	decision := supervisor.Decision{Action: action, Reason: reason + ": " + compactFailureLogs(cause.Error(), 500)}
+	_ = decision.Normalize(generation, telemetry.ReviewID, time.Now())
+	return decision
+}
+
+func readWorkerTelemetry(path string) (supervisor.Telemetry, bool) {
+	data, err := readGCSObject(path)
+	if err != nil || len(data) == 0 {
+		return supervisor.Telemetry{}, false
+	}
+	var telemetry supervisor.Telemetry
+	if err := json.Unmarshal(data, &telemetry); err != nil {
+		return supervisor.Telemetry{}, false
+	}
+	if err := telemetry.Validate(); err != nil {
+		return supervisor.Telemetry{}, false
+	}
+	return telemetry, true
+}
+
+func writeWorkerControl(path string, decision supervisor.Decision) error {
+	data, err := json.Marshal(decision)
+	if err != nil {
+		return err
+	}
+	return writeGCSObject(path, data)
+}
+
+func readGCSObject(path string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), cloudCommandTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "gcloud", "storage", "cat", path)
+	cmd.WaitDelay = 2 * time.Second
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return out, nil
+	}
+	ctx2, cancel2 := context.WithTimeout(context.Background(), cloudCommandTimeout)
+	defer cancel2()
+	fallback := exec.CommandContext(ctx2, "python3", "-m", "gsutil", "cat", path)
+	fallback.WaitDelay = 2 * time.Second
+	out2, err2 := fallback.CombinedOutput()
+	if err2 != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	return out2, nil
+}
+
+func writeGCSObject(path string, data []byte) error {
+	tmp, err := os.CreateTemp("", "gary-supervision-*.json")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), cloudCommandTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "gcloud", "storage", "cp", name, path)
+	cmd.WaitDelay = 2 * time.Second
+	if out, err := cmd.CombinedOutput(); err == nil {
+		return nil
+	} else {
+		ctx2, cancel2 := context.WithTimeout(context.Background(), cloudCommandTimeout)
+		defer cancel2()
+		fallback := exec.CommandContext(ctx2, "python3", "-m", "gsutil", "cp", name, path)
+		fallback.WaitDelay = 2 * time.Second
+		if out2, err2 := fallback.CombinedOutput(); err2 != nil {
+			return fmt.Errorf("write %s: gcloud=%v (%s); gsutil=%v (%s)", path, err, strings.TrimSpace(string(out)), err2, strings.TrimSpace(string(out2)))
+		}
+		return nil
+	}
+}
+
 func downloadGCSFile(tmpDir, gcsPath string) string {
 	path := filepath.Join(tmpDir, filepath.Base(gcsPath))
 	for _, args := range [][]string{
