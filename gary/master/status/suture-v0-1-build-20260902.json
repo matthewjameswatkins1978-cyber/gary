@@ -3,13 +3,12 @@
   "project_id": "suture-v0-1-build-20260902",
   "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
   "project_manual_version": 1,
-  "state": "failed",
-  "updated_at": "2026-09-02T13:27:35Z",
+  "state": "running",
+  "updated_at": "2026-09-02T13:30:19Z",
   "staging_branch": "gary/master-suture-v0-1-buil-84399e",
   "wave": 8,
-  "summary": "Staging repo is at initial commit. Dispatching a minimal, focused bootstrap slice to set up Cargo.toml and core protocol enums with Serde/Schemars tests.",
-  "error": "operator-cancelled after 7m49s while the wave-8 worker had been submitted; the pre-fix controller did not retain the exact Batch ID or terminal result",
-  "planner_memory": "ACCEPTED: 807e93f Initial commit.\nCURRENT STATE: README.md only.\nCURRENT STAGE: Stage A Foundation.\nOUTSTANDING SLICE: Create minimal Cargo.toml, src/lib.rs, and src/protocol.rs with core protocol enums (Outcome, RefusalReason, FailureReason, Cardinality) deriving Serde and Schemars, plus serialization unit tests.\nCONSTRAINTS: Single crate suture v0.1.0, #![forbid(unsafe_code)], derived Serde/schemars, clean clippy \u0026 tests.",
+  "summary": "Repository is at initial commit. Scheduling minimal Stage A bootstrap job to initialize Cargo.toml and src/lib.rs with core protocol enums and structs.",
+  "planner_memory": "ACCEPTED: 807e93f Initial commit.\nCURRENT STATE: README.md only.\nCURRENT STAGE: Stage A Foundation.\nOUTSTANDING SLICE: Create minimal Cargo.toml and src/lib.rs defining core protocol enums (Outcome, RefusalReason, FailureReason, Cardinality) and models (ByteEdit, MutationPlan, Certificate) with Serde and Schemars derivations plus serialization unit tests.\nCONSTRAINTS: Single crate suture v0.1.0, #![forbid(unsafe_code)], derived Serde/schemars, clean cargo test and clippy.",
   "waves": [
     {
       "wave": 1,
@@ -450,11 +449,11 @@
     "pricing_status": "MIXED",
     "currency": "USD",
     "pricing_version": "2026-08-30",
-    "yardmaster_model_cost_usd": 0.1568115,
+    "yardmaster_model_cost_usd": 0.18103575,
     "worker_model_cost_usd": 0.24624736999999997,
-    "model_cost_usd": 0.40305886999999996,
+    "model_cost_usd": 0.42728311999999996,
     "compute_cost_usd": 0.038421262633882,
-    "total_cost_usd": 0.44148013263388186,
+    "total_cost_usd": 0.46570438263388186,
     "components": [
       {
         "kind": "yardmaster",
@@ -763,6 +762,24 @@
         "pricing_effective_date": "2026-08-30",
         "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
         "provider_response_id": "tyGYaunaBafZzdMPmLThkAE"
+      },
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 29299,
+        "fresh_input_tokens": 29299,
+        "output_tokens": 600,
+        "thinking_tokens": 633,
+        "total_tokens": 30532,
+        "model_cost_usd": 0.024224250000000003,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.024224250000000003,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "2iSYaoCAB8rb8LgPxKTowAE"
       }
     ],
     "unmetered_components": [
