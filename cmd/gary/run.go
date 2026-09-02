@@ -225,6 +225,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	var lastProgressState string
 	var prevGCSPatch string
 	lastBatchJobID := ""
+	lastBatchState := ""
 	progressHistory := make([]string, 0)
 	lowProgressStreak := 0
 	repairCount := 0
@@ -234,6 +235,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	actualAttempts := 0
 	runCost := cost.NewSummary()
 
+attemptLoop:
 	for attempt := 1; attempt <= attemptLimit; attempt++ {
 		if cfg.MaxCostUSD > 0 {
 			projected := EstimateJobCostForModel(model, 1)
@@ -356,12 +358,14 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		attemptCost := workerCostComponent(model, usageText, attemptRuntime)
 		runCost.Add(attemptCost)
 
-		batchSucceeded := status.State() == "SUCCEEDED"
+		batchState := status.State()
+		lastBatchState = batchState
+		batchSucceeded := batchState == "SUCCEEDED"
 
 		patchData := downloadGCSFile(attemptDir, attemptGCSPath+"/result.patch")
 		acceptOutput := downloadGCSFile(attemptDir, attemptGCSPath+"/acceptance_output.txt")
 
-		// If GCS download failed, try to extract from batch logs
+		// If GCS download failed, recover from Batch logs where possible.
 		if patchData == "" {
 			patchData = extractFromBatchLogs(cfg.GCPProject, cfg.GCPRegion, jobName, "GARY_PATCH_B64")
 		}
@@ -377,7 +381,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			lastAcceptance = acceptOutput
 		}
 
-		if batchSucceeded && strings.Contains(lastAcceptance, "SUPERVISION_TERMINAL=STOP_AND_REPLAN") {
+		if strings.Contains(lastAcceptance, "SUPERVISION_TERMINAL=STOP_AND_REPLAN") {
 			lastFailure = fmt.Sprintf("Yardmaster stopped worker for replan; partial patch/evidence preserved at %s", attemptGCSPath)
 			finalStatus = "REPLAN_REQUIRED"
 			logPrint(prefix, "  %s", lastFailure)
@@ -385,78 +389,199 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			break
 		}
 
-		if batchSucceeded && strings.TrimSpace(patchData) == "" {
-			batchSucceeded = false
-			lastFailure = "worker completed without a non-empty result patch"
-			logPrintln(prefix, "  BATCH SUCCEEDED but produced no patch — refusing empty writeback")
-		}
-
-		if batchSucceeded {
-			logPrintln(prefix, "  BATCH SUCCEEDED — verifying locally")
-
-			// If GCS upload failed (patchData empty), try to get patch from GitHub
-			if patchData == "" {
-				logPrintln(prefix, "  No patch from GCS — pulling from GitHub")
-				workDir := filepath.Join(attemptDir, "repo")
-				if err := gitops.Clone(job.Repo, workDir); err == nil {
-					if err := gitops.FetchBranch(workDir, "origin", garyBranch); err == nil {
-						if err := gitops.Checkout(workDir, garyBranch); err == nil {
-							patchData, _ = gitops.FormatPatch(workDir, job.BaseBranch)
-						}
-					}
-				}
+		// Handover invariant: Batch state is transport evidence, not product
+		// acceptance. Whenever a recoverable candidate exists, the trusted
+		// control layer reruns the child's acceptance in a fresh clone before
+		// deciding whether the work passed, failed, or needs repair.
+		candidateAvailable := strings.TrimSpace(patchData) != ""
+		if candidateAvailable {
+			if batchSucceeded {
+				logPrintln(prefix, "  BATCH SUCCEEDED — independently verifying candidate")
+			} else {
+				logPrint(prefix, "  BATCH %s BUT CANDIDATE EXISTS — independently verifying candidate", batchState)
 			}
 
 			localResult := runLocalAcceptanceClassified(attemptDir, job, garyBranch, patchData, prefix)
 			if localResult.blocker {
 				finalStatus = "BLOCKED"
 				lastFailure = localResult.err.Error()
-				logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
+				logPrint(prefix, "  TRUSTED VERIFICATION BLOCKED: %s", lastFailure)
 				break
 			}
 			if localResult.passed {
 				workDir := filepath.Join(attemptDir, "repo")
-				commitSHA, _ := gitops.CommitSHA(workDir)
-				if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
-					lastFailure = fmt.Sprintf("GitHub writeback push failed for %s: %v", garyBranch, err)
-					finalStatus = "BLOCKED"
-					logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
+				quality, qualityCost, qualityErr := runChildQualityInspection(cfg, job, workDir)
+				runCost.Add(qualityCost)
+				if qualityErr != nil {
+					// A mechanically green candidate must never become accepted
+					// merely because the quality gate is unavailable. Preserve
+					// the exact candidate for recovery and stop at the control
+					// boundary rather than throwing the work away.
+					commitSHA, _ := gitops.CommitSHA(workDir)
+					if pushErr := gitops.Push(workDir, "origin", garyBranch); pushErr != nil {
+						lastFailure = fmt.Sprintf("Yardmaster quality inspection unavailable (%v); checkpoint push also failed: %v", qualityErr, pushErr)
+						finalStatus = "BLOCKED"
+						logPrint(prefix, "  QUALITY GATE BLOCKED: %s", lastFailure)
+						os.RemoveAll(attemptDir)
+						break attemptLoop
+					}
+					duration := time.Since(submittedAt)
+					result := jobs.RunResult{
+						JobID:                job.ID,
+						ProjectID:            job.ProjectID,
+						MasterPacketDigest:   job.MasterPacketDigest,
+						ProjectManualVersion: job.ProjectManualVersion,
+						BatchJobID:           jobName,
+						BatchState:           batchState,
+						ArtifactPrefix:       attemptGCSPath,
+						Branch:               garyBranch,
+						CommitSHA:            commitSHA,
+						Accepted:             false,
+						Verification:         "trusted-independent",
+						QualityReview:        "UNAVAILABLE",
+						DurationSecs:         duration.Seconds(),
+						PatchBytes:           int64(len(patchData)),
+						Attempts:             attempt,
+						RepairCount:          repairCount,
+						Escalated:            escalated,
+						CloserUsed:           closerUsed,
+						FinalStatus:          "BLOCKED",
+						FailureReason:        compactFailureLogs("Yardmaster quality inspection unavailable: "+qualityErr.Error(), 4000),
+						ModelCostEstimated:   runCost.ModelCostUSD,
+						ComputeCostEstimated: runCost.ComputeCostUSD,
+						TotalCostEstimated:   runCost.TotalCostUSD,
+						Cost:                 runCost,
+					}
 					os.RemoveAll(attemptDir)
-					break
+					saveRunResult(cfg, result)
+					writeLedger(cfg, result, model)
+					snapshotJobComplete(job.ID, result)
+					return result
 				}
-				duration := time.Since(submittedAt)
-				os.RemoveAll(attemptDir)
 
-				result := jobs.RunResult{
-					JobID:                job.ID,
-					ProjectID:            job.ProjectID,
-					MasterPacketDigest:   job.MasterPacketDigest,
-					ProjectManualVersion: job.ProjectManualVersion,
-					BatchJobID:           jobName,
-					Branch:               garyBranch,
-					CommitSHA:            commitSHA,
-					Accepted:             true,
-					DurationSecs:         duration.Seconds(),
-					PatchBytes:           int64(len(patchData)),
-					Attempts:             attempt,
-					RepairCount:          repairCount,
-					Escalated:            escalated,
-					CloserUsed:           closerUsed,
-					FinalStatus:          "DONE",
-					ModelCostEstimated:   runCost.ModelCostUSD,
-					ComputeCostEstimated: runCost.ComputeCostUSD,
-					TotalCostEstimated:   runCost.TotalCostUSD,
-					Cost:                 runCost,
+				disposition := classifyChildQuality(quality)
+				switch disposition {
+				case childQualityPass:
+					commitSHA, _ := gitops.CommitSHA(workDir)
+					if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
+						lastFailure = fmt.Sprintf("GitHub writeback push failed for %s: %v", garyBranch, err)
+						finalStatus = "BLOCKED"
+						logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
+						os.RemoveAll(attemptDir)
+						break
+					}
+					duration := time.Since(submittedAt)
+					os.RemoveAll(attemptDir)
+
+					result := jobs.RunResult{
+						JobID:                job.ID,
+						ProjectID:            job.ProjectID,
+						MasterPacketDigest:   job.MasterPacketDigest,
+						ProjectManualVersion: job.ProjectManualVersion,
+						BatchJobID:           jobName,
+						BatchState:           batchState,
+						ArtifactPrefix:       attemptGCSPath,
+						Branch:               garyBranch,
+						CommitSHA:            commitSHA,
+						Accepted:             true,
+						Verification:         "trusted-independent",
+						QualityReview:        strings.TrimSpace(quality.Summary),
+						DurationSecs:         duration.Seconds(),
+						PatchBytes:           int64(len(patchData)),
+						Attempts:             attempt,
+						RepairCount:          repairCount,
+						Escalated:            escalated,
+						CloserUsed:           closerUsed,
+						FinalStatus:          "DONE",
+						ModelCostEstimated:   runCost.ModelCostUSD,
+						ComputeCostEstimated: runCost.ComputeCostUSD,
+						TotalCostEstimated:   runCost.TotalCostUSD,
+						Cost:                 runCost,
+					}
+					saveRunResult(cfg, result)
+					writeLedger(cfg, result, model)
+					snapshotJobComplete(job.ID, result)
+					return result
+
+				case childQualitySmallFix, childQualityMajorFix:
+					repairCount++
+					lastProgressState = "mechanically-passed-quality-repair"
+					lastFailure = strings.TrimSpace(quality.Summary)
+					lastRepairBrief = strings.TrimSpace(quality.Memory)
+					progressHistory = append(progressHistory, "QUALITY_REVIEW "+lastFailure)
+					if disposition == childQualitySmallFix {
+						logPrint(prefix, "  YARDMASTER SMALL FIX: %s", lastFailure)
+					} else {
+						logPrint(prefix, "  YARDMASTER MAJOR FIX: %s", lastFailure)
+					}
+					if lastRepairBrief != "" {
+						logPrint(prefix, "  YARDMASTER REPAIR GUIDANCE: %s", lastRepairBrief)
+					}
+					os.RemoveAll(attemptDir)
+					if attempt == attemptLimit {
+						escalated = true
+						break attemptLoop
+					}
+					// The next worker attempt receives the checkpointed patch and
+					// the Yardmaster's review. Small issues preserve the approach;
+					// major issues receive stronger guidance while preserving any
+					// useful work the review explicitly says to keep.
+					continue attemptLoop
+
+				case childQualityReplan:
+					commitSHA, _ := gitops.CommitSHA(workDir)
+					if pushErr := gitops.Push(workDir, "origin", garyBranch); pushErr != nil {
+						lastFailure = fmt.Sprintf("%s; checkpoint push failed: %v", strings.TrimSpace(quality.Summary), pushErr)
+						finalStatus = "BLOCKED"
+						os.RemoveAll(attemptDir)
+						break attemptLoop
+					}
+					duration := time.Since(submittedAt)
+					result := jobs.RunResult{
+						JobID:                job.ID,
+						ProjectID:            job.ProjectID,
+						MasterPacketDigest:   job.MasterPacketDigest,
+						ProjectManualVersion: job.ProjectManualVersion,
+						BatchJobID:           jobName,
+						BatchState:           batchState,
+						ArtifactPrefix:       attemptGCSPath,
+						Branch:               garyBranch,
+						CommitSHA:            commitSHA,
+						Accepted:             false,
+						Verification:         "trusted-independent",
+						QualityReview:        "REPLAN: " + strings.TrimSpace(quality.Summary),
+						DurationSecs:         duration.Seconds(),
+						PatchBytes:           int64(len(patchData)),
+						Attempts:             attempt,
+						RepairCount:          repairCount,
+						Escalated:            escalated,
+						CloserUsed:           closerUsed,
+						FinalStatus:          "REPLAN_REQUIRED",
+						FailureReason:        compactFailureLogs(strings.TrimSpace(quality.Summary)+"\n"+strings.TrimSpace(quality.Memory), 4000),
+						ModelCostEstimated:   runCost.ModelCostUSD,
+						ComputeCostEstimated: runCost.ComputeCostUSD,
+						TotalCostEstimated:   runCost.TotalCostUSD,
+						Cost:                 runCost,
+					}
+					os.RemoveAll(attemptDir)
+					saveRunResult(cfg, result)
+					writeLedger(cfg, result, model)
+					snapshotJobComplete(job.ID, result)
+					return result
 				}
-				saveRunResult(cfg, result)
-				writeLedger(cfg, result, model)
-				snapshotJobComplete(job.ID, result)
-				return result
 			}
-			lastFailure = "Local acceptance failed after Batch success.\n" + lastAcceptance
-		} else {
-			logPrint(prefix, "  BATCH %s", status.State())
-			lastFailure = fmt.Sprintf("Batch job ended with state: %s\n", status.State())
+			if !localResult.passed {
+				lastFailure = fmt.Sprintf("trusted acceptance rejected recovered candidate after Batch state %s: %v", batchState, localResult.err)
+			}
+		}
+
+		if !batchSucceeded {
+			logPrint(prefix, "  BATCH %s", batchState)
+			if lastFailure == "" {
+				lastFailure = fmt.Sprintf("Batch job ended with state: %s\n", batchState)
+			} else {
+				lastFailure += fmt.Sprintf("\nBatch job ended with state: %s\n", batchState)
+			}
 			failureLogs := ""
 			if status.UID != "" {
 				if logs, logErr := batch.RecentLogs(cfg.GCPProject, status.UID, 12); logErr == nil {
@@ -470,8 +595,6 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			if lastAcceptance != "" {
 				lastFailure += "\nWorker acceptance output:\n" + lastAcceptance
 			}
-			// Only strong infrastructure/auth signatures in the worker execution logs
-			// stop the reasoning loop. Test/API failures remain repair evidence.
 			if isServiceEnvironmentBlocker(failureLogs) {
 				finalStatus = "BLOCKED"
 				if actualAttempts > 0 {
@@ -480,8 +603,10 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", strings.TrimSpace(failureLogs))
 				break
 			}
+		} else if !candidateAvailable {
+			lastFailure = "worker completed without a recoverable result patch"
+			logPrintln(prefix, "  BATCH SUCCEEDED but produced no patch — refusing empty writeback")
 		}
-
 		os.RemoveAll(attemptDir)
 
 		progressState := "unknown"
@@ -565,39 +690,85 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				}
 			} else if closeResult {
 				workDir := filepath.Join(closerDir, "repo")
-				commitSHA, _ := gitops.CommitSHA(workDir)
-				if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
+				quality, qualityCost, qualityErr := runChildQualityInspection(cfg, job, workDir)
+				runCost.Add(qualityCost)
+				if qualityErr != nil {
 					finalStatus = "BLOCKED"
-					lastFailure = fmt.Sprintf("GitHub writeback push failed for %s: %v", garyBranch, err)
-					logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
-				} else {
-					duration := time.Since(submittedAt)
-					closerUsed = true
-					finalStatus = "DONE"
-
-					result := jobs.RunResult{
-						JobID:                job.ID,
-						ProjectID:            job.ProjectID,
-						MasterPacketDigest:   job.MasterPacketDigest,
-						ProjectManualVersion: job.ProjectManualVersion,
-						Branch:               garyBranch,
-						CommitSHA:            commitSHA,
-						Accepted:             true,
-						DurationSecs:         duration.Seconds(),
-						Attempts:             actualAttempts,
-						RepairCount:          repairCount,
-						Escalated:            escalated,
-						CloserUsed:           closerUsed,
-						FinalStatus:          "DONE",
-						ModelCostEstimated:   runCost.ModelCostUSD,
-						ComputeCostEstimated: runCost.ComputeCostUSD,
-						TotalCostEstimated:   runCost.TotalCostUSD,
-						Cost:                 runCost,
+					lastFailure = "Closer candidate passed trusted mechanics but Yardmaster quality inspection was unavailable: " + qualityErr.Error()
+					logPrint(prefix, "  QUALITY GATE BLOCKED: %s", lastFailure)
+				} else if classifyChildQuality(quality) != childQualityPass {
+					commitSHA, _ := gitops.CommitSHA(workDir)
+					if pushErr := gitops.Push(workDir, "origin", garyBranch); pushErr != nil {
+						finalStatus = "BLOCKED"
+						lastFailure = fmt.Sprintf("Closer quality review %s; checkpoint push failed: %v", strings.TrimSpace(quality.Summary), pushErr)
+					} else {
+						duration := time.Since(submittedAt)
+						result := jobs.RunResult{
+							JobID:                job.ID,
+							ProjectID:            job.ProjectID,
+							MasterPacketDigest:   job.MasterPacketDigest,
+							ProjectManualVersion: job.ProjectManualVersion,
+							ArtifactPrefix:       gcsPath + "/closer",
+							Branch:               garyBranch,
+							CommitSHA:            commitSHA,
+							Accepted:             false,
+							Verification:         "trusted-independent",
+							QualityReview:        strings.TrimSpace(quality.Summary),
+							DurationSecs:         duration.Seconds(),
+							Attempts:             actualAttempts,
+							RepairCount:          repairCount,
+							Escalated:            true,
+							CloserUsed:           true,
+							FinalStatus:          "REPLAN_REQUIRED",
+							FailureReason:        compactFailureLogs(strings.TrimSpace(quality.Summary)+"\n"+strings.TrimSpace(quality.Memory), 4000),
+							ModelCostEstimated:   runCost.ModelCostUSD,
+							ComputeCostEstimated: runCost.ComputeCostUSD,
+							TotalCostEstimated:   runCost.TotalCostUSD,
+							Cost:                 runCost,
+						}
+						saveRunResult(cfg, result)
+						writeLedger(cfg, result, model+"+"+cfg.CloserModel)
+						snapshotJobComplete(job.ID, result)
+						return result
 					}
-					saveRunResult(cfg, result)
-					writeLedger(cfg, result, model+"+"+cfg.CloserModel)
-					snapshotJobComplete(job.ID, result)
-					return result
+				} else {
+					commitSHA, _ := gitops.CommitSHA(workDir)
+					if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
+						finalStatus = "BLOCKED"
+						lastFailure = fmt.Sprintf("GitHub writeback push failed for %s: %v", garyBranch, err)
+						logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
+					} else {
+						duration := time.Since(submittedAt)
+						closerUsed = true
+						finalStatus = "DONE"
+
+						result := jobs.RunResult{
+							JobID:                job.ID,
+							ProjectID:            job.ProjectID,
+							MasterPacketDigest:   job.MasterPacketDigest,
+							ProjectManualVersion: job.ProjectManualVersion,
+							ArtifactPrefix:       gcsPath + "/closer",
+							Branch:               garyBranch,
+							CommitSHA:            commitSHA,
+							Accepted:             true,
+							Verification:         "trusted-independent",
+							QualityReview:        strings.TrimSpace(quality.Summary),
+							DurationSecs:         duration.Seconds(),
+							Attempts:             actualAttempts,
+							RepairCount:          repairCount,
+							Escalated:            escalated,
+							CloserUsed:           closerUsed,
+							FinalStatus:          "DONE",
+							ModelCostEstimated:   runCost.ModelCostUSD,
+							ComputeCostEstimated: runCost.ComputeCostUSD,
+							TotalCostEstimated:   runCost.TotalCostUSD,
+							Cost:                 runCost,
+						}
+						saveRunResult(cfg, result)
+						writeLedger(cfg, result, model+"+"+cfg.CloserModel)
+						snapshotJobComplete(job.ID, result)
+						return result
+					}
 				}
 			} else {
 				finalStatus = "FAILED"
@@ -611,6 +782,8 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		JobID:                job.ID,
 		ProjectID:            job.ProjectID,
 		BatchJobID:           lastBatchJobID,
+		BatchState:           lastBatchState,
+		ArtifactPrefix:       gcsPath,
 		MasterPacketDigest:   job.MasterPacketDigest,
 		ProjectManualVersion: job.ProjectManualVersion,
 		Branch:               garyBranch,
@@ -927,22 +1100,12 @@ func runLocalAcceptanceClassified(tmpDir string, job *jobs.Job, garyBranch, patc
 	defer cleanupPython()
 
 	for _, command := range job.Acceptance {
-		for _, cmd := range acceptanceCommandSegments(command) {
-			parts := acceptanceCommandParts(cmd, pythonBin)
-			if len(parts) == 0 {
-				err := errors.New("empty acceptance command")
-				logPrint(prefix, "    LOCAL ENVIRONMENT BLOCKED: %v", err)
-				return fail(err, true)
-			}
-			c := exec.Command(parts[0], parts[1:]...)
-			c.Dir = workDir
-			out, err := c.CombinedOutput()
-			if err != nil {
-				logPrint(prefix, "    LOCAL FAIL: %s", strings.TrimSpace(string(out)))
-				return fail(fmt.Errorf("local acceptance command %q failed: %w", cmd, err), false)
-			}
-			logPrintln(prefix, "    LOCAL PASS")
+		out, err := runAcceptanceCommand(workDir, command, pythonBin)
+		if err != nil {
+			logPrint(prefix, "    LOCAL FAIL: %s", strings.TrimSpace(string(out)))
+			return fail(fmt.Errorf("local acceptance command %q failed: %w", command, err), false)
 		}
+		logPrintln(prefix, "    LOCAL PASS")
 	}
 
 	if err := cleanupDisposableWorkerArtifacts(workDir); err != nil {
@@ -1398,14 +1561,20 @@ func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.J
 	closerCost = batchCostComponent(cfg.CloserModel, usageText, batch.ObservedRuntimeSeconds(status, startedAt, finishedAt), "e2-standard-4")
 	closerCost.Kind = "closer"
 
-	if status.State() != "SUCCEEDED" {
-		closerCost.UnmeteredReason = appendCostReason(closerCost.UnmeteredReason, "closer Batch job ended in "+status.State())
-		return false, closerCost, fmt.Errorf("closer job %s", status.State())
-	}
-
 	patchData := downloadGCSFile(tmpDir, attemptGCSPath+"/result.patch")
 	if patchData == "" {
+		patchData = extractFromBatchLogs(cfg.GCPProject, cfg.GCPRegion, jobName, "GARY_PATCH_B64")
+	}
+	if patchData == "" {
+		if status.State() != "SUCCEEDED" {
+			closerCost.UnmeteredReason = appendCostReason(closerCost.UnmeteredReason, "closer Batch job ended in "+status.State()+" with no recoverable candidate")
+			return false, closerCost, fmt.Errorf("closer job %s with no recoverable candidate", status.State())
+		}
 		return false, closerCost, fmt.Errorf("no patch from closer")
+	}
+	if status.State() != "SUCCEEDED" {
+		closerCost.UnmeteredReason = appendCostReason(closerCost.UnmeteredReason, "closer Batch job ended in "+status.State()+" but a candidate was recovered and independently verified")
+		logPrint(prefix, "  CLOSER BATCH %s BUT CANDIDATE EXISTS — independently verifying candidate", status.State())
 	}
 
 	return runLocalAcceptance(tmpDir, job, garyBranch, patchData, prefix), closerCost, nil

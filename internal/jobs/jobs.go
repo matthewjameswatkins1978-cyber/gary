@@ -21,9 +21,18 @@ type Job struct {
 type RunResult struct {
 	JobID            string  `json:"job_id"`
 	BatchJobID       string  `json:"batch_job_id"`
+	// BatchState is transport/execution-wrapper evidence, not product acceptance.
+	BatchState       string  `json:"batch_state,omitempty"`
+	// ArtifactPrefix preserves the durable worker evidence/checkpoint location even when no result is accepted.
+	ArtifactPrefix   string  `json:"artifact_prefix,omitempty"`
 	Branch           string  `json:"branch"`
 	CommitSHA        string  `json:"commit_sha"`
 	Accepted         bool    `json:"accepted"`
+	// Verification records who actually awarded the pass. Accepted results are
+	// integrable only when this is trusted-independent.
+	Verification     string  `json:"verification,omitempty"`
+	// QualityReview records the Yardmaster merge-worthiness verdict for child work.
+	QualityReview    string  `json:"quality_review,omitempty"`
 	DurationSecs     float64 `json:"duration_seconds"`
 	EstimatedMinutes int     `json:"estimated_minutes,omitempty"`
 	PatchBytes       int64   `json:"patch_bytes"`

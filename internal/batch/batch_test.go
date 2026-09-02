@@ -298,6 +298,30 @@ func TestCodingWorkerIsSteerableAndResumable(t *testing.T) {
 	}
 }
 
+func TestGreenCandidateIsCheckpointedBeforeYardmasterHandover(t *testing.T) {
+	script := generateCodingWorkerScript(CodingJobConfig{
+		RepoURL: "https://example.com/repo.git", BaseBranch: "main", GaryBranch: "gary/test",
+		Task: "finish it", Acceptance: "go test ./...", GCSPath: "gs://bucket/run",
+		Model: "gemini-3.5-flash-lite",
+	})
+	for _, required := range []string{
+		"checkpoint_candidate()",
+		"Checkpointing candidate before Yardmaster handover",
+		"$GARY_GCS_PATH/result.patch",
+		"$GARY_GCS_PATH/acceptance_output.txt",
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("supervised worker script missing candidate checkpoint marker %q", required)
+		}
+	}
+	pass := strings.Index(script, "ACCEPTANCE PASSED")
+	checkpoint := strings.Index(script, "checkpoint_candidate\n")
+	wait := strings.Index(script, "Waiting for Yardmaster review after turn")
+	if pass < 0 || checkpoint < 0 || wait < 0 || !(pass < checkpoint && checkpoint < wait) {
+		t.Fatalf("green candidate must be checkpointed after mechanical pass and before Yardmaster handover: pass=%d checkpoint=%d wait=%d", pass, checkpoint, wait)
+	}
+}
+
 func TestCodingJobPassesOnlyShortLivedTokenToWorker(t *testing.T) {
 	cfg := CodingJobConfig{
 		Project: "p", Region: "r", JobName: "j",

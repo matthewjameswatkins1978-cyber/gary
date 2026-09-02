@@ -17,6 +17,7 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/supervisor"
 )
 
@@ -292,6 +293,147 @@ func callWorkerSupervisorAPI(ctx context.Context, cfg *config.Config, prompt str
 		return supervisor.Decision{}, component, err
 	}
 	return decision, component, nil
+}
+
+type childQualityDisposition string
+
+const (
+	childQualityPass     childQualityDisposition = "PASS"
+	childQualitySmallFix childQualityDisposition = "SMALL_FIX"
+	childQualityMajorFix childQualityDisposition = "MAJOR_FIX"
+	childQualityReplan   childQualityDisposition = "REPLAN"
+)
+
+func classifyChildQuality(plan *masterPlan) childQualityDisposition {
+	if plan == nil {
+		return childQualityMajorFix
+	}
+	if plan.Done {
+		return childQualityPass
+	}
+	summary := strings.ToUpper(strings.TrimSpace(plan.Summary))
+	switch {
+	case strings.HasPrefix(summary, "SMALL_FIX:"):
+		return childQualitySmallFix
+	case strings.HasPrefix(summary, "REPLAN:"):
+		return childQualityReplan
+	case strings.HasPrefix(summary, "MAJOR_FIX:"):
+		return childQualityMajorFix
+	default:
+		// A rejection without a clear classification is treated conservatively
+		// as a material repair, not as a pass and not as a route-changing replan.
+		return childQualityMajorFix
+	}
+}
+
+func runChildQualityInspection(cfg *config.Config, job *jobs.Job, workDir string) (*masterPlan, cost.Component, error) {
+	component := estimatedComponent("child-quality-inspector", cfg.MasterModel, "child quality inspector did not return provider usage")
+
+	head, err := gitops.CommitSHA(workDir)
+	if err != nil {
+		return nil, component, fmt.Errorf("child inspector candidate SHA: %w", err)
+	}
+	repoContext, err := buildYardmasterRepoContext(workDir, yardmasterContextMaxBytes)
+	if err != nil {
+		return nil, component, fmt.Errorf("child inspector repository snapshot: %w", err)
+	}
+	diffStat, _ := plannerCommandOutput(workDir, "git", "diff", "--stat", job.BaseBranch+"...HEAD")
+	diffText, _ := plannerCommandOutput(workDir, "git", "diff", "--find-renames", job.BaseBranch+"...HEAD")
+	if len(diffText) > 70000 {
+		diffText = diffText[:70000] + "\n[diff truncated]\n"
+	}
+
+	prompt := fmt.Sprintf(`You are GARY Yardmaster acting as the independent quality gate for a completed child job.
+
+The trusted control layer has already rerun the child's stated mechanical acceptance checks on this exact candidate in a fresh clone. Those checks passing is necessary but not sufficient for integration.
+
+Judge whether this bounded change is genuinely merge-worthy and up to a reasonable professional engineering standard for the assigned child objective.
+
+PASS only when the actual implementation:
+- materially satisfies the child objective, not merely the literal narrow check;
+- is coherent, maintainable and appropriately idiomatic for the existing project;
+- does not weaken tests, acceptance, safety boundaries or frozen constraints;
+- does not contain obvious hacks, placeholders, dead-end scaffolding or unjustified scope expansion;
+- does not leave an obvious material correctness, security, portability or integration defect that should be fixed before dependent work builds on it.
+
+Do not demand optional polish, personal stylistic preferences, broad redesign, speculative future-proofing, or unrelated cleanup. This is a bounded merge review, not a search for perfection.
+
+If it is not merge-worthy, classify the problem:
+- SMALL_FIX: the approach is sound and the candidate should be preserved; give the worker a short, exact list of small corrections. The next attempt should keep everything else.
+- MAJOR_FIX: substantial correction is needed but the core route/useful work should be preserved; explain what is materially wrong, what is worth keeping, and give concrete hints for the repair attempt.
+- REPLAN: the implementation route, job boundary, dependency assumption, or authority situation is fundamentally wrong enough that simply sending the same worker back with repair notes is the wrong control action.
+
+Do not trust worker prose or Batch status. Judge the exact candidate, its diff, repository evidence, child objective, constraints and already-rerun mechanical checks.
+
+Return exactly one of these shapes:
+
+{
+  "done": true,
+  "summary": "PASS: concise evidence basis",
+  "memory": "short merge-quality evidence",
+  "jobs": []
+}
+
+{
+  "done": false,
+  "summary": "SMALL_FIX: concise material issue",
+  "memory": "exact small corrections; explicitly say what to preserve",
+  "jobs": []
+}
+
+{
+  "done": false,
+  "summary": "MAJOR_FIX: concise material issue",
+  "memory": "strong repair guidance: what to keep, what must change, and useful implementation hints",
+  "jobs": []
+}
+
+{
+  "done": false,
+  "summary": "REPLAN: concise reason this route/job shape should change",
+  "memory": "evidence and the control-level issue the Yardmaster must account for",
+  "jobs": []
+}
+
+CHILD JOB ID: %s
+BASE BRANCH: %s
+CANDIDATE COMMIT: %s
+
+CHILD OBJECTIVE
+===============
+%s
+
+CHILD ACCEPTANCE ALREADY RERUN BY TRUSTED CONTROL
+=================================================
+%s
+
+PROJECT CONTEXT / CONSTRAINTS
+=============================
+%s
+
+DIFF STAT
+=========
+%s
+
+CANDIDATE DIFF
+==============
+%s
+
+CURRENT CANDIDATE REPOSITORY SNAPSHOT
+=====================================
+%s
+`, job.ID, job.BaseBranch, head, job.Task, strings.Join(job.Acceptance, "\n"), job.ProjectContext, diffStat, diffText, repoContext)
+
+	ctx, cancel := context.WithTimeout(context.Background(), yardmasterPlannerTimeout)
+	defer cancel()
+	plan, component, err := callYardmasterAPI(ctx, cfg, prompt, 0)
+	if err != nil {
+		return nil, component, fmt.Errorf("child quality inspector: %w", err)
+	}
+	if len(plan.Jobs) != 0 {
+		return nil, component, fmt.Errorf("child quality inspector returned jobs; expected verdict only")
+	}
+	return plan, component, nil
 }
 
 func runFinalSemanticInspection(cfg *config.Config, manifest *masterManifest, brief, stagingBranch string) (*masterPlan, cost.Component, error) {

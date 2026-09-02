@@ -37,12 +37,25 @@ func acceptanceCommandSegments(command string) []string {
 }
 
 func validateAcceptanceCommand(command string) bool {
-	parts := acceptanceCommandSegments(command)
-	if len(parts) == 0 || len(parts) > 12 {
+	command = strings.TrimSpace(command)
+	if command == "" || len(command) > maxAcceptanceCommandBytes {
 		return false
 	}
-	for _, part := range parts {
-		if !inboxCommand.MatchString(part) {
+	if strings.ContainsAny(command, "\x00\r\n") {
+		return false
+	}
+
+	// Acceptance is verifier code, so normal shell composition is allowed:
+	// pipes, &&, ;, quoting, command substitution and environment prefixes are
+	// ordinary ways to express checks. The Yardmaster is still not allowed to
+	// smuggle unrelated network/admin/destructive work into the control plane.
+	lower := strings.ToLower(" " + command + " ")
+	for _, forbidden := range []string{
+		" curl ", " wget ", " ssh ", " scp ", " sftp ", " nc ", " ncat ", " socat ",
+		" sudo ", " su ", " git push ", " gh ", " mkfs", " shutdown ", " reboot ",
+		" rm -rf /", " rm -rf ~", " rm -rf $home", " git reset --hard", " git clean -f",
+	} {
+		if strings.Contains(lower, forbidden) {
 			return false
 		}
 	}
