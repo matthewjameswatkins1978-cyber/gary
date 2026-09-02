@@ -51,7 +51,7 @@ jobs:
               "taskCount": 1,
               "parallelism": 1
             }],
-            "logsPolicy": {"destination": "CLOUD_LOGGING"},
+            "allocationPolicy": {"serviceAccount": {"email": "gary-batch-worker@gary-agent-yard.iam.gserviceaccount.com"}},\n            "logsPolicy": {"destination": "CLOUD_LOGGING"},
             "labels": {"app": "telltail", "kind": "cloud-canary"}
           }
           JSON
