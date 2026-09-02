@@ -918,21 +918,23 @@ func runLocalAcceptanceClassified(tmpDir string, job *jobs.Job, garyBranch, patc
 	}
 	defer cleanupPython()
 
-	for _, cmd := range job.Acceptance {
-		parts := acceptanceCommandParts(cmd, pythonBin)
-		if len(parts) == 0 {
-			err := errors.New("empty acceptance command")
-			logPrint(prefix, "    LOCAL ENVIRONMENT BLOCKED: %v", err)
-			return fail(err, true)
+	for _, command := range job.Acceptance {
+		for _, cmd := range acceptanceCommandSegments(command) {
+			parts := acceptanceCommandParts(cmd, pythonBin)
+			if len(parts) == 0 {
+				err := errors.New("empty acceptance command")
+				logPrint(prefix, "    LOCAL ENVIRONMENT BLOCKED: %v", err)
+				return fail(err, true)
+			}
+			c := exec.Command(parts[0], parts[1:]...)
+			c.Dir = workDir
+			out, err := c.CombinedOutput()
+			if err != nil {
+				logPrint(prefix, "    LOCAL FAIL: %s", strings.TrimSpace(string(out)))
+				return fail(fmt.Errorf("local acceptance command %q failed: %w", cmd, err), false)
+			}
+			logPrintln(prefix, "    LOCAL PASS")
 		}
-		c := exec.Command(parts[0], parts[1:]...)
-		c.Dir = workDir
-		out, err := c.CombinedOutput()
-		if err != nil {
-			logPrint(prefix, "    LOCAL FAIL: %s", strings.TrimSpace(string(out)))
-			return fail(fmt.Errorf("local acceptance command %q failed: %w", cmd, err), false)
-		}
-		logPrintln(prefix, "    LOCAL PASS")
 	}
 
 	if err := cleanupDisposableWorkerArtifacts(workDir); err != nil {
@@ -1036,13 +1038,15 @@ func preparePythonAcceptance(workDir string, commands []string) (string, func(),
 
 func usesPythonAcceptance(commands []string) bool {
 	for _, command := range commands {
-		parts := strings.Fields(command)
-		if len(parts) == 0 {
-			continue
-		}
-		switch parts[0] {
-		case "python", "python3", "pytest", "ruff", "build":
-			return true
+		for _, segment := range acceptanceCommandSegments(command) {
+			parts := strings.Fields(segment)
+			if len(parts) == 0 {
+				continue
+			}
+			switch parts[0] {
+			case "python", "python3", "pytest", "ruff", "build":
+				return true
+			}
 		}
 	}
 	return false
@@ -1050,9 +1054,11 @@ func usesPythonAcceptance(commands []string) bool {
 
 func hasPythonInstall(commands []string) bool {
 	for _, command := range commands {
-		parts := strings.Fields(command)
-		if len(parts) >= 4 && (parts[0] == "python" || parts[0] == "python3") && parts[1] == "-m" && parts[2] == "pip" && parts[3] == "install" {
-			return true
+		for _, segment := range acceptanceCommandSegments(command) {
+			parts := strings.Fields(segment)
+			if len(parts) >= 4 && (parts[0] == "python" || parts[0] == "python3") && parts[1] == "-m" && parts[2] == "pip" && parts[3] == "install" {
+				return true
+			}
 		}
 	}
 	return false
