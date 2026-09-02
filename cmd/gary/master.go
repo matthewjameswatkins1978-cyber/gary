@@ -686,13 +686,18 @@ func runMasterAcceptance(repoURL, branch string, commands []string) error {
 		return err
 	}
 	for _, command := range commands {
-		parts := strings.Fields(command)
-		cmd := exec.Command(parts[0], parts[1:]...)
-		cmd.Dir = tmp
-		cmd.Env = os.Environ()
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("%s failed: %w\n%s", command, err, strings.TrimSpace(string(out)))
+		for _, segment := range acceptanceCommandSegments(command) {
+			parts := strings.Fields(segment)
+			if len(parts) == 0 {
+				return fmt.Errorf("empty final acceptance segment in %q", command)
+			}
+			cmd := exec.Command(parts[0], parts[1:]...)
+			cmd.Dir = tmp
+			cmd.Env = os.Environ()
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("%s failed: %w\n%s", segment, err, strings.TrimSpace(string(out)))
+			}
 		}
 	}
 	return nil
