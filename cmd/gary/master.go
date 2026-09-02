@@ -455,7 +455,7 @@ func loadMasterManifest(path string) (*masterManifest, string, error) {
 		return nil, "", errors.New("max_workers must be between 1 and 8")
 	}
 	for _, command := range m.Acceptance {
-		if !inboxCommand.MatchString(command) {
+		if !validateAcceptanceCommand(command) {
 			return nil, "", fmt.Errorf("final acceptance command %q contains unsupported shell syntax", command)
 		}
 	}
@@ -486,8 +486,9 @@ PLANNER-SPECIFIC RULES
 - Give each Worker the outcome, relevant context, constraints, tool or toolchain assumptions and direct checks needed to work independently. Let the Worker choose implementation tactics and handle ordinary setup within the job's permissions.
 - ECONOMY: every planning call and every worker attempt is paid. Choose the smallest useful next slice, and do not schedule speculative future work.
 - ECONOMY: exactly one child job may run in a wave. Put one small, independently verifiable outcome in it; defer all other work to later waves after that result is integrated.
-- ECONOMY: every child worker has a hard maximum runtime of 600 seconds (10 minutes) and must begin wrapping up at 480 seconds (8 minutes). Do not give it a feature bundle, whole subsystem, broad migration, full test suite, or several unrelated acceptance goals.
-- TIME ESTIMATION: every job must include an estimated_minutes value from 1 through 10. Aim for 4–8 minutes; if the estimate is above 8 minutes, split the work before dispatch. Compare prior estimated_minutes with actual_seconds in the previous-wave history and make later jobs smaller when estimates overshoot or workers reach the soft deadline.
+- SUPERVISION: workers are live-supervised by the Yardmaster from observable telemetry. Elapsed time is not a failure condition. Do not split a coherent semantic outcome merely to satisfy a clock.
+- SUPERVISION: roughly every five minutes of active work, and at natural checkpoints, the Yardmaster may CONTINUE, GUIDE, STOP_AND_REPLAN, or send the candidate to inspection. Plan work that can benefit from this feedback loop.
+- TIME ESTIMATION: every job must include an estimated_minutes value from 1 through 60. This is a pacing/cost estimate, not a deadline. Prefer the smallest coherent independently verifiable outcome; compare estimates with actual_seconds to improve later planning without killing productive work.
 - ECONOMY: never repeat a scaffold or setup job merely because an earlier attempt was unsuccessful. If the same objective failed or was budget-stopped, use the evidence to split it into a smaller bounded slice or stop and report the blocker.
 - ECONOMY: after an accepted result, plan from the current staging branch and extend it; do not recreate already accepted models, tests, configuration, or project structure.
 - Workers should use judgment about ordinary tool setup. Keep ephemeral setup, caches and build products out of repository content and do not make one Worker's disposable environment a dependency for another.
@@ -594,14 +595,14 @@ func validateMasterPlan(plan *masterPlan, maxJobs int) error {
 		if strings.TrimSpace(child.Task) == "" || len(child.Task) > maxPlannerTaskBytes {
 			return fmt.Errorf("job %d task is empty or too large", i+1)
 		}
-		if child.EstimatedMinutes < 1 || child.EstimatedMinutes > 10 {
-			return fmt.Errorf("job %d estimated_minutes must be between 1 and 10", i+1)
+		if child.EstimatedMinutes < 1 || child.EstimatedMinutes > 60 {
+			return fmt.Errorf("job %d estimated_minutes must be between 1 and 60", i+1)
 		}
 		if len(child.Acceptance) == 0 {
 			return fmt.Errorf("job %d has no acceptance commands", i+1)
 		}
 		for _, command := range child.Acceptance {
-			if !inboxCommand.MatchString(command) {
+			if !validateAcceptanceCommand(command) {
 				return fmt.Errorf("job %d acceptance %q contains unsupported shell syntax", i+1, command)
 			}
 		}
