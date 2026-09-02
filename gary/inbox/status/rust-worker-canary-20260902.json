@@ -1,9 +1,9 @@
 {
   "id": "rust-worker-canary-20260902",
   "manifest": "gary/inbox/pending/rust-worker-canary-20260902.json",
-  "state": "queued",
-  "updated_at": "2026-09-02T12:47:26Z",
-  "detail": "explicit recovery queued after noninteractive submission fix; no Batch job was created",
+  "state": "running",
+  "updated_at": "2026-09-02T12:48:41Z",
+  "detail": "dispatching through Batch",
   "transitions": [
     {
       "state": "queued",
@@ -54,6 +54,16 @@
       "state": "queued",
       "at": "2026-09-02T12:47:26Z",
       "detail": "explicit recovery queued after noninteractive submission fix; no Batch job was created"
+    },
+    {
+      "state": "queued",
+      "at": "2026-09-02T12:48:41Z",
+      "detail": "accepted by inbox"
+    },
+    {
+      "state": "running",
+      "at": "2026-09-02T12:48:41Z",
+      "detail": "dispatching through Batch"
     }
   ]
 }
