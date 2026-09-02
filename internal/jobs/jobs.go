@@ -19,19 +19,22 @@ type Job struct {
 
 // RunResult records the outcome of a single gary run invocation.
 type RunResult struct {
-	JobID                string  `json:"job_id"`
-	BatchJobID           string  `json:"batch_job_id"`
-	Branch               string  `json:"branch"`
-	CommitSHA            string  `json:"commit_sha"`
-	Accepted             bool    `json:"accepted"`
-	DurationSecs         float64 `json:"duration_seconds"`
-	EstimatedMinutes     int     `json:"estimated_minutes,omitempty"`
-	PatchBytes           int64   `json:"patch_bytes"`
-	Attempts             int     `json:"attempts"`
-	RepairCount          int     `json:"repair_count"`
-	Escalated            bool    `json:"escalated"`
-	CloserUsed           bool    `json:"closer_used"`
-	FinalStatus          string  `json:"final_status"`
+	JobID            string  `json:"job_id"`
+	BatchJobID       string  `json:"batch_job_id"`
+	Branch           string  `json:"branch"`
+	CommitSHA        string  `json:"commit_sha"`
+	Accepted         bool    `json:"accepted"`
+	DurationSecs     float64 `json:"duration_seconds"`
+	EstimatedMinutes int     `json:"estimated_minutes,omitempty"`
+	PatchBytes       int64   `json:"patch_bytes"`
+	Attempts         int     `json:"attempts"`
+	RepairCount      int     `json:"repair_count"`
+	Escalated        bool    `json:"escalated"`
+	CloserUsed       bool    `json:"closer_used"`
+	FinalStatus      string  `json:"final_status"`
+	// FailureReason is bounded mechanical evidence for the Yardmaster. It is
+	// not an acceptance claim and must never contain worker prose alone.
+	FailureReason        string  `json:"failure_reason,omitempty"`
 	ProjectID            string  `json:"project_id,omitempty"`
 	MasterPacketDigest   string  `json:"master_packet_digest,omitempty"`
 	ProjectManualVersion int     `json:"project_manual_version,omitempty"`

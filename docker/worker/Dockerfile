@@ -28,6 +28,13 @@ RUN ln -sf /usr/bin/fdfind /usr/local/bin/fd
 RUN curl -fsSL https://go.dev/dl/go1.24.0.linux-amd64.tar.gz | tar -C /usr/local -xz
 ENV PATH="/usr/local/go/bin:${PATH}"
 
+# Rust repositories are first-class worker targets. Keep the toolchain,
+# rustfmt, and clippy in the image so Cargo acceptance runs in Batch itself.
+ARG RUST_VERSION=1.89.0
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain "${RUST_VERSION}" \
+    && /root/.cargo/bin/rustup component add rustfmt clippy --toolchain "${RUST_VERSION}"
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 # Install Node.js 20
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \

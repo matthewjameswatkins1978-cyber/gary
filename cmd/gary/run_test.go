@@ -40,8 +40,8 @@ func TestRuntimeBudgets(t *testing.T) {
 	if maxLowProgressAttempts != 3 {
 		t.Fatalf("low-progress escalation threshold = %d, want 3", maxLowProgressAttempts)
 	}
-	if batchSchedulingGraceSec != 300 {
-		t.Fatalf("Batch scheduling grace = %d, want 300", batchSchedulingGraceSec)
+	if batchSchedulingGraceSec != 900 {
+		t.Fatalf("Batch scheduling grace = %d, want 900", batchSchedulingGraceSec)
 	}
 	if yardmasterPlannerTimeout != 5*time.Minute {
 		t.Fatalf("Yardmaster planner timeout = %s, want 5m", yardmasterPlannerTimeout)
