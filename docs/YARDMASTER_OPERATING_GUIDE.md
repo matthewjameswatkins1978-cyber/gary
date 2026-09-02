@@ -433,7 +433,57 @@ A missing ordinary development package is not, by itself, a profound architectur
 
 ---
 
-## 14. Inspect, integrate, then replan from reality
+## 14. Worker-result control flow
+
+The Yardmaster should treat a worker result as a state transition proposal backed by evidence. The useful question is not merely "what label did the worker return?" but:
+
+> What durable evidence now exists, what is safe to preserve, and what is the smallest correct next control action?
+
+A strong default response matrix is:
+
+| Worker situation | Yardmaster default | Avoid |
+| --- | --- | --- |
+| **Accepted, pushed branch + commit present** | Integrate that exact accepted commit into controlled staging promptly, record it, verify the integration, then plan from the new staging state. | Leaving accepted work stranded while assigning the same or dependent work again. |
+| **Worker says DONE but mechanical acceptance is false/missing** | Treat as inconsistent evidence. Do not integrate. Inspect the acceptance record or control-plane result generation. | Trusting prose or the DONE label. |
+| **Accepted flag is true but pushed branch/commit is missing or unrecoverable** | Treat as a control/writeback integrity failure. Preserve logs/evidence and repair the transport/writeback path. | Re-implementing already accepted code just because delivery failed. |
+| **FAILED with useful partial work/evidence** | Preserve the result branch/patch and failure evidence. Build a repair handoff around the specific remaining failure. | Throwing away useful work or issuing "try again" unchanged. |
+| **FAILED with no useful progress** | Change something material: narrower objective, different dependency order, better context, different tool/environment route, or escalation if competence/authority is the real problem. | Repeating a materially equivalent packet. |
+| **BLOCKED by ordinary setup/environment** | Fix or provision the environment when permitted, or reroute through an authorised workable environment. | Escalating a missing compiler/package as a product decision. |
+| **BLOCKED by genuine authority/external dependency** | Stop dependent work, preserve useful state, identify the exact missing authority/dependency and the smallest unblock. Continue independent work only when safe. | Inventing permissions or disguising the blocker as implementation failure. |
+| **REPLAN_REQUIRED** | Assume the current job shape or dependency assumptions are wrong until evidence says otherwise. Redraw the next slice using the new evidence. | Resubmitting the same job under a new name. |
+| **BUDGET_STOPPED / timeout / cancellation / infrastructure interruption** | Treat as incomplete or indeterminate. Preserve any useful branch, patch, logs and progress evidence; resume, split, or reroute based on what actually completed. | Calling the implementation bad simply because the execution envelope ended. |
+| **No change / objective already satisfied** | Verify the objective on current staging. If already satisfied, retire the redundant job and replan. If not, investigate why the worker produced no delta. | Forcing a cosmetic commit so the job "looks productive." |
+| **Accepted result conflicts during integration** | Preserve the accepted result. Treat the conflict as a new reconciliation problem against the newer staging state; re-verify after reconciliation. | Discarding the accepted commit or blindly replaying the original implementation job. |
+| **Repeated equivalent failure with no new evidence** | Stop the loop and replan or escalate. | Spending another worker merely because retries remain. |
+| **Ambiguous/internally contradictory result** | Fail closed on success claims, preserve evidence, and investigate the control/result pipeline. | Guessing the most convenient interpretation. |
+
+### Accepted work is an integration obligation
+
+For GARY, successful child work is not finished when the worker pushes a branch. It becomes useful project progress when the Yardmaster integrates it into the controlled staging state.
+
+The normal sequence is: worker implements → mechanical checks pass → result identifies an accepted pushed branch and commit → Yardmaster integrates that exact commit → integration is verified → staging becomes the new planning truth → the next job is chosen from that reality.
+
+If the branch was accepted against an older staging state but now conflicts with newer accepted work, preserve the acceptance evidence. The integration has become stale, not necessarily the implementation. Reconcile from current staging and run the relevant checks again.
+
+### Partial work should be preserved without polluting staging
+
+An unaccepted branch can still be valuable. Keep it as evidence or as input to a repair worker, but do not automatically merge it into controlled staging simply because effort was spent.
+
+If a clearly separable subset is mechanically proven correct, it may be promoted as its own accepted slice through the trusted acceptance/integration path. Otherwise keep staging clean and give the repair worker precise instructions about what to reuse.
+
+### Distinguish implementation failure from delivery failure
+
+Code or acceptance failure is an implementation problem. Code and checks succeeding followed by push, token, network, or writeback failure is a delivery/control problem. The latter should normally trigger transport or control recovery, not another implementation attempt.
+
+### Terminal project state is monotonic
+
+Once a project is deliberately `ACCEPTED` or `ARCHIVED`, no stale worker, Yardmaster run, retry, status publisher, or old snapshot may move it back into an active state.
+
+Terminality should behave like a one-way door unless an explicit authorised reopen operation exists. A stale writer should be rejected rather than winning because it happened to publish later. Use project identity, generation/version, terminal-state checks, and trustworthy update ordering to prevent resurrection.
+
+---
+
+## 15. Inspect, integrate, then replan from reality
 
 A worker reporting completion means ready for inspection, not automatic integration.
 
@@ -449,7 +499,7 @@ The plan serves the project. The project does not serve the plan.
 
 ---
 
-## 15. Use tools and human escalation sensibly
+## 16. Use tools and human escalation sensibly
 
 Workers may use ordinary tools and safe alternatives needed to finish authorised work. Using `rg` instead of `grep` is implementation freedom. Replacing a required Cloud Run deployment with a local Docker demonstration is changing the requested outcome.
 
@@ -469,7 +519,7 @@ A missing ordinary package is normally an environment problem, not a human produ
 
 ---
 
-## 16. Verify and package the project as a whole
+## 17. Verify and package the project as a whole
 
 Worker checks prove pieces. They do not prove the integrated project works.
 
@@ -493,7 +543,7 @@ Temporary worker workspaces may be removed after useful evidence and accepted co
 
 ---
 
-## 17. Let the Foreman's Notebook learn cautiously
+## 18. Let the Foreman's Notebook learn cautiously
 
 When the Foreman's Notebook is available, it may consider what useful batches of work appear to teach the Yardmaster. Do not force a lesson.
 
@@ -514,7 +564,7 @@ Do not learn workarounds for a GARY defect when the correct lesson is that GARY 
 
 ---
 
-## 18. Default project-opening sequence
+## 19. Default project-opening sequence
 
 A strong default orientation is:
 
