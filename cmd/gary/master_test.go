@@ -93,6 +93,29 @@ func TestLoadMasterManifestAcceptsProjectIDWithoutBriefPath(t *testing.T) {
 	}
 }
 
+func TestMasterRequiresIndependentFinalSemanticInspection(t *testing.T) {
+	masterData, err := os.ReadFile("master.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plannerData, err := os.ReadFile("planner.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	masterSource := string(masterData)
+	plannerSource := string(plannerData)
+	for _, required := range []string{"runFinalSemanticInspection", "final-inspection", "REJECTED completion"} {
+		if !strings.Contains(masterSource, required) {
+			t.Fatalf("master completion path missing semantic inspection marker %q", required)
+		}
+	}
+	for _, required := range []string{"independent final acceptance inspector", "Do not trust Builder or Yardmaster completion claims as evidence", "A dependency added without the requested implementation is not completion"} {
+		if !strings.Contains(plannerSource, required) {
+			t.Fatalf("final inspector prompt missing %q", required)
+		}
+	}
+}
+
 func TestMasterWorkflowAutoContinuesPausedRunsAndPersistsProjectContext(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "gary-master.yml"))
 	if err != nil {
