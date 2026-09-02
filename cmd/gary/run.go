@@ -409,44 +409,165 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			}
 			if localResult.passed {
 				workDir := filepath.Join(attemptDir, "repo")
-				commitSHA, _ := gitops.CommitSHA(workDir)
-				if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
-					lastFailure = fmt.Sprintf("GitHub writeback push failed for %s: %v", garyBranch, err)
-					finalStatus = "BLOCKED"
-					logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
+				quality, qualityCost, qualityErr := runChildQualityInspection(cfg, job, workDir)
+				runCost.Add(qualityCost)
+				if qualityErr != nil {
+					// A mechanically green candidate must never become accepted
+					// merely because the quality gate is unavailable. Preserve
+					// the exact candidate for recovery and stop at the control
+					// boundary rather than throwing the work away.
+					commitSHA, _ := gitops.CommitSHA(workDir)
+					if pushErr := gitops.Push(workDir, "origin", garyBranch); pushErr != nil {
+						lastFailure = fmt.Sprintf("Yardmaster quality inspection unavailable (%v); checkpoint push also failed: %v", qualityErr, pushErr)
+						finalStatus = "BLOCKED"
+						logPrint(prefix, "  QUALITY GATE BLOCKED: %s", lastFailure)
+						os.RemoveAll(attemptDir)
+						break
+					}
+					duration := time.Since(submittedAt)
+					result := jobs.RunResult{
+						JobID:                job.ID,
+						ProjectID:            job.ProjectID,
+						MasterPacketDigest:   job.MasterPacketDigest,
+						ProjectManualVersion: job.ProjectManualVersion,
+						BatchJobID:           jobName,
+						BatchState:           batchState,
+						ArtifactPrefix:       attemptGCSPath,
+						Branch:               garyBranch,
+						CommitSHA:            commitSHA,
+						Accepted:             false,
+						Verification:         "trusted-independent",
+						QualityReview:        "UNAVAILABLE",
+						DurationSecs:         duration.Seconds(),
+						PatchBytes:           int64(len(patchData)),
+						Attempts:             attempt,
+						RepairCount:          repairCount,
+						Escalated:            escalated,
+						CloserUsed:           closerUsed,
+						FinalStatus:          "BLOCKED",
+						FailureReason:        compactFailureLogs("Yardmaster quality inspection unavailable: "+qualityErr.Error(), 4000),
+						ModelCostEstimated:   runCost.ModelCostUSD,
+						ComputeCostEstimated: runCost.ComputeCostUSD,
+						TotalCostEstimated:   runCost.TotalCostUSD,
+						Cost:                 runCost,
+					}
 					os.RemoveAll(attemptDir)
-					break
+					saveRunResult(cfg, result)
+					writeLedger(cfg, result, model)
+					snapshotJobComplete(job.ID, result)
+					return result
 				}
-				duration := time.Since(submittedAt)
-				os.RemoveAll(attemptDir)
 
-				result := jobs.RunResult{
-					JobID:                job.ID,
-					ProjectID:            job.ProjectID,
-					MasterPacketDigest:   job.MasterPacketDigest,
-					ProjectManualVersion: job.ProjectManualVersion,
-					BatchJobID:           jobName,
-					BatchState:           batchState,
-					Branch:               garyBranch,
-					CommitSHA:            commitSHA,
-					Accepted:             true,
-					Verification:         "trusted-independent",
-					DurationSecs:         duration.Seconds(),
-					PatchBytes:           int64(len(patchData)),
-					Attempts:             attempt,
-					RepairCount:          repairCount,
-					Escalated:            escalated,
-					CloserUsed:           closerUsed,
-					FinalStatus:          "DONE",
-					ModelCostEstimated:   runCost.ModelCostUSD,
-					ComputeCostEstimated: runCost.ComputeCostUSD,
-					TotalCostEstimated:   runCost.TotalCostUSD,
-					Cost:                 runCost,
+				disposition := classifyChildQuality(quality)
+				switch disposition {
+				case childQualityPass:
+					commitSHA, _ := gitops.CommitSHA(workDir)
+					if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
+						lastFailure = fmt.Sprintf("GitHub writeback push failed for %s: %v", garyBranch, err)
+						finalStatus = "BLOCKED"
+						logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
+						os.RemoveAll(attemptDir)
+						break
+					}
+					duration := time.Since(submittedAt)
+					os.RemoveAll(attemptDir)
+
+					result := jobs.RunResult{
+						JobID:                job.ID,
+						ProjectID:            job.ProjectID,
+						MasterPacketDigest:   job.MasterPacketDigest,
+						ProjectManualVersion: job.ProjectManualVersion,
+						BatchJobID:           jobName,
+						BatchState:           batchState,
+						ArtifactPrefix:       attemptGCSPath,
+						Branch:               garyBranch,
+						CommitSHA:            commitSHA,
+						Accepted:             true,
+						Verification:         "trusted-independent",
+						QualityReview:        "PASS: " + strings.TrimSpace(quality.Summary),
+						DurationSecs:         duration.Seconds(),
+						PatchBytes:           int64(len(patchData)),
+						Attempts:             attempt,
+						RepairCount:          repairCount,
+						Escalated:            escalated,
+						CloserUsed:           closerUsed,
+						FinalStatus:          "DONE",
+						ModelCostEstimated:   runCost.ModelCostUSD,
+						ComputeCostEstimated: runCost.ComputeCostUSD,
+						TotalCostEstimated:   runCost.TotalCostUSD,
+						Cost:                 runCost,
+					}
+					saveRunResult(cfg, result)
+					writeLedger(cfg, result, model)
+					snapshotJobComplete(job.ID, result)
+					return result
+
+				case childQualitySmallFix, childQualityMajorFix:
+					repairCount++
+					lastProgressState = "mechanically-passed-quality-repair"
+					lastFailure = strings.TrimSpace(quality.Summary)
+					lastRepairBrief = strings.TrimSpace(quality.Memory)
+					progressHistory = append(progressHistory, "QUALITY_REVIEW "+lastFailure)
+					if disposition == childQualitySmallFix {
+						logPrint(prefix, "  YARDMASTER SMALL FIX: %s", lastFailure)
+					} else {
+						logPrint(prefix, "  YARDMASTER MAJOR FIX: %s", lastFailure)
+					}
+					if lastRepairBrief != "" {
+						logPrint(prefix, "  YARDMASTER REPAIR GUIDANCE: %s", lastRepairBrief)
+					}
+					os.RemoveAll(attemptDir)
+					if attempt == attemptLimit {
+						escalated = true
+						break
+					}
+					// The next worker attempt receives the checkpointed patch and
+					// the Yardmaster's review. Small issues preserve the approach;
+					// major issues receive stronger guidance while preserving any
+					// useful work the review explicitly says to keep.
+					continue
+
+				case childQualityReplan:
+					commitSHA, _ := gitops.CommitSHA(workDir)
+					if pushErr := gitops.Push(workDir, "origin", garyBranch); pushErr != nil {
+						lastFailure = fmt.Sprintf("%s; checkpoint push failed: %v", strings.TrimSpace(quality.Summary), pushErr)
+						finalStatus = "BLOCKED"
+						os.RemoveAll(attemptDir)
+						break
+					}
+					duration := time.Since(submittedAt)
+					result := jobs.RunResult{
+						JobID:                job.ID,
+						ProjectID:            job.ProjectID,
+						MasterPacketDigest:   job.MasterPacketDigest,
+						ProjectManualVersion: job.ProjectManualVersion,
+						BatchJobID:           jobName,
+						BatchState:           batchState,
+						ArtifactPrefix:       attemptGCSPath,
+						Branch:               garyBranch,
+						CommitSHA:            commitSHA,
+						Accepted:             false,
+						Verification:         "trusted-independent",
+						QualityReview:        "REPLAN: " + strings.TrimSpace(quality.Summary),
+						DurationSecs:         duration.Seconds(),
+						PatchBytes:           int64(len(patchData)),
+						Attempts:             attempt,
+						RepairCount:          repairCount,
+						Escalated:            escalated,
+						CloserUsed:           closerUsed,
+						FinalStatus:          "REPLAN_REQUIRED",
+						FailureReason:        compactFailureLogs(strings.TrimSpace(quality.Summary)+"\n"+strings.TrimSpace(quality.Memory), 4000),
+						ModelCostEstimated:   runCost.ModelCostUSD,
+						ComputeCostEstimated: runCost.ComputeCostUSD,
+						TotalCostEstimated:   runCost.TotalCostUSD,
+						Cost:                 runCost,
+					}
+					os.RemoveAll(attemptDir)
+					saveRunResult(cfg, result)
+					writeLedger(cfg, result, model)
+					snapshotJobComplete(job.ID, result)
+					return result
 				}
-				saveRunResult(cfg, result)
-				writeLedger(cfg, result, model)
-				snapshotJobComplete(job.ID, result)
-				return result
 			}
 			lastFailure = fmt.Sprintf("trusted acceptance rejected recovered candidate after Batch state %s: %v", batchState, localResult.err)
 		}
@@ -614,6 +735,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		ProjectID:            job.ProjectID,
 		BatchJobID:           lastBatchJobID,
 		BatchState:           lastBatchState,
+		ArtifactPrefix:       gcsPath,
 		MasterPacketDigest:   job.MasterPacketDigest,
 		ProjectManualVersion: job.ProjectManualVersion,
 		Branch:               garyBranch,
