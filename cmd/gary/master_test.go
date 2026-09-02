@@ -217,6 +217,31 @@ func TestMasterPlanJSONCarriesWorkerEstimate(t *testing.T) {
 	}
 }
 
+func TestValidateIntegrableMasterResult(t *testing.T) {
+	good := jobs.RunResult{JobID: "good", FinalStatus: "DONE", Accepted: true, Branch: "gary/good", CommitSHA: "abc123"}
+	if err := validateIntegrableMasterResult(good); err != nil {
+		t.Fatalf("accepted pushed result rejected: %v", err)
+	}
+
+	cases := []jobs.RunResult{
+		{JobID: "done-unaccepted", FinalStatus: "DONE", Accepted: false, Branch: "gary/x", CommitSHA: "abc123"},
+		{JobID: "accepted-failed", FinalStatus: "FAILED", Accepted: true, Branch: "gary/x", CommitSHA: "abc123"},
+		{JobID: "accepted-no-branch", FinalStatus: "DONE", Accepted: true, CommitSHA: "abc123"},
+		{JobID: "accepted-no-commit", FinalStatus: "DONE", Accepted: true, Branch: "gary/x"},
+	}
+	for _, tc := range cases {
+		if err := validateIntegrableMasterResult(tc); err == nil {
+			t.Fatalf("inconsistent worker result accepted: %+v", tc)
+		}
+	}
+
+	for _, status := range []string{"FAILED", "BLOCKED", "REPLAN_REQUIRED", "BUDGET_STOPPED"} {
+		if err := validateIntegrableMasterResult(jobs.RunResult{JobID: status, FinalStatus: status}); err != nil {
+			t.Fatalf("ordinary non-accepted result %s should remain replannable: %v", status, err)
+		}
+	}
+}
+
 func TestMasterWaveBoundsGiveResumeAFreshBoundedBudget(t *testing.T) {
 	start, end := masterWaveBounds(6, 5, true)
 	if start != 7 || end != 11 {
@@ -267,7 +292,7 @@ func TestMasterPlannerPromptIncludesCorrectRoleUniversalRulesAndJobBrief(t *test
 	if !strings.Contains(prompt, brief) {
 		t.Fatal("planner prompt must preserve job-specific instructions")
 	}
-	for _, marker := range []string{"ECONOMY: every planning call", "exactly one child job may run in a wave", "never repeat a scaffold"} {
+	for _, marker := range []string{"ECONOMY: every planning call", "exactly one child job may run in a wave", "never repeat a scaffold", "accepted child work is an integration obligation", "BUDGET_STOPPED", "control-plane integrity fault"} {
 		if !strings.Contains(prompt, marker) {
 			t.Fatalf("planner prompt missing economy rule %q", marker)
 		}
