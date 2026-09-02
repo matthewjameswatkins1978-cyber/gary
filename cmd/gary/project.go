@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/project"
 )
 
@@ -505,6 +506,10 @@ func buildProjectManualPrompt(input project.ProjectContext) string {
 	}
 	return fmt.Sprintf(`You are the GARY Yardmaster performing durable project intake.
 
+COMPLETION PRINCIPLE
+====================
+%s
+
 Read the complete master packet below. Distinguish requirements from suggestions
 and background. Preserve ambiguity and contradictions instead of inventing
 answers. Record important requirements with stable IDs and source locators into
@@ -539,7 +544,7 @@ important_rationale, known_dependencies, known_external_services, known_risks,
 open_questions, conflicts, current_phase, current_strategy,
 completed_capabilities, remaining_capabilities, active_decisions,
 superseded_decisions, source_packet_digest, manual_version and manual_digest.
-`, input.Project.ProjectID, input.Project.MasterPacketDigest, input.Packet, amendments.String())
+`, doctrine.CompletionPrinciple, input.Project.ProjectID, input.Project.MasterPacketDigest, input.Packet, amendments.String())
 }
 
 func callProjectYardmasterJSON(ctx context.Context, cfg *config.Config, prompt string) (string, error) {

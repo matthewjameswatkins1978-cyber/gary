@@ -15,9 +15,10 @@ func TestRuntimeDoctrineStaysInDocumentedRulebook(t *testing.T) {
 	}
 	doc := strings.ReplaceAll(string(data), "\r\n", "\n")
 	for name, rules := range map[string]string{
-		"universal":  UniversalRules,
-		"yardmaster": YardmasterRoleRules,
-		"worker":     WorkerRoleRules,
+		"completion principle": CompletionPrinciple,
+		"universal":            UniversalRules,
+		"yardmaster":           YardmasterRoleRules,
+		"worker":               WorkerRoleRules,
 	} {
 		if !strings.Contains(doc, rules) {
 			t.Fatalf("GARY_RULEBOOK.md must contain the exact runtime %s rules", name)

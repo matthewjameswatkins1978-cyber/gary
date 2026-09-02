@@ -272,7 +272,8 @@ func TestMasterPlannerPromptDelegatesHeavyWork(t *testing.T) {
 	prompt := buildMasterPlannerPrompt(m, "finish it", "stage", 1, "[]", "")
 	for _, required := range []string{
 		"You are the planning and supervision layer. You do not implement child jobs.",
-		"Do not install dependencies",
+		doctrine.CompletionPrinciple,
+		"Give each Worker the outcome, relevant context, constraints, tool or toolchain assumptions",
 		"delegate execution and verification to child jobs",
 		"single control-plane model call",
 		"Return only the JSON object",
@@ -290,9 +291,8 @@ func TestMasterPlannerPromptDefinesParallelIsolationAndSafeAcceptance(t *testing
 		"fresh isolated clone",
 		"Sibling jobs do not share virtualenvs",
 		"If P0/blocker verification is still unresolved",
-		"Acceptance commands are executed directly without a shell",
-		"Never put quotes, parentheses",
-		".venv/bin/python -m pytest -q",
+		"simple direct acceptance checks",
+		"GARY validates the command form before dispatch",
 	} {
 		if !strings.Contains(prompt, required) {
 			t.Fatalf("planner prompt missing %q", required)

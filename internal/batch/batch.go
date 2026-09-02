@@ -548,12 +548,16 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 	return strings.Join(parts, "\n")
 }
 
-func codingWorkerPrompt(task string, estimatedMinutes int) string {
+func codingWorkerPrompt(task, acceptance string, estimatedMinutes int) string {
 	timeEstimate := ""
 	if estimatedMinutes >= 1 && estimatedMinutes <= 10 {
-		timeEstimate = fmt.Sprintf("\n- YARDMASTER ESTIMATE: this slice is expected to take about %d minutes. Treat that as the planning budget: finish the stated outcome and acceptance evidence within it; if it is running long, stop opening new scope and wrap the partial result for review.\n", estimatedMinutes)
+		timeEstimate = fmt.Sprintf("\n- YARDMASTER ESTIMATE: this slice is expected to take about %d minutes. Use it to pace the work and wrap the stated outcome with evidence if it runs long.\n", estimatedMinutes)
 	}
 	return fmt.Sprintf(`You are a GARY implementation Worker. Work only in this repository.
+
+COMPLETION PRINCIPLE
+====================
+%s
 
 WORKER ROLE
 ===========
@@ -565,16 +569,22 @@ UNIVERSAL GARY RULES
 
 COST AND REPOSITORY HYGIENE
 ============================
-- This is a paid, bounded attempt. Work only on the stated slice; do not explore unrelated parts of the repository or repeat completed work.
-- TIMEBOX: the worker has a hard maximum of 600 seconds. At 480 seconds (8 minutes), stop opening new files and stop starting new work; wrap up the current slice, run the stated acceptance checks, save the partial patch, and leave clear evidence of what passed and what remains.%s
-- Do not create virtual environments, install dependencies, or run broad dependency/build scans unless the task or acceptance command explicitly requires it. Use temporary locations outside the repository for disposable tooling.
-- Never commit generated environments, caches, dependency trees, build products, or machine-local files. Before committing, inspect git status and remove disposable artifacts; the patch must contain only intentional source, test, documentation, and configuration changes.
+- This is a paid, bounded attempt. Work on the stated outcome and use judgment about the shortest sound route to it; do not repeat completed work or expand into unrelated scope.
+- Work within the runtime's time limit. If the work runs long, stop broadening the scope, preserve useful progress and leave clear evidence of what passed and what remains.%s
+- Before substantive work, make sure the tools and environment needed by the job and its checks are available. Use the repository's pinned toolchain where present and provision a compatible tool when needed and permitted.
+- Keep generated environments, caches, build products and machine-local files out of the commit. The patch should contain only intentional repository changes.
 
 JOB
 ===
 %s
 
-Do not ask questions unless genuinely blocked.`, doctrine.WorkerRoleRules, doctrine.UniversalRules, timeEstimate, task)
+CHECKS
+======
+These are the direct checks GARY will use for this job:
+%s
+Use your judgment to satisfy them and run the relevant checks before wrapping up. Return the actual results as evidence.
+
+Do not ask questions unless genuinely blocked.`, doctrine.CompletionPrinciple, doctrine.WorkerRoleRules, doctrine.UniversalRules, timeEstimate, task, acceptance)
 }
 
 // GenerateCodingJobConfig produces the JSON config for a Batch coding job.
@@ -590,7 +600,7 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 	}
 
 	// Build the full prompt for the worker.
-	prompt := codingWorkerPrompt(cfg.Task, cfg.EstimatedMinutes)
+	prompt := codingWorkerPrompt(cfg.Task, cfg.Acceptance, cfg.EstimatedMinutes)
 
 	// Base64 encode prompt for safe shell transport
 	promptB64 := base64.StdEncoding.EncodeToString([]byte(prompt))

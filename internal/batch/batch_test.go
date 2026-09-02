@@ -466,7 +466,11 @@ func TestCodingJobAcceptancePytestStyle(t *testing.T) {
 
 func TestCodingWorkerPromptIncludesCorrectRoleUniversalRulesAndTask(t *testing.T) {
 	task := "Fix one bounded defect."
-	prompt := codingWorkerPrompt(task, 5)
+	acceptance := "go test ./..."
+	prompt := codingWorkerPrompt(task, acceptance, 5)
+	if !strings.Contains(prompt, doctrine.CompletionPrinciple) {
+		t.Fatal("worker prompt must include the completion principle")
+	}
 	if !strings.Contains(prompt, doctrine.WorkerRoleRules) {
 		t.Fatal("worker prompt must include Worker role rules")
 	}
@@ -476,17 +480,23 @@ func TestCodingWorkerPromptIncludesCorrectRoleUniversalRulesAndTask(t *testing.T
 	if !strings.Contains(prompt, doctrine.UniversalRules) {
 		t.Fatal("worker prompt must include universal GARY rules")
 	}
-	if !strings.Contains(prompt, "Never commit generated environments") {
+	if !strings.Contains(prompt, "Keep generated environments, caches, build products") {
 		t.Fatal("worker prompt must include repository hygiene rules")
 	}
-	if !strings.Contains(prompt, "At 480 seconds (8 minutes)") {
-		t.Fatal("worker prompt must include the soft deadline")
+	if !strings.Contains(prompt, "Work within the runtime's time limit") {
+		t.Fatal("worker prompt must include the runtime time limit")
 	}
 	if !strings.Contains(prompt, "YARDMASTER ESTIMATE: this slice is expected to take about 5 minutes") {
 		t.Fatal("worker prompt must include Yardmaster's bounded estimate")
 	}
 	if !strings.Contains(prompt, task) {
 		t.Fatal("worker prompt must preserve the bounded job")
+	}
+	if !strings.Contains(prompt, acceptance) {
+		t.Fatal("worker prompt must preserve the Yardmaster checks")
+	}
+	if strings.Contains(prompt, "Do not create virtual environments, install dependencies") {
+		t.Fatal("worker prompt must leave ordinary tool setup to Worker judgment")
 	}
 }
 
@@ -501,7 +511,7 @@ func TestCodingWorkerPromptOnlyIncludesValidYardmasterEstimate(t *testing.T) {
 		{name: "out-of-range", estimate: 11},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			prompt := codingWorkerPrompt("bounded task", test.estimate)
+			prompt := codingWorkerPrompt("bounded task", "go test ./...", test.estimate)
 			if test.want != "" && !strings.Contains(prompt, test.want) {
 				t.Fatalf("prompt missing estimate marker %q", test.want)
 			}
@@ -545,7 +555,7 @@ func TestPromptTransportRoundTrip(t *testing.T) {
 	}
 
 	// Build the full prompt the same way GenerateCodingJobConfig does.
-	prompt := codingWorkerPrompt(cfg.Task, cfg.EstimatedMinutes)
+	prompt := codingWorkerPrompt(cfg.Task, cfg.Acceptance, cfg.EstimatedMinutes)
 
 	promptB64 := base64.StdEncoding.EncodeToString([]byte(prompt))
 
