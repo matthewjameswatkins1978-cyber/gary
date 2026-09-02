@@ -396,7 +396,7 @@ type CodingJobConfig struct {
 func generateCodingWorkerScript(cfg CodingJobConfig) string {
 	parts := []string{
 		"#!/bin/bash",
-		"set -e",
+		"set -e -o pipefail",
 		"",
 		"export GEMINI_CLI_TRUST_WORKSPACE=true",
 		"export CLOUDSDK_PYTHON=/usr/local/bin/python",
@@ -420,6 +420,9 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		fmt.Sprintf("echo \"Cloning %s...\"", cfg.RepoURL),
 		fmt.Sprintf("git clone %s /workspace/repo", cfg.RepoURL),
 		"cd /workspace/repo",
+		"",
+		"echo \"Rust: $(rustc --version)\"",
+		"echo \"Cargo: $(cargo --version)\"",
 		"",
 		"# Set git identity for commits",
 		"git config --global user.email \"gary@agent-yard.local\"",
@@ -466,6 +469,7 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		"else",
 		"  echo \"ACCEPTANCE FAILED (exit code $ACCEPTANCE_EXIT)\" | tee -a /workspace/acceptance_output.txt",
 		"fi",
+		"echo \"GEMINI_EXIT=$GEMINI_EXIT\" | tee -a /workspace/acceptance_output.txt",
 		"",
 		"# Remove disposable worker artifacts before staging; never publish environments or caches.",
 		"find . -type d \\( -name .venv -o -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache -o -name .tox -o -name .nox -o -name .swiftpm -o -name .build -o -name DerivedData \\) -prune -exec rm -rf {} + 2>/dev/null || true",
@@ -497,12 +501,11 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		fmt.Sprintf("gcloud storage cp /workspace/acceptance_output.txt %s/acceptance_output.txt 2>/dev/null || python3 -m gsutil cp /workspace/acceptance_output.txt %s/acceptance_output.txt || true", cfg.GCSPath, cfg.GCSPath),
 		fmt.Sprintf("gcloud storage cp /workspace/usage.jsonl %s/usage.jsonl 2>/dev/null || python3 -m gsutil cp /workspace/usage.jsonl %s/usage.jsonl || true", cfg.GCSPath, cfg.GCSPath),
 		"",
-		"# Only now return the mechanical acceptance exit code.",
-		"if [ $ACCEPTANCE_EXIT -ne 0 ]; then",
-		"  exit $ACCEPTANCE_EXIT",
-		"fi",
-		"",
+		"# Artifact capture succeeded; acceptance is evidence for the control plane,",
+		"# not a Batch infrastructure failure. The controller reruns acceptance",
+		"# against the captured patch before it can be accepted or written back.",
 		"echo \"GARY CODING WORKER COMPLETE\"",
+		"exit 0",
 	}
 
 	return strings.Join(parts, "\n")

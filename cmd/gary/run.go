@@ -30,10 +30,12 @@ import (
 )
 
 const (
-	maxAttempts             = 8
-	maxLowProgressAttempts  = 3
-	defaultWorkerMaxRunSec  = 600
-	batchSchedulingGraceSec = 300
+	maxAttempts            = 8
+	maxLowProgressAttempts = 3
+	defaultWorkerMaxRunSec = 600
+	// Batch maxRunDuration covers task execution, not queueing/provisioning.
+	// Keep enough bounded grace for a cold VM without abandoning an active job.
+	batchSchedulingGraceSec = 900
 )
 
 var outputMu sync.Mutex
@@ -149,14 +151,14 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		ctx, err := project.DefaultStore().LoadContext(job.ProjectID)
 		if err != nil {
 			logPrint(prefix, "  PROJECT CONTEXT BLOCKED: %v", err)
-			result := jobs.RunResult{JobID: job.ID, ProjectID: job.ProjectID, FinalStatus: "BLOCKED", Cost: cost.NewSummary()}
+			result := jobs.RunResult{JobID: job.ID, ProjectID: job.ProjectID, FinalStatus: "BLOCKED", FailureReason: err.Error(), Cost: cost.NewSummary()}
 			saveRunResult(cfg, result)
 			return result
 		}
 		if job.MasterPacketDigest != "" || job.ProjectManualVersion != 0 {
 			if err := ctx.ValidateProvenance(job.ProjectID, job.MasterPacketDigest, job.ProjectManualVersion); err != nil {
 				logPrint(prefix, "  PROJECT CONTEXT BLOCKED: %v", err)
-				result := jobs.RunResult{JobID: job.ID, ProjectID: job.ProjectID, MasterPacketDigest: ctx.Project.MasterPacketDigest, ProjectManualVersion: ctx.Project.ProjectManualVersion, FinalStatus: "BLOCKED", Cost: cost.NewSummary()}
+				result := jobs.RunResult{JobID: job.ID, ProjectID: job.ProjectID, MasterPacketDigest: ctx.Project.MasterPacketDigest, ProjectManualVersion: ctx.Project.ProjectManualVersion, FinalStatus: "BLOCKED", FailureReason: err.Error(), Cost: cost.NewSummary()}
 				saveRunResult(cfg, result)
 				return result
 			}
@@ -198,6 +200,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				JobID:              job.ID,
 				Branch:             garyBranch,
 				FinalStatus:        "BUDGET_STOPPED",
+				FailureReason:      reason,
 				DurationSecs:       duration.Seconds(),
 				Attempts:           0,
 				TotalCostEstimated: 0,
@@ -215,6 +218,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	var lastRepairBrief string
 	var lastProgressState string
 	var prevGCSPatch string
+	lastBatchJobID := ""
 	progressHistory := make([]string, 0)
 	lowProgressStreak := 0
 	repairCount := 0
@@ -226,11 +230,12 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 
 	for attempt := 1; attempt <= attemptLimit; attempt++ {
 		if cfg.MaxCostUSD > 0 {
-			projected := EstimateJobCostForModel(model, attempt)
-			allowed, reason := BudgetCheck(cfg.MaxCostUSD, 0, projected)
+			projected := EstimateJobCostForModel(model, 1)
+			allowed, reason := BudgetCheck(cfg.MaxCostUSD, runCost.TotalCostUSD, projected)
 			if !allowed {
 				logPrintln(prefix, "  BUDGET_STOPPED: "+reason)
 				finalStatus = "BUDGET_STOPPED"
+				lastFailure = reason
 				break
 			}
 		}
@@ -266,6 +271,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		githubToken, tokenErr := currentBatchGitHubToken(job.Repo)
 		if tokenErr != nil {
 			logPrint(prefix, "  GitHub authentication refresh failed before Batch submission: %v", tokenErr)
+			lastFailure = fmt.Sprintf("GitHub authentication refresh failed before Batch submission: %v", tokenErr)
 			os.RemoveAll(attemptDir)
 			actualAttempts = attempt - 1
 			finalStatus = "BLOCKED"
@@ -290,9 +296,12 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			MaxRunDurSec:     maxRunDurSec,
 		}
 
-		_, err = batch.SubmitCodingJob(codingCfg)
+		batchJobID, submitErr := batch.SubmitCodingJob(codingCfg)
+		lastBatchJobID = batchJobID
+		err = submitErr
 		if err != nil {
 			logPrint(prefix, "  submission failed: %v", err)
+			lastFailure = fmt.Sprintf("Batch submission failed for %s: %v", jobName, err)
 			os.RemoveAll(attemptDir)
 			actualAttempts = attempt - 1
 			finalStatus = "BLOCKED"
@@ -307,7 +316,26 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 		)
 		if err != nil {
 			logPrint(prefix, "  polling failed: %v", err)
+			lastFailure = fmt.Sprintf("Batch polling failed for %s: %v", jobName, err)
 			runCost.Add(batchCostComponent(model, "", time.Since(submittedAt).Seconds(), "e2-small"))
+			// The worker may have uploaded its artifacts just before the
+			// controller's deadline. Preserve them even though the terminal
+			// Batch state was not observed.
+			if recovered := downloadGCSFile(attemptDir, attemptGCSPath+"/result.patch"); recovered != "" {
+				lastPatch = recovered
+				prevGCSPatch = attemptGCSPath + "/result.patch"
+				lastFailure += fmt.Sprintf("; recovered partial patch (%d bytes)", len(recovered))
+			}
+			if recovered := downloadGCSFile(attemptDir, attemptGCSPath+"/acceptance_output.txt"); recovered != "" {
+				lastAcceptance = recovered
+			}
+			// Stop this exact job so a later wave cannot overlap an abandoned
+			// worker. Its Batch ID remains in the durable result for recovery.
+			if current, describeErr := batch.DescribeJob(cfg.GCPProject, cfg.GCPRegion, jobName); describeErr == nil && !batch.IsTerminal(current.State()) {
+				if cancelErr := batch.CancelJob(cfg.GCPProject, cfg.GCPRegion, jobName); cancelErr != nil {
+					lastFailure += "; cancel failed: " + cancelErr.Error()
+				}
+			}
 			os.RemoveAll(attemptDir)
 			finalStatus = "BLOCKED"
 			break
@@ -341,6 +369,12 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			lastAcceptance = acceptOutput
 		}
 
+		if batchSucceeded && strings.TrimSpace(patchData) == "" {
+			batchSucceeded = false
+			lastFailure = "worker completed without a non-empty result patch"
+			logPrintln(prefix, "  BATCH SUCCEEDED but produced no patch — refusing empty writeback")
+		}
+
 		if batchSucceeded {
 			logPrintln(prefix, "  BATCH SUCCEEDED — verifying locally")
 
@@ -368,7 +402,11 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				workDir := filepath.Join(attemptDir, "repo")
 				commitSHA, _ := gitops.CommitSHA(workDir)
 				if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
-					logPrint(prefix, "  push: %v", err)
+					lastFailure = fmt.Sprintf("GitHub writeback push failed for %s: %v", garyBranch, err)
+					finalStatus = "BLOCKED"
+					logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
+					os.RemoveAll(attemptDir)
+					break
 				}
 				duration := time.Since(submittedAt)
 				os.RemoveAll(attemptDir)
@@ -512,34 +550,39 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			} else if closeResult {
 				workDir := filepath.Join(closerDir, "repo")
 				commitSHA, _ := gitops.CommitSHA(workDir)
-				gitops.Push(workDir, "origin", garyBranch)
-				duration := time.Since(submittedAt)
-				closerUsed = true
-				finalStatus = "DONE"
+				if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
+					finalStatus = "BLOCKED"
+					lastFailure = fmt.Sprintf("GitHub writeback push failed for %s: %v", garyBranch, err)
+					logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
+				} else {
+					duration := time.Since(submittedAt)
+					closerUsed = true
+					finalStatus = "DONE"
 
-				result := jobs.RunResult{
-					JobID:                job.ID,
-					ProjectID:            job.ProjectID,
-					MasterPacketDigest:   job.MasterPacketDigest,
-					ProjectManualVersion: job.ProjectManualVersion,
-					Branch:               garyBranch,
-					CommitSHA:            commitSHA,
-					Accepted:             true,
-					DurationSecs:         duration.Seconds(),
-					Attempts:             actualAttempts,
-					RepairCount:          repairCount,
-					Escalated:            escalated,
-					CloserUsed:           closerUsed,
-					FinalStatus:          "DONE",
-					ModelCostEstimated:   runCost.ModelCostUSD,
-					ComputeCostEstimated: runCost.ComputeCostUSD,
-					TotalCostEstimated:   runCost.TotalCostUSD,
-					Cost:                 runCost,
+					result := jobs.RunResult{
+						JobID:                job.ID,
+						ProjectID:            job.ProjectID,
+						MasterPacketDigest:   job.MasterPacketDigest,
+						ProjectManualVersion: job.ProjectManualVersion,
+						Branch:               garyBranch,
+						CommitSHA:            commitSHA,
+						Accepted:             true,
+						DurationSecs:         duration.Seconds(),
+						Attempts:             actualAttempts,
+						RepairCount:          repairCount,
+						Escalated:            escalated,
+						CloserUsed:           closerUsed,
+						FinalStatus:          "DONE",
+						ModelCostEstimated:   runCost.ModelCostUSD,
+						ComputeCostEstimated: runCost.ComputeCostUSD,
+						TotalCostEstimated:   runCost.TotalCostUSD,
+						Cost:                 runCost,
+					}
+					saveRunResult(cfg, result)
+					writeLedger(cfg, result, model+"+"+cfg.CloserModel)
+					snapshotJobComplete(job.ID, result)
+					return result
 				}
-				saveRunResult(cfg, result)
-				writeLedger(cfg, result, model+"+"+cfg.CloserModel)
-				snapshotJobComplete(job.ID, result)
-				return result
 			} else {
 				finalStatus = "FAILED"
 			}
@@ -551,15 +594,18 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	result := jobs.RunResult{
 		JobID:                job.ID,
 		ProjectID:            job.ProjectID,
+		BatchJobID:           lastBatchJobID,
 		MasterPacketDigest:   job.MasterPacketDigest,
 		ProjectManualVersion: job.ProjectManualVersion,
 		Branch:               garyBranch,
+		PatchBytes:           int64(len(lastPatch)),
 		DurationSecs:         duration.Seconds(),
 		Attempts:             actualAttempts,
 		RepairCount:          repairCount,
 		Escalated:            escalated,
 		CloserUsed:           closerUsed,
 		FinalStatus:          finalStatus,
+		FailureReason:        compactFailureLogs(lastFailure, 4000),
 		ModelCostEstimated:   runCost.ModelCostUSD,
 		ComputeCostEstimated: runCost.ComputeCostUSD,
 		TotalCostEstimated:   runCost.TotalCostUSD,
@@ -572,16 +618,19 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 }
 func downloadGCSFile(tmpDir, gcsPath string) string {
 	path := filepath.Join(tmpDir, filepath.Base(gcsPath))
-	cmd := exec.Command("gsutil", "cp", gcsPath, path)
-	_, err := cmd.CombinedOutput()
-	if err != nil {
-		return ""
+	for _, args := range [][]string{
+		{"gsutil", "cp", gcsPath, path},
+		{"gcloud", "storage", "cp", gcsPath, path},
+	} {
+		cmd := exec.Command(args[0], args[1:]...)
+		if _, err := cmd.CombinedOutput(); err == nil {
+			data, readErr := os.ReadFile(path)
+			if readErr == nil {
+				return string(data)
+			}
+		}
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	return string(data)
+	return ""
 }
 
 type batchLogEntry struct {

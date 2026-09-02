@@ -77,9 +77,12 @@ type masterPlannerHistory struct {
 type masterPlannerHistoryJob struct {
 	JobID            string  `json:"job_id"`
 	Status           string  `json:"status"`
+	BatchJobID       string  `json:"batch_job_id,omitempty"`
 	Attempts         int     `json:"attempts,omitempty"`
 	Accepted         bool    `json:"accepted,omitempty"`
 	Commit           string  `json:"commit,omitempty"`
+	PatchBytes       int64   `json:"patch_bytes,omitempty"`
+	FailureReason    string  `json:"failure_reason,omitempty"`
 	CostUSD          float64 `json:"cost_usd,omitempty"`
 	EstimatedMinutes int     `json:"estimated_minutes,omitempty"`
 	ActualSeconds    float64 `json:"actual_seconds,omitempty"`
@@ -91,8 +94,9 @@ func compactMasterHistory(waves []masterWaveRecord) string {
 		record := masterPlannerHistory{Wave: wave.Wave, Plan: truncatePlannerText(wave.PlanSummary, 1200), Integrated: wave.Integrated}
 		for _, result := range wave.Results {
 			record.Results = append(record.Results, masterPlannerHistoryJob{
-				JobID: result.JobID, Status: result.FinalStatus, Attempts: result.Attempts,
-				Accepted: result.Accepted, Commit: result.CommitSHA, CostUSD: result.TotalCostEstimated,
+				JobID: result.JobID, Status: result.FinalStatus, BatchJobID: result.BatchJobID, Attempts: result.Attempts,
+				Accepted: result.Accepted, Commit: result.CommitSHA, PatchBytes: result.PatchBytes,
+				FailureReason: truncatePlannerText(result.FailureReason, 1200), CostUSD: result.TotalCostEstimated,
 				EstimatedMinutes: result.EstimatedMinutes, ActualSeconds: result.DurationSecs,
 			})
 		}

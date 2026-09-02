@@ -248,6 +248,25 @@ func TestCompactMasterHistoryOmitsRawCostTelemetry(t *testing.T) {
 	}
 }
 
+func TestCompactMasterHistoryPreservesWorkerFailureEvidence(t *testing.T) {
+	history := compactMasterHistory([]masterWaveRecord{{
+		Wave: 2,
+		Results: []jobs.RunResult{{
+			JobID: "job-2", FinalStatus: "BLOCKED", BatchJobID: "batch-2",
+			PatchBytes: 6972, FailureReason: "acceptance failed: cargo not found",
+		}},
+	}})
+	for _, marker := range []string{
+		`"batch_job_id":"batch-2"`,
+		`"patch_bytes":6972`,
+		`"failure_reason":"acceptance failed: cargo not found"`,
+	} {
+		if !strings.Contains(history, marker) {
+			t.Fatalf("compact history missing %q: %s", marker, history)
+		}
+	}
+}
+
 func TestMasterPlannerPromptDelegatesHeavyWork(t *testing.T) {
 	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
 	prompt := buildMasterPlannerPrompt(m, "finish it", "stage", 1, "[]", "")

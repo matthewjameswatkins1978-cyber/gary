@@ -344,18 +344,48 @@ func TestCodingJobPreservesFailedAcceptanceEvidenceBeforeExit(t *testing.T) {
 		"GARY_USAGE_B64_START",
 		"gcloud storage cp /workspace/acceptance_output.txt",
 		"gcloud storage cp /workspace/usage.jsonl",
-		"if [ $ACCEPTANCE_EXIT -ne 0 ]; then",
+		"ACCEPTANCE FAILED (exit code $ACCEPTANCE_EXIT)",
 	} {
 		if !strings.Contains(script, required) {
 			t.Fatalf("worker script missing %q", required)
 		}
 	}
 
-	exitIndex := strings.LastIndex(script, "if [ $ACCEPTANCE_EXIT -ne 0 ]; then")
+	completionIndex := strings.LastIndex(script, "echo \"GARY CODING WORKER COMPLETE\"")
 	markerIndex := strings.Index(script, "GARY_ACCEPTANCE_B64_START")
 	uploadIndex := strings.Index(script, "gcloud storage cp /workspace/acceptance_output.txt")
-	if exitIndex < markerIndex || exitIndex < uploadIndex {
-		t.Fatal("failed acceptance must emit and upload evidence before exiting")
+	if completionIndex < markerIndex || completionIndex < uploadIndex {
+		t.Fatal("failed acceptance must emit and upload evidence before completing")
+	}
+	if strings.Contains(script, "exit $ACCEPTANCE_EXIT") {
+		t.Fatal("acceptance failure must remain evidence, not Batch infrastructure failure")
+	}
+	if !strings.Contains(script, "exit 0") {
+		t.Fatal("worker must complete successfully after capturing acceptance evidence")
+	}
+}
+
+func TestCodingWorkerRustCanaryContract(t *testing.T) {
+	cfg := CodingJobConfig{
+		Project: "p", Region: "r", JobName: "j",
+		RepoURL: "https://example.com/repo.git", BaseBranch: "main",
+		GaryBranch: "gary/canary", Task: "create a trivial Rust source file",
+		Acceptance: "test -f src/canary.rs",
+		GCSPath:    "gs://bucket/run",
+	}
+	script := generateCodingWorkerScript(cfg)
+	for _, required := range []string{
+		"Rust: $(rustc --version)",
+		"Cargo: $(cargo --version)",
+		"git format-patch",
+		"GARY_PATCH_B64_START",
+		"GARY_PATCH_B64_END",
+		"GARY CODING WORKER COMPLETE",
+		"exit 0",
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("Rust canary worker contract missing %q", required)
+		}
 	}
 }
 
