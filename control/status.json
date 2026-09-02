@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-02T14:03:12Z",
+  "updated_at": "2026-09-02T14:09:46Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -41,70 +41,9 @@
       "result_branch": "gary/judgement-call-b-w10-j1-a9ff29c1",
       "started_at": "2026-08-30T03:22:32Z",
       "attempts": 2
-    },
-    {
-      "id": "suture-v0-1-buil-w11-j1",
-      "project_id": "suture-v0-1-build-20260902",
-      "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
-      "project_manual_version": 1,
-      "batch_job_id": "gary-run-suture-v0-1-buil-w11-j1-1-20260902-140312",
-      "state": "running",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/Suture.git",
-      "base_branch": "gary/master-suture-v0-1-buil-84399e",
-      "result_branch": "gary/suture-v0-1-buil-w11-j1-98e86351",
-      "started_at": "2026-09-02T14:03:10Z",
-      "attempts": 1
     }
   ],
   "recent_jobs": [
-    {
-      "id": "book-burner-laun-w4-j1",
-      "project_id": "book-burner",
-      "master_packet_digest": "sha256:eb665f51e826796841fccf4d722d6bf18928523adac614c868749c8afcbd1999",
-      "project_manual_version": 1,
-      "batch_job_id": "gary-run-book-burner-laun-w4-j1-1-20260831-103648",
-      "state": "accepted",
-      "result_branch": "gary/book-burner-laun-w4-j1-f580b9a7",
-      "result_commit": "c199371",
-      "finished_at": "2026-08-31T10:41:12Z",
-      "attempts": 1,
-      "est_cost": 0.082287993164434,
-      "cost": {
-        "pricing_status": "MIXED",
-        "currency": "USD",
-        "pricing_version": "2026-08-30",
-        "worker_model_cost_usd": 0.08101480999999999,
-        "model_cost_usd": 0.08101480999999999,
-        "compute_cost_usd": 0.001273183164434,
-        "total_cost_usd": 0.082287993164434,
-        "components": [
-          {
-            "kind": "worker",
-            "model_requested": "gemini-3.5-flash-lite",
-            "usage_source": "PROVIDER_REPORTED",
-            "input_tokens": 463627,
-            "cached_input_tokens": 272327,
-            "fresh_input_tokens": 191300,
-            "output_tokens": 6182,
-            "total_tokens": 469809,
-            "model_cost_usd": 0.08101480999999999,
-            "compute_cost_usd": 0.001273183164434,
-            "total_cost_usd": 0.082287993164434,
-            "runtime_seconds": 221.423159032,
-            "machine_type": "e2-small",
-            "provisioning_model": "STANDARD",
-            "pricing_version": "2026-08-30",
-            "pricing_effective_date": "2026-08-30",
-            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
-            "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
-          }
-        ],
-        "unmetered_components": [
-          "Batch compute is estimated from observed runtime; invoice data was not queried"
-        ]
-      },
-      "summary": "DONE"
-    },
     {
       "id": "book-burner-laun-w5-j2",
       "project_id": "book-burner",
@@ -1072,6 +1011,54 @@
             "compute_cost_usd": 0.0023892391733397497,
             "total_cost_usd": 0.07866688917333975,
             "runtime_seconds": 415.519856233,
+            "machine_type": "e2-small",
+            "provisioning_model": "STANDARD",
+            "pricing_version": "2026-08-30",
+            "pricing_effective_date": "2026-08-30",
+            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+            "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+          }
+        ],
+        "unmetered_components": [
+          "Batch compute is estimated from observed runtime; invoice data was not queried"
+        ]
+      },
+      "summary": "DONE"
+    },
+    {
+      "id": "suture-v0-1-buil-w11-j1",
+      "project_id": "suture-v0-1-build-20260902",
+      "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+      "project_manual_version": 1,
+      "batch_job_id": "gary-run-suture-v0-1-buil-w11-j1-1-20260902-140312",
+      "state": "accepted",
+      "result_branch": "gary/suture-v0-1-buil-w11-j1-98e86351",
+      "result_commit": "b863b55",
+      "finished_at": "2026-09-02T14:09:46Z",
+      "attempts": 1,
+      "est_cost": 0.09400185353231826,
+      "cost": {
+        "pricing_status": "MIXED",
+        "currency": "USD",
+        "pricing_version": "2026-08-30",
+        "worker_model_cost_usd": 0.0920127,
+        "model_cost_usd": 0.0920127,
+        "compute_cost_usd": 0.00198915353231825,
+        "total_cost_usd": 0.09400185353231826,
+        "components": [
+          {
+            "kind": "worker",
+            "model_requested": "gemini-3.5-flash-lite",
+            "usage_source": "PROVIDER_REPORTED",
+            "input_tokens": 709866,
+            "cached_input_tokens": 512730,
+            "fresh_input_tokens": 197136,
+            "output_tokens": 6996,
+            "total_tokens": 716862,
+            "model_cost_usd": 0.0920127,
+            "compute_cost_usd": 0.00198915353231825,
+            "total_cost_usd": 0.09400185353231826,
+            "runtime_seconds": 345.939744751,
             "machine_type": "e2-small",
             "provisioning_model": "STANDARD",
             "pricing_version": "2026-08-30",
