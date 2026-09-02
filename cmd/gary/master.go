@@ -77,8 +77,12 @@ type masterPlannerHistoryJob struct {
 	JobID            string  `json:"job_id"`
 	Status           string  `json:"status"`
 	BatchJobID       string  `json:"batch_job_id,omitempty"`
+	BatchState       string  `json:"batch_state,omitempty"`
+	ArtifactPrefix   string  `json:"artifact_prefix,omitempty"`
 	Attempts         int     `json:"attempts,omitempty"`
 	Accepted         bool    `json:"accepted,omitempty"`
+	Verification     string  `json:"verification,omitempty"`
+	QualityReview    string  `json:"quality_review,omitempty"`
 	Commit           string  `json:"commit,omitempty"`
 	PatchBytes       int64   `json:"patch_bytes,omitempty"`
 	FailureReason    string  `json:"failure_reason,omitempty"`
@@ -93,8 +97,10 @@ func compactMasterHistory(waves []masterWaveRecord) string {
 		record := masterPlannerHistory{Wave: wave.Wave, Plan: truncatePlannerText(wave.PlanSummary, 1200), Integrated: wave.Integrated}
 		for _, result := range wave.Results {
 			record.Results = append(record.Results, masterPlannerHistoryJob{
-				JobID: result.JobID, Status: result.FinalStatus, BatchJobID: result.BatchJobID, Attempts: result.Attempts,
-				Accepted: result.Accepted, Commit: result.CommitSHA, PatchBytes: result.PatchBytes,
+				JobID: result.JobID, Status: result.FinalStatus, BatchJobID: result.BatchJobID, BatchState: result.BatchState,
+				ArtifactPrefix: result.ArtifactPrefix, Attempts: result.Attempts, Accepted: result.Accepted,
+				Verification: result.Verification, QualityReview: truncatePlannerText(result.QualityReview, 700),
+				Commit: result.CommitSHA, PatchBytes: result.PatchBytes,
 				FailureReason: truncatePlannerText(result.FailureReason, 1200), CostUSD: result.TotalCostEstimated,
 				EstimatedMinutes: result.EstimatedMinutes, ActualSeconds: result.DurationSecs,
 			})
@@ -459,7 +465,7 @@ func loadMasterManifest(path string) (*masterManifest, string, error) {
 	}
 	for _, command := range m.Acceptance {
 		if !validateAcceptanceCommand(command) {
-			return nil, "", fmt.Errorf("final acceptance command %q contains unsupported shell syntax", command)
+			return nil, "", fmt.Errorf("final acceptance command %q is not an allowed acceptance check", command)
 		}
 	}
 	return &m, string(brief), nil
@@ -498,7 +504,7 @@ PLANNER-SPECIFIC RULES
 - CONTROL FLOW: repeated equivalent failure with no new evidence means stop and replan. A DONE result without mechanical acceptance, or an accepted result without a recoverable branch and commit, is a control-plane integrity fault rather than success.
 - HANDOVER: keep candidate quality, worker claims, Batch/transport state, and trusted acceptance as separate facts. A Batch FAILED result can still contain a recoverable candidate. If a candidate artifact exists, independently verify it before deciding to retry or discard it.
 - HANDOVER: no worker awards itself a pass. No Batch state awards a pass. No Yardmaster impression awards a pass. Only trusted independent acceptance on the exact candidate in a clean environment can set accepted=true and make the result eligible for staging integration.
-- HANDOVER: accepted child work means the bounded child outcome passed trusted acceptance and must be integrated. It does not mean the whole master project is finished; reassess the integrated repository and continue until final project acceptance and semantic inspection pass.
+- HANDOVER: accepted child work means the exact candidate passed trusted mechanical verification, received a Yardmaster quality PASS, and has a recoverable branch and commit. It must then be integrated. Child acceptance does not mean the whole master project is finished; reassess the integrated repository and continue until final project acceptance and semantic inspection pass.
 - ECONOMY: after an accepted result, plan from the current staging branch and extend it; do not recreate already accepted models, tests, configuration, or project structure.
 - Workers should use judgment about ordinary tool setup. Keep ephemeral setup, caches and build products out of repository content and do not make one Worker's disposable environment a dependency for another.
 - Create at most %d independent jobs that can safely start from the same current branch.
@@ -612,7 +618,7 @@ func validateMasterPlan(plan *masterPlan, maxJobs int) error {
 		}
 		for _, command := range child.Acceptance {
 			if !validateAcceptanceCommand(command) {
-				return fmt.Errorf("job %d acceptance %q contains unsupported shell syntax", i+1, command)
+				return fmt.Errorf("job %d acceptance %q is not an allowed acceptance check", i+1, command)
 			}
 		}
 	}
@@ -651,6 +657,12 @@ func validateIntegrableMasterResult(result jobs.RunResult) error {
 		if result.FinalStatus != "DONE" {
 			return fmt.Errorf("accepted result has final_status %q, want DONE", result.FinalStatus)
 		}
+		if result.Verification != "trusted-independent" {
+			return fmt.Errorf("accepted result verification is %q, want trusted-independent", result.Verification)
+		}
+		if !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(result.QualityReview)), "PASS") {
+			return fmt.Errorf("accepted result has no Yardmaster quality PASS: %q", result.QualityReview)
+		}
 		if strings.TrimSpace(result.Branch) == "" {
 			return errors.New("accepted result has no pushed branch")
 		}
@@ -660,7 +672,7 @@ func validateIntegrableMasterResult(result jobs.RunResult) error {
 		return nil
 	}
 	if result.FinalStatus == "DONE" {
-		return errors.New("DONE result was not mechanically accepted")
+		return errors.New("DONE result lacks the full trusted verification + Yardmaster quality pass")
 	}
 	return nil
 }
