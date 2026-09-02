@@ -23,6 +23,8 @@ type RunResult struct {
 	BatchJobID       string  `json:"batch_job_id"`
 	// BatchState is transport/execution-wrapper evidence, not product acceptance.
 	BatchState       string  `json:"batch_state,omitempty"`
+	// ArtifactPrefix preserves the durable worker evidence/checkpoint location even when no result is accepted.
+	ArtifactPrefix   string  `json:"artifact_prefix,omitempty"`
 	Branch           string  `json:"branch"`
 	CommitSHA        string  `json:"commit_sha"`
 	Accepted         bool    `json:"accepted"`
