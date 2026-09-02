@@ -77,3 +77,29 @@ func TestDecodeProjectManualRepairsBlankEquivalentFields(t *testing.T) {
 	}
 }
 
+func TestDecodeProjectManualNormalizesCapabilityObjects(t *testing.T) {
+	digest := "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	text := `{
+  "schema": "gary.project-manual.v1",
+  "project_id": "demo",
+  "objective": "Test durable intake",
+  "definition_of_done": "Done",
+  "manual_version": "0.1.0",
+  "source_packet_digest": "` + digest + `",
+  "remaining_capabilities": [
+    {"id":"CAP-01","title":"Foundation","description":"Build protocol types"},
+    "Packaging"
+  ]
+}`
+	manual, err := decodeProjectManual(text, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manual.RemainingCapabilities) != 2 {
+		t.Fatalf("capabilities = %+v", manual.RemainingCapabilities)
+	}
+	if manual.RemainingCapabilities[0] != "Foundation: Build protocol types" || manual.RemainingCapabilities[1] != "Packaging" {
+		t.Fatalf("capability normalization = %+v", manual.RemainingCapabilities)
+	}
+}
+
