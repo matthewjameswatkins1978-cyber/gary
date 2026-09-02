@@ -232,32 +232,31 @@ jobs:
                 */project.json|*/state.json)
                   if [ -f "$path" ]; then
                     if ! python3 - "$path" "$local_file" <<'PY'
-import json
-import sys
+          import json
+          import sys
 
-remote_path, local_path = sys.argv[1:3]
-try:
-    with open(remote_path, encoding="utf-8") as f:
-        remote = json.load(f)
-    with open(local_path, encoding="utf-8") as f:
-        local = json.load(f)
-except Exception:
-    # Preserve an unexpected remote control record for explicit repair rather
-    # than silently overwriting evidence.
-    raise SystemExit(1)
+          remote_path, local_path = sys.argv[1:3]
+          try:
+              with open(remote_path, encoding="utf-8") as f:
+                  remote = json.load(f)
+              with open(local_path, encoding="utf-8") as f:
+                  local = json.load(f)
+          except Exception:
+              # Preserve unexpected remote control evidence for explicit repair.
+              raise SystemExit(1)
 
-remote_state = str(remote.get("state", ""))
-local_state = str(local.get("state", ""))
-remote_updated = str(remote.get("updated_at", ""))
-local_updated = str(local.get("updated_at", ""))
+          remote_state = str(remote.get("state", ""))
+          local_state = str(local.get("state", ""))
+          remote_updated = str(remote.get("updated_at", ""))
+          local_updated = str(local.get("updated_at", ""))
 
-if remote_state == "ARCHIVED" and local_state != "ARCHIVED":
-    raise SystemExit(1)
-if remote_state == "ACCEPTED" and local_state not in {"ACCEPTED", "ARCHIVED"}:
-    raise SystemExit(1)
-if remote_updated and local_updated and remote_updated >= local_updated:
-    raise SystemExit(1)
-PY
+          if remote_state == "ARCHIVED" and local_state != "ARCHIVED":
+              raise SystemExit(1)
+          if remote_state == "ACCEPTED" and local_state not in {"ACCEPTED", "ARCHIVED"}:
+              raise SystemExit(1)
+          if remote_updated and local_updated and remote_updated >= local_updated:
+              raise SystemExit(1)
+          PY
                     then
                       echo "Preserving terminal/newer remote project state $path"
                       continue
