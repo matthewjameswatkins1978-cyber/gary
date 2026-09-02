@@ -73,7 +73,7 @@ jobs:
       # Serialize repeat dispatches of the same master identity, while allowing
       # unrelated projects/master jobs to proceed independently.
       group: gary-master-${{ matrix.id }}
-      cancel-in-progress: false
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
