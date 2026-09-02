@@ -554,8 +554,8 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 
 func codingWorkerPrompt(task, acceptance string, estimatedMinutes int) string {
 	timeEstimate := ""
-	if estimatedMinutes >= 1 && estimatedMinutes <= 10 {
-		timeEstimate = fmt.Sprintf("\n- YARDMASTER ESTIMATE: this slice is expected to take about %d minutes. Use it to pace the work and wrap the stated outcome with evidence if it runs long.\n", estimatedMinutes)
+	if estimatedMinutes >= 1 && estimatedMinutes <= 60 {
+		timeEstimate = fmt.Sprintf("\n- YARDMASTER ESTIMATE: this coherent outcome is expected to take about %d minutes. This is a pacing/cost estimate, not a deadline.\n", estimatedMinutes)
 	}
 	return fmt.Sprintf(`You are a GARY implementation Worker. Work only in this repository.
 
@@ -573,8 +573,8 @@ UNIVERSAL GARY RULES
 
 COST AND REPOSITORY HYGIENE
 ============================
-- This is a paid, bounded attempt. Work on the stated outcome and use judgment about the shortest sound route to it; do not repeat completed work or expand into unrelated scope.
-- Work within the runtime's time limit. If the work runs long, stop broadening the scope, preserve useful progress and leave clear evidence of what passed and what remains.%s
+- This is paid work. Work on the stated outcome and use judgment about the shortest sound route to it; do not repeat completed work or expand into unrelated scope.
+- You are live-supervised by the Yardmaster. Elapsed time is not failure. Keep making useful progress, emit real evidence through tools/files/tests, and accept corrective guidance if the Yardmaster intervenes.%s
 - Before substantive work, make sure the tools and environment needed by the job and its checks are available. Use the repository's pinned toolchain where present and provision a compatible tool when needed and permitted.
 - Keep generated environments, caches, build products and machine-local files out of the commit. The patch should contain only intentional repository changes.
 
