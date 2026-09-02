@@ -1,9 +1,9 @@
 {
   "id": "rust-worker-canary-20260902",
   "manifest": "gary/inbox/pending/rust-worker-canary-20260902.json",
-  "state": "running",
-  "updated_at": "2026-09-02T12:29:27Z",
-  "detail": "dispatching through Batch",
+  "state": "failed",
+  "updated_at": "2026-09-02T12:36:00Z",
+  "detail": "previous control-plane dispatch was cancelled before Batch submission; explicit canary recovery",
   "transitions": [
     {
       "state": "queued",
@@ -14,6 +14,11 @@
       "state": "running",
       "at": "2026-09-02T12:29:27Z",
       "detail": "dispatching through Batch"
+    },
+    {
+      "state": "failed",
+      "at": "2026-09-02T12:36:00Z",
+      "detail": "previous control-plane dispatch was cancelled before Batch submission; explicit canary recovery"
     }
   ]
 }
