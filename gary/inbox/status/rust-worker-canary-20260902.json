@@ -1,0 +1,19 @@
+{
+  "id": "rust-worker-canary-20260902",
+  "manifest": "gary/inbox/pending/rust-worker-canary-20260902.json",
+  "state": "running",
+  "updated_at": "2026-09-02T12:29:27Z",
+  "detail": "dispatching through Batch",
+  "transitions": [
+    {
+      "state": "queued",
+      "at": "2026-09-02T12:29:27Z",
+      "detail": "accepted by inbox"
+    },
+    {
+      "state": "running",
+      "at": "2026-09-02T12:29:27Z",
+      "detail": "dispatching through Batch"
+    }
+  ]
+}
