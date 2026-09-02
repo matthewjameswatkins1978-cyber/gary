@@ -204,16 +204,14 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
 		return project.ProjectManual{}, errors.New("project manual returned more than one JSON value")
 	}
-	if version, ok := raw["manual_version"]; ok {
-		var asString string
-		if json.Unmarshal(version, &asString) == nil {
-			n, err := parseManualVersion(asString)
-			if err != nil {
-				return project.ProjectManual{}, fmt.Errorf("manual_version must be an integer: %w", err)
-			}
-			encoded, _ := json.Marshal(n)
-			raw["manual_version"] = encoded
-		}
+	// The durable store owns manual revision numbering. Yardmaster output may
+	// confuse the product version (for example "0.1.0") with this internal
+	// revision, so normalize any supplied value to a harmless placeholder.
+	// CreateAndIngest/AmendAndIngest replace it with the authoritative version
+	// before validation and persistence.
+	if _, ok := raw["manual_version"]; ok {
+		encoded, _ := json.Marshal(1)
+		raw["manual_version"] = encoded
 	}
 	for _, field := range []string{"objective", "definition_of_done"} {
 		if value, ok := raw[field]; ok {
