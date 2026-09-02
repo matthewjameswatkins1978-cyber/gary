@@ -17,6 +17,7 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/supervisor"
 )
 
 const (
@@ -159,6 +160,135 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 	return enforceEconomicPlan(&plan), component, nil
 }
 
+
+func runWorkerSupervision(cfg *config.Config, task, acceptance, projectContext string, telemetry supervisor.Telemetry, generation int) (supervisor.Decision, cost.Component, error) {
+	component := estimatedComponent("yardmaster-supervision", cfg.MasterModel, "live worker supervision did not return provider usage")
+	if err := telemetry.Validate(); err != nil {
+		return supervisor.Decision{}, component, fmt.Errorf("worker telemetry: %w", err)
+	}
+	telemetryJSON, _ := json.MarshalIndent(telemetry, "", "  ")
+	prompt := fmt.Sprintf(`You are GARY Yardmaster acting as the live supervisor of one implementation worker.
+
+You are not the Builder and you are not doing the implementation. Your job is to keep the worker moving toward the assigned semantic outcome without micromanaging healthy work.
+
+Choose exactly one action:
+- CONTINUE: real progress is visible and the current direction is sound. Do not interrupt the worker.
+- GUIDE: the worker is drifting, repeating a mistake, missing a constraint, or can be materially improved by a short corrective instruction. Preserve useful work and give one concise instruction.
+- STOP_AND_REPLAN: the worker is clearly stalled, pursuing a materially wrong approach, repeatedly failing without progress, or continuing would waste money. Preserve its patch/evidence and return control to the Yardmaster.
+- READY_FOR_INSPECTION: the worker has produced enough evidence that the assigned outcome appears complete and should leave implementation mode for independent/local inspection.
+
+Important rules:
+- Elapsed time by itself is NEVER a reason to stop.
+- Compilation, tests, dependency installation, or a long tool call count as work when repository/test evidence is still advancing.
+- Prefer CONTINUE when progress is genuine.
+- Use GUIDE before STOP_AND_REPLAN when a small correction can plausibly recover the current worker.
+- Passing a weak or unrelated command is not proof that the semantic task is complete.
+- A dependency added without the requested implementation is not completion.
+- Do not ask for private reasoning or chain-of-thought. Judge only observable engineering evidence.
+- Keep guidance under 1200 characters.
+
+Return only this JSON shape:
+{
+  "action": "CONTINUE|GUIDE|STOP_AND_REPLAN|READY_FOR_INSPECTION",
+  "guidance": "required only for GUIDE",
+  "reason": "brief evidence-grounded reason"
+}
+
+ASSIGNED OUTCOME
+================
+%s
+
+MECHANICAL CHECKS
+=================
+%s
+
+DURABLE CHILD PROJECT CONTEXT
+=============================
+%s
+
+LIVE WORKER TELEMETRY
+=====================
+%s
+`, task, acceptance, projectContext, telemetryJSON)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	return callWorkerSupervisorAPI(ctx, cfg, prompt, generation, telemetry.ReviewID)
+}
+
+func callWorkerSupervisorAPI(ctx context.Context, cfg *config.Config, prompt string, generation int, reviewID string) (supervisor.Decision, cost.Component, error) {
+	component := estimatedComponent("yardmaster-supervision", cfg.MasterModel, "live worker supervision did not return provider usage")
+	token, err := vertexAccessToken(ctx)
+	if err != nil {
+		return supervisor.Decision{}, component, fmt.Errorf("worker supervisor Vertex auth: %w", err)
+	}
+	payload, err := json.Marshal(map[string]interface{}{
+		"contents": []map[string]interface{}{{"role": "user", "parts": []map[string]string{{"text": prompt}}}},
+		"generationConfig": map[string]interface{}{
+			"thinkingConfig": map[string]interface{}{"thinkingLevel": "LOW"},
+			"responseMimeType": "application/json",
+			"maxOutputTokens": 2048,
+		},
+	})
+	if err != nil {
+		return supervisor.Decision{}, component, fmt.Errorf("worker supervisor request encode: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, yardmasterVertexEndpoint(cfg.GCPProject, cfg.MasterModel), bytes.NewReader(payload))
+	if err != nil {
+		return supervisor.Decision{}, component, fmt.Errorf("worker supervisor request build: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return supervisor.Decision{}, component, fmt.Errorf("worker supervisor transport: %w", err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return supervisor.Decision{}, component, fmt.Errorf("worker supervisor response read: %w", err)
+	}
+	requestID := resp.Header.Get("x-goog-request-id")
+	component.ProviderRequestID = requestID
+	if resp.StatusCode != http.StatusOK {
+		return supervisor.Decision{}, component, fmt.Errorf("worker supervisor API %d: %s", resp.StatusCode, compactPlannerError(string(data), 1600))
+	}
+	if usage, usageErr := cost.ParseVertexUsage(json.RawMessage(data), cfg.MasterModel, "", requestID); usageErr == nil {
+		component = componentFromUsage("yardmaster-supervision", usage)
+		component.ProviderRequestID = requestID
+	}
+
+	var apiResp struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+	}
+	if err := json.Unmarshal(data, &apiResp); err != nil {
+		return supervisor.Decision{}, component, fmt.Errorf("worker supervisor response parse: %w", err)
+	}
+	if len(apiResp.Candidates) == 0 {
+		return supervisor.Decision{}, component, fmt.Errorf("worker supervisor returned no candidates")
+	}
+	var raw strings.Builder
+	for _, part := range apiResp.Candidates[0].Content.Parts {
+		raw.WriteString(part.Text)
+	}
+	text := stripJSONFence(strings.TrimSpace(raw.String()))
+	var decision supervisor.Decision
+	dec := json.NewDecoder(strings.NewReader(text))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&decision); err != nil {
+		return supervisor.Decision{}, component, fmt.Errorf("worker supervisor decision JSON: %w; output=%s", err, compactPlannerError(text, 1200))
+	}
+	if err := decision.Normalize(generation, reviewID, time.Now()); err != nil {
+		return supervisor.Decision{}, component, err
+	}
+	return decision, component, nil
+}
 
 func runFinalSemanticInspection(cfg *config.Config, manifest *masterManifest, brief, stagingBranch string) (*masterPlan, cost.Component, error) {
 	component := estimatedComponent("inspector", cfg.MasterModel, "final semantic inspector did not return provider usage")
