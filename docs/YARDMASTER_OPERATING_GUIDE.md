@@ -4,19 +4,15 @@
 
 This guide describes a strong default way to turn a finished project plan into completed engineering work through GARY's workers.
 
-It explains how to establish project identity, prepare the filesystem and toolchain, create isolated workspaces, define verification, divide implementation into coherent jobs, construct worker packets, run work locally or in the cloud, preserve evidence, repair failures, integrate results, and verify completion.
-
-This is an operating method, not a rigid procedure.
-
-Use it as accumulated engineering tradecraft. Understand why each practice exists, apply the parts that help, omit or change the parts that do not, and add steps when the project clearly needs them. Current project evidence outranks habit.
+It is engineering tradecraft, not a compulsory workflow. The Yardmaster should understand why each practice exists, use the parts that help, omit or change the parts that do not, and add steps when the project clearly needs them. Current project requirements and current evidence outrank habit.
 
 The objective is not compliance with this guide. The objective is to get the real project finished correctly, efficiently, and with trustworthy evidence.
-
-The system should make the sensible path easy while leaving enough freedom for an intelligent agent to discover a better one.
 
 At every stage ask:
 
 > What arrangement of project state, tools, information, workers, ownership, and evidence gives this project the best chance of being completed correctly?
+
+The system should make the sensible path easy while leaving enough freedom for an intelligent agent to discover a better one.
 
 ---
 
@@ -24,21 +20,20 @@ At every stage ask:
 
 Before assigning implementation work, identify the project unambiguously.
 
-Record and preserve:
+Preserve:
 
-- product objective;
-- v1 or current-scope boundary;
-- major architecture decisions that are intended to remain stable;
-- canonical repository;
-- exact base revision or Git SHA;
+- the product objective;
+- current scope and explicit exclusions;
+- major architecture decisions intended to remain stable;
+- the canonical repository;
+- the accepted starting revision;
 - master acceptance criteria;
-- important permissions and authority boundaries;
-- explicit exclusions and protected decisions;
-- external systems involved, such as Google Cloud, GitHub, databases, APIs, or deployment targets.
+- permissions and authority boundaries;
+- external systems and deployment targets.
 
-The original master packet remains authoritative. Summaries, worker notes, and later plans may help execution but do not silently replace the requested outcome.
+The original master packet remains authoritative. Summaries, worker notes, plans, and rolling memory help execution but do not silently replace the requested outcome.
 
-Do not tell a worker to use "the latest version" when an exact accepted base can be named.
+Resolve a branch to an exact Git SHA when work is dispatched so the starting point can be reproduced. Avoid instructions such as "use the latest version" when the actual accepted revision can be named.
 
 Example:
 
@@ -55,112 +50,53 @@ A worker may discover a better implementation. It may not redefine the project m
 
 ---
 
-## 2. Give every project an isolated home
+## 2. Separate durable project state from disposable execution state
 
-Each active project should have durable state and a clearly owned mutable workspace.
+GARY's durable project record and a worker's checkout are different things.
 
-A useful conceptual layout is:
+The durable project record belongs under GARY's project store and preserves the material needed to understand and resume the project. The current on-disk form is described in `docs/project-context.md` and includes the master packet, project state, versioned manuals, amendments, job/evidence records, and archive material.
 
-```text
-yard/
-  projects/
-    <project-id>/
-      source/
-      worktrees/
-      control/
-      evidence/
-      artifacts/
-      logs/
-      cache/
-```
+Execution workspaces are disposable clones or worktrees created for implementation and verification. They may contain build products and caches that should never become the only copy of important project state.
 
-The exact paths are not sacred. The ownership model is.
-
-### `source/`
-
-Canonical local checkout or integration checkout. Keep it clean where practical.
-
-### `worktrees/`
-
-One isolated Git worktree or equivalent checkout per active worker job when jobs can overlap in time.
-
-Example:
+A useful conceptual separation is:
 
 ```text
-worktrees/
-  suture-021/
-  suture-022/
-  suture-023/
+Durable project record
+  project identity
+  master packet
+  state/manuals/amendments
+  job and evidence records
+  accepted references
+
+Disposable execution space
+  integration checkout or staging branch
+  worker clone/worktree A
+  worker clone/worktree B
+  build/cache/temp files
 ```
 
-Do not let unrelated workers casually mutate the same checkout.
+The exact filesystem paths are implementation details. The ownership model is not:
 
-### `control/`
+> One project has one coherent durable identity, and each concurrently active worker has unambiguous mutable ownership.
 
-Durable project metadata, such as:
-
-```text
-project.json
-master-packet
-state.json
-amendments/
-jobs/
-```
-
-### `evidence/`
-
-Machine-generated evidence by job or project stage:
-
-```text
-evidence/
-  suture-021/
-    git.json
-    tests.json
-    build.log
-    lint.log
-    diff.patch
-    result.json
-```
-
-### `artifacts/`
-
-Binaries, packages, screenshots, generated reports, deployment manifests, checksums, and other final or intermediate artifacts worth preserving.
-
-### `logs/`
-
-Execution and orchestration logs.
-
-### `cache/`
-
-Disposable dependency or build caches. Nothing important should exist only here.
-
-The key principle is:
-
-> One project owns its mutable workspace, and each concurrent worker has unambiguous write ownership.
-
-This is what allows many projects to be in the yard at once without mixing their state.
+Do not let unrelated workers casually mutate the same checkout. Preserve accepted commits and useful evidence before deleting disposable workspaces.
 
 ---
 
-## 3. Inspect the repository before planning deeply
+## 3. Inspect enough of the repository to organise the work well
 
-Do enough reconnaissance to understand how the project actually works.
+Do targeted reconnaissance before planning deeply.
 
-Prefer the repository's own executable and documented truth over assumptions.
-
-Look first for files such as:
+Prefer the repository's own executable and documented truth over assumptions. Useful starting points include:
 
 ```text
 README.md
 AGENTS.md
 CONTRIBUTING.md
-Makefile
-justfile
-package.json
-pnpm-workspace.yaml
+Makefile / justfile
+package.json / workspace files
 go.mod
-Cargo.toml
-rust-toolchain.toml
+Cargo.toml / rust-toolchain.toml
 pyproject.toml
 Dockerfile
 .github/workflows/*
@@ -172,208 +108,72 @@ scripts/*
 Answer practical questions:
 
 - What language and toolchain does this use?
-- Is a toolchain version pinned?
-- How is it built?
-- How is it tested?
-- How is it formatted or linted?
+- Is a version pinned?
+- How is it built, tested, formatted, and linted?
 - What already exists?
-- Where are the natural architectural boundaries?
+- Where are the natural architecture and ownership boundaries?
 - Are files generated?
-- Are there external services?
-- Does CI reveal the real build commands?
+- What external services are required?
+- Does CI reveal the real verification path?
 - Is deployment part of acceptance?
 
-Do not read the entire repository for ceremony. Inspect enough to make good orchestration decisions.
-
-CI is often valuable because it exposes the repository's actual verification path when prose documentation is stale.
-
-If documentation and current executable configuration disagree, investigate rather than blindly choosing either.
+Do not read the entire repository for ceremony. Inspect enough to make good orchestration decisions. If prose documentation and executable configuration disagree, investigate rather than blindly choosing either.
 
 ---
 
-## 4. Establish a useful baseline
+## 4. Establish a useful baseline and prepare the environment
 
-When it is cheap and meaningful, run the relevant verification before workers modify the project.
+When cheap and meaningful, verify the accepted starting state before workers modify it. Record the base SHA, working-tree state, relevant tool versions, build/test result, and known existing failures.
 
 Examples:
 
-### Go
-
 ```bash
+# Go
 git status --short
 go test ./...
 go vet ./...
-```
 
-### Rust
-
-```bash
+# Rust
 git status --short
 cargo fmt --check
 cargo test
 cargo clippy --all-targets --all-features -- -D warnings
-```
 
-### Node/Web
-
-```bash
+# Node/Web
 npm ci
 npm test
 npm run build
 ```
 
-or use the project's own package manager and scripts.
+Use the project's own package manager and commands where they exist.
 
-Record useful baseline evidence:
+A broken baseline is useful information. Do not make a worker spend an hour repairing a failure it did not create. Equally, do not insist on an expensive perfect baseline when it will not improve the next decision.
 
-- exact base SHA;
-- working-tree state;
-- tool versions where relevant;
-- build result;
-- test result;
-- known existing failures.
+Setup is engineering work. Before repeatedly dispatching implementation, make sure ordinary tools needed by the job and its stated checks are available. Prefer project-declared or pinned versions.
 
-If the baseline is already broken, record that fact. Do not make a worker spend an hour repairing a failure it did not create.
+Common examples include Git and ordinary shell utilities plus the language ecosystem the project actually uses: Go, Rust, Node, Python, Java/Android, browser automation, `protoc`, cloud CLIs, or similar tools.
 
-Do not insist on a perfect baseline when obtaining one is expensive or impossible and does not help the next decision. Baseline checks are evidence, not ritual.
+Provisioning a missing compiler or development utility is setup. Replacing PostgreSQL with SQLite because PostgreSQL is inconvenient is redesign.
+
+If the obvious setup route fails, investigate a safe alternative before declaring the environment blocked.
 
 ---
 
-## 5. Prepare the environment before repeatedly dispatching implementation
+## 5. Keep secrets and authority narrower than the implementation job
 
-Setup is engineering work.
+Secrets do not belong in Git, task packets, prompts, logs, documentation, or captured evidence.
 
-Make sure ordinary tools required by the job and its acceptance checks are available before repeatedly sending workers into the same broken environment.
+Use workload identity, environment injection, short-lived credentials, or the platform's intended secret manager. Prefer identity over long-lived secret files where practical.
 
-Prefer project-declared or pinned versions.
+A trusted control/wrapper layer may need authority that the implementation model does not. For example it may mint narrowly scoped GitHub credentials, upload evidence, update GARY state, launch workers, measure cost, run trusted verification, or push authorised checkpoints.
 
-Typical useful tools include:
-
-```text
-git
-curl
-wget
-jq
-yq
-ripgrep
-fd
-zip/unzip
-tar
-make
-just
-shellcheck
-```
-
-Install only language ecosystems current work needs.
-
-### Go
-
-```text
-go
-gofmt
-go vet
-```
-
-### Rust
-
-```text
-rustup
-cargo
-rustfmt
-clippy
-```
-
-### Node/Web
-
-```text
-node
-corepack
-pnpm
-```
-
-Prefer the project's declared package manager. Do not convert an npm project to pnpm merely because pnpm is generally preferred.
-
-### Python
-
-When genuinely needed:
-
-```text
-python
-uv
-```
-
-Do not introduce Python as a runtime dependency merely because orchestration finds it convenient.
-
-### Java/Android
-
-When needed:
-
-```text
-JDK
-Gradle
-Android command-line tools
-Android SDK
-```
-
-### Web testing
-
-Use browser automation such as Playwright when actual browser behaviour matters.
-
-If a required ordinary development tool such as `protoc` is missing, safely provisioning it is usually preferable to making several workers rediscover the same missing executable.
-
-Distinguish environment preparation from redesign.
-
-Installing a missing compiler is setup.
-
-Replacing PostgreSQL with SQLite because PostgreSQL is inconvenient is an architecture change.
-
-If the obvious tool route fails, investigate a safe alternative before declaring the environment blocked.
+Give a worker only the authority required by the current implementation job. Production deployment, merge authority, personal credentials, and broad cloud identity should not be granted merely for convenience.
 
 ---
 
-## 6. Keep secrets and authority outside ordinary worker prompts
+## 6. Make verification obvious
 
-Secrets do not belong in:
-
-- Git;
-- task packets;
-- README files;
-- agent prompts;
-- logs;
-- screenshots.
-
-Use environment injection, workload identity, short-lived credentials, or a proper secret manager.
-
-Where possible, prefer identity over long-lived secret files.
-
-Cloud secrets should use the platform's intended secret mechanism, such as Google Secret Manager.
-
-A trusted orchestration layer may hold narrowly scoped authority that an implementation worker does not need.
-
-For example, a trusted wrapper may:
-
-- obtain short-lived GitHub App credentials;
-- upload evidence;
-- communicate with GARY state storage;
-- launch or terminate workers;
-- measure runtime and cost;
-- run trusted verification;
-- push authorised checkpoints.
-
-An unprivileged worker generally needs:
-
-- source code;
-- its JobPacket;
-- local development tools;
-- an isolated Git workspace.
-
-It normally does not need personal credentials, production secrets, merge authority, or unrestricted cloud identity.
-
----
-
-## 7. Prefer one canonical project verification entry point
-
-When practical, make the project's important verification obvious through a single entry point such as:
+Prefer a clear canonical project verification route where the repository benefits from one, for example:
 
 ```bash
 just verify
@@ -385,40 +185,19 @@ or:
 ./scripts/verify
 ```
 
-That entry point may run:
+It may cover format, lint, type checking, unit/integration tests, build, protected acceptance, and smoke checks.
 
-- format checks;
-- lint;
-- type checking;
-- unit tests;
-- integration tests;
-- build;
-- protected acceptance checks;
-- smoke verification.
+Do not manufacture a wrapper solely for uniformity if the repository already has a clear canonical verification command.
 
-Focused child jobs should still run smaller relevant checks during implementation.
-
-The canonical verifier exists so that final project acceptance does not depend on every worker inventing a slightly different definition of "tested".
-
-Do not create a wrapper merely for cosmetic uniformity when the repository already has a clear canonical command.
+Child jobs should use focused checks while working. Project completion should return to the master acceptance so the integrated result is judged as a whole.
 
 ---
 
-## 8. Find the natural work graph
+## 7. Find coherent outcomes and the real dependency graph
 
-Do not immediately slice a project into equal durations or equal numbers of files.
+Do not slice work into arbitrary time boxes or equal file counts.
 
-Identify coherent implementation outcomes.
-
-A good child job should be:
-
-- useful;
-- understandable as one outcome;
-- objectively testable where possible;
-- large enough to justify a worker;
-- small enough for one worker to own coherently;
-- independent of concurrent work where practical;
-- bounded by the project's architecture and acceptance.
+A good child job is one coherent useful outcome that a capable worker can own and verify. It should be large enough to justify a worker and small enough to remain understandable.
 
 Bad:
 
@@ -433,9 +212,7 @@ Implement the strict JSON provider, including malformed-input behaviour
 and focused tests, while preserving the existing provider interface.
 ```
 
-The second packet gives the worker a real engineering result to own.
-
-Think in terms of dependencies:
+Think about both logical dependencies and mutable ownership:
 
 ```text
 core types
@@ -447,50 +224,15 @@ core types
           +-- CLI integration
 ```
 
-Independent middle jobs may run concurrently after the shared interface is stable enough.
+The middle jobs may be parallel once the shared interface is stable enough. Parallelism helps when work is genuinely separable; it hurts when several workers need uncontrolled writes to the same central state.
 
-Parallelism is useful when work is genuinely separable.
-
-It is harmful when several workers all need uncontrolled writes to the same central files.
-
-Consider both logical dependency and mutable ownership.
+Path ownership can help when boundaries are natural, but it is advisory scheduling information unless the project explicitly requires stronger protection. A coherent cross-layer change should not be rejected merely because it crosses an arbitrary path list.
 
 ---
 
-## 9. Use writable ownership intelligently
+## 8. Construct a useful JobPacket
 
-For parallel work, define expected writable areas when doing so genuinely prevents collisions.
-
-Example:
-
-```yaml
-allowed_paths:
-  - src/calle/firestore/**
-  - tests/calle/firestore/**
-```
-
-Protected areas may include:
-
-```yaml
-protected_paths:
-  - tests/protected/**
-  - acceptance/**
-  - infra/production/**
-```
-
-These boundaries can also inform scheduling: jobs with overlapping mutable ownership may need sequencing or separate integration handling.
-
-Do not turn path lists into a filesystem religion.
-
-Some coherent changes legitimately cross layers. If the project architecture makes strict path ownership artificial, describe semantic scope instead and isolate the worker through Git/worktree ownership.
-
-The purpose is collision reduction and clear responsibility, not arbitrary rejection.
-
----
-
-## 10. Construct a proper JobPacket
-
-A worker packet should let a capable worker answer five questions immediately:
+A JobPacket should let a capable worker answer five questions immediately:
 
 1. What outcome am I responsible for?
 2. What exact project state am I starting from?
@@ -498,86 +240,23 @@ A worker packet should let a capable worker answer five questions immediately:
 4. What must I preserve or avoid changing?
 5. What evidence will demonstrate success?
 
-A strong JobPacket normally includes the following.
+Include the fields that matter for this job rather than filling a template mechanically. Commonly useful material is:
 
-### Identity
-
-```text
-Run ID
-Project ID
-Job ID
-Plan/manual version if relevant
-Repository
-Base SHA
-Worker branch/worktree
-```
-
-### Objective
-
-One precise description of what must exist when the job is finished.
-
-### Relevant context
-
-Only facts the worker needs and should not have to rediscover unnecessarily.
-
-### Existing behaviour
-
-What currently exists that matters to this job.
-
-### Required behaviour
-
-What must change.
-
-### Scope and ownership
-
-Expected writable files, modules, components, or semantic territory when useful.
-
-### Protected or forbidden scope
-
-Things that must not be casually altered.
-
-### Dependencies
-
-Accepted work this job requires.
-
-### Inputs
-
-Schemas, interfaces, fixtures, APIs, existing components, or evidence needed by the worker.
-
-### Expected outputs
-
-Expected files, behaviours, artifacts, or interfaces.
-
-### Acceptance commands
-
-Focused, executable checks.
-
-### Behavioural acceptance
-
-Important properties not fully represented by one command.
-
-### Resources and budget
-
-When operationally relevant: model tier, machine profile, cost ceiling, or runtime safety ceiling.
-
-These are resource controls, not substitutes for engineering judgement.
-
-### Genuine stop conditions
-
-Use stop conditions for real authority or architecture conflicts.
+- run/project/job identity;
+- repository, resolved base SHA, and worker branch/workspace;
+- one precise objective;
+- relevant context and existing behaviour;
+- required behaviour;
+- semantic or file ownership where useful;
+- protected decisions or areas;
+- dependencies and required inputs;
+- expected outputs;
+- focused executable acceptance checks;
+- behavioural acceptance that a command cannot fully express;
+- resource/cost information when operationally relevant;
+- genuine stop conditions for authority or frozen-design conflicts.
 
 Example:
-
-```text
-If completing this job requires changing the frozen CallResult schema,
-return the conflict rather than silently redesigning the schema.
-```
-
-Do not use arbitrary elapsed-time targets as semantic failure conditions.
-
----
-
-## 11. Example JobPacket
 
 ```text
 JOB: Strict JSON provider
@@ -588,23 +267,16 @@ Implement the JSON provider required by Stage C.
 WORKSPACE
 Repository: <project repo>
 Base SHA: abc123...
-Branch/worktree: worker-owned isolated workspace
+Branch/workspace: isolated worker-owned checkout
 
 RELEVANT CONTEXT
 The provider interface already exists in src/provider.rs.
 TextProvider is the closest reference implementation.
 JSON must reject malformed input rather than silently recover.
 
-EXISTING BEHAVIOUR
-TextProvider passes its focused tests. No JSON provider currently exists.
-
-REQUIRED BEHAVIOUR
-Implement strict JSON parsing and provider behaviour required by the
-frozen Stage C contract.
-
 SCOPE
 Implement the JSON provider and focused tests. Small supporting changes
-to shared provider code are allowed if implementation genuinely requires them.
+to shared provider code are allowed if genuinely required.
 
 PRESERVE
 Do not weaken existing tests.
@@ -618,112 +290,64 @@ cargo test
 
 USE YOUR JUDGEMENT
 Choose the implementation approach yourself. Inspect additional repository
-files when useful. Provision ordinary development dependencies if needed and permitted.
+files when useful. Provision ordinary development dependencies when permitted.
 ```
 
-Notice what is deliberately absent: a thirty-step implementation recipe.
+Do not turn the packet into a thirty-step implementation recipe. The worker is an intelligent implementation agent, not a script interpreter.
 
-The worker is an intelligent implementation agent, not a script interpreter.
+A genuine stop condition might be:
+
+```text
+If completion requires changing the frozen CallResult schema, return that
+conflict rather than silently redesigning the schema.
+```
+
+Arbitrary elapsed-time targets are not semantic failure conditions.
 
 ---
 
-## 12. Give the worker the right amount of context
-
-Too little context causes rediscovery and avoidable mistakes.
-
-Too much context causes distraction and consumes reasoning capacity.
+## 9. Give workers enough context, but not the whole project history
 
 Pass information that changes how the worker should act.
 
 Useful:
 
 ```text
-Previous attempt established that the parser logic is correct. The remaining
-failure is Windows newline handling in decodeFixture. Preserve the parser changes.
+The previous attempt established that parser logic is correct. The remaining
+failure is Windows newline handling in decodeFixture. Preserve the parser work.
 ```
 
 Usually not useful:
 
 ```text
-Here is the full history of every project discussion since conception.
+Here is the complete history of every project discussion since conception.
 ```
 
-Workers normally need:
+Workers normally need their outcome, relevant architecture, current accepted state, constraints, dependencies, important previous evidence, and acceptance checks. Let them inspect ordinary implementation detail themselves.
 
-- their outcome;
-- relevant architecture;
-- current accepted state;
-- constraints;
-- dependencies;
-- important previous evidence;
-- acceptance commands.
-
-Let them inspect ordinary implementation details themselves.
-
-Do not make workers spend half their context rediscovering facts the Yardmaster already knows, and do not drown them in irrelevant history.
+Do not make workers rediscover facts the Yardmaster already knows, and do not drown them in irrelevant history.
 
 ---
 
-## 13. Choose local or cloud execution according to the work
+## 10. Choose execution and resources according to the work
 
-Not every job belongs in the cloud.
+Use local execution when interaction, environment debugging, a quick probe, or a very small amount of work makes cloud dispatch unnecessary. Use cloud workers when disposable isolation or genuine parallelism earns its cost.
 
-Local execution is often best for:
+Cloud execution does not make one worker magically faster. It lets multiple independent workers make progress at once.
 
-- one or two jobs;
-- quick investigations;
-- architectural probes;
-- tiny fixes;
-- interactive work;
-- early project setup;
-- debugging the environment itself.
-
-Cloud parallelism becomes valuable when several useful jobs are genuinely independent.
-
-For example:
-
-```text
-A: API implementation
-B: fixtures
-C: UI shell
-D: persistence adapter
-```
-
-If their dependencies and mutable ownership do not collide, they may run simultaneously.
-
-Cloud execution does not make one worker magically faster. It lets multiple workers make progress at once.
-
-Choose the smallest machine profile that gives the worker a healthy environment. Do not give every worker a huge machine, but do not save pennies by creating predictable out-of-memory or painfully slow build failures.
+Choose a machine profile that gives the job a healthy environment. Do not give every worker oversized hardware, but do not save pennies by creating predictable out-of-memory or painfully slow builds.
 
 Disposable workers should be reproducible copies of a known environment, not mysterious machines that happen to compile today.
 
----
-
-## 14. Let workers work
-
-Once a capable worker has a coherent job, an isolated workspace, adequate context, and the necessary tools, give it room to solve the problem.
-
-Do not interrupt healthy builds, tests, installs, downloads, or implementation merely because an arbitrary slice length elapsed.
-
-Observe engineering signals such as:
-
-- meaningful source changes;
-- build progress;
-- narrowing test failures;
-- resolved dependencies;
-- new diagnostic evidence;
-- repeated identical failures;
-- absence of substantive progress.
-
-A twelve-minute compiler build may be healthy.
-
-Repeating the same failed command six times in three minutes without learning anything is not.
-
-Time is evidence about cost and progress. It is not proof that engineering work has failed.
+Several projects may be active concurrently when their repositories/workspaces and durable project identities are isolated. Concurrency should be constrained by real shared resources, mutable ownership, cost, authority, and infrastructure capacity rather than an unnecessary yard-wide project lock.
 
 ---
 
-## 15. Supervise from evidence
+## 11. Supervise from engineering evidence
+
+Once a capable worker has a coherent job, usable environment, relevant context, and isolated workspace, give it room to work.
+
+Do not interrupt healthy builds, tests, installs, downloads, or implementation merely because an arbitrary amount of time elapsed.
 
 At a supervision point ask:
 
@@ -732,40 +356,29 @@ At a supervision point ask:
 - What still fails?
 - Is uncertainty decreasing?
 - Is useful partial work accumulating?
-- Is the worker intelligently changing approach when evidence changes?
+- Is the worker changing approach when evidence changes?
 - Does it need information or authority it cannot obtain?
 
-Then choose an appropriate action such as:
+Then choose an action such as `CONTINUE`, `GUIDE`, `STOP_AND_REPLAN`, or `READY_FOR_INSPECTION`.
 
-```text
-CONTINUE
-GUIDE
-STOP_AND_REPLAN
-READY_FOR_INSPECTION
-```
+Guidance should add information. "Keep going" rarely does.
 
-Guidance should add useful information.
-
-Weak:
-
-```text
-Keep going.
-```
-
-Better:
+Example:
 
 ```text
 The parser tests now pass. The remaining failure is workspace_roundtrip.
 Preserve the parser changes and focus on why reconstruction changes ordering.
 ```
 
+Time is evidence about cost and progress. It is not proof that engineering work has failed.
+
 ---
 
-## 16. Treat failed attempts as handovers, not resets
+## 12. Treat unsuccessful attempts as evidence and handovers
 
-A subsequent worker should inherit what has already been learned.
+A subsequent attempt should inherit what has already been learned.
 
-A good repair packet records:
+A useful repair handover contains:
 
 ```text
 WHAT WORKS
@@ -781,320 +394,86 @@ WHAT WAS TRIED
 Changing serializer ordering did not alter the failure.
 
 PRESERVE
-Do not discard accepted parser work from commit abc123.
+Keep the accepted parser work from commit abc123.
 
 NEXT OBJECTIVE
 Determine why workspace reconstruction changes ordering and repair it.
 ```
 
-Bad repair instruction:
+Do not reduce repair to "try again".
 
-```text
-Try again.
-```
+A failed final check does not mean an attempt produced nothing useful. Preserve substantial correct partial work when evidence justifies it. Do not preserve a large change merely because effort was spent on it.
 
-Better:
-
-```text
-Everything passes except duplicate empty-call responses. Repair this exact
-failing case without altering the adapter interface. Preserve the accepted
-transaction handling from the previous attempt.
-```
-
-The next worker should begin on the current lap, not restart the race.
+Do not mechanically stop after an arbitrary retry count when evidence shows convergence. Conversely, repeated attempts that produce no new useful evidence are a reason to replan rather than continue burning resources.
 
 ---
 
-## 17. Preserve useful partial work
+## 13. Keep machine evidence separate from worker commentary
 
-A failed final check does not mean an attempt produced nothing useful.
+Where practical, GARY or its trusted wrapper should measure facts that machinery can know better than the AI.
 
-Distinguish:
+Useful machine evidence includes:
 
-```text
-attempt failed final acceptance
-```
+- base/final SHA, branch, commits, changed paths, diff, working-tree state;
+- unexpected or protected-path changes when relevant;
+- verification command, exit code, log/output reference, and duration;
+- worker/model identity, machine profile, elapsed time, attempts, cost/usage data, and infrastructure interruption information.
 
-from:
+The worker should also return a short human-readable account of what it changed and any important design observation.
 
-```text
-attempt produced no useful progress
-```
+That commentary is useful context. It is not proof.
 
-If a worker implemented substantial correct work, preserve it in the project's controlled history and use it as the basis for repair.
+Human-facing labels such as `Good Job`, `Fix`, and `Broken` can summarise the judgement, but they are not a substitute for the evidence and do not need to be internal machine states.
 
-Do not throw away ninety percent correct work merely because the last edge case still fails.
+- **Good Job:** useful work satisfies the important acceptance and is a candidate for integration.
+- **Fix:** useful work has a narrow repairable problem; create a focused repair packet from current evidence.
+- **Broken:** the current approach should stop or be reconsidered because of a material misunderstanding, architecture conflict, scope violation, unresolved authority/product decision, invalid environment assumption, or demonstrated lack of progress.
 
-Similarly, do not preserve a large change merely because effort was spent on it. Evidence determines usefulness.
-
----
-
-## 18. Separate machine evidence from worker commentary
-
-Return two different things.
-
-### A. Trusted machine evidence
-
-Where practical, GARY or its trusted wrapper should measure authoritative facts itself.
-
-Useful evidence includes:
-
-#### Git
-
-- base SHA;
-- final SHA;
-- branch/worktree identity;
-- commits;
-- changed paths;
-- diff;
-- working-tree state.
-
-#### Scope
-
-- expected/allowed path observations when applicable;
-- protected-path changes;
-- unexpected generated files.
-
-#### Verification
-
-For each important check:
-
-- command;
-- exit code;
-- output or log reference;
-- duration.
-
-#### Runtime
-
-- worker/model identity;
-- machine profile;
-- elapsed time;
-- retries;
-- measured model/token/cost data when available;
-- infrastructure interruptions.
-
-Do not ask the AI to report facts the machinery can measure more reliably.
-
-### B. Worker commentary
-
-The worker also returns a concise human-readable note explaining what it did and any important design observation.
-
-Example:
-
-```text
-Implemented the Firestore CallResultStore adapter.
-Added idempotent event writes, transaction-safe status updates, and malformed
-document handling. Existing fixtures lack provider timestamps, so current
-received_at behaviour is preserved. No architecture changes required.
-```
-
-This is useful context.
-
-It is not proof.
+A missing ordinary development package is not, by itself, a profound architectural failure.
 
 ---
 
-## 19. Classify results for humans without reducing judgement to labels
+## 14. Inspect, integrate, then replan from reality
 
-Useful human-facing categories are:
+A worker reporting completion means ready for inspection, not automatic integration.
 
-### Good Job
+Inspect the actual diff, relevant checks, working-tree cleanliness, unexpected files, secrets, scope drift, protected acceptance machinery, and relationship to other accepted work.
 
-The work is useful and satisfies its important acceptance criteria.
+Integrate accepted useful work into the project's controlled staging/integration state. Ordinary workers do not gain merge or production authority merely by finishing a job.
 
-Typical evidence:
+After integration, reconsider what remains. Do not blindly execute a plan created before the project taught you anything.
 
-- correct scope;
-- clean understandable Git state;
-- relevant tests pass;
-- build passes;
-- required acceptance passes;
-- no unresolved architecture surprise.
-
-Good Job means candidate for integration, not automatic merge authority.
-
-### Fix
-
-The work is substantially useful but has a narrow repairable problem.
-
-Examples:
-
-- one edge case fails;
-- lint failure;
-- small integration mismatch;
-- one required behaviour is missing;
-- minor contract mismatch.
-
-Produce a focused repair packet using current evidence.
-
-Do not mechanically limit useful repair to an arbitrary single attempt. If evidence shows convergence, continue within cost and safety boundaries. If repeated attempts produce no new useful evidence, replan rather than endlessly retrying.
-
-### Broken
-
-The current approach should stop and be reconsidered.
-
-Examples:
-
-- wrong architecture;
-- major scope violation;
-- protected acceptance was rewritten;
-- requirement fundamentally misunderstood;
-- unresolved product decision is genuinely required;
-- dependency or environment mismatch invalidates the approach;
-- repeated attempts show no meaningful progress.
-
-Broken is useful when it accurately identifies why current work cannot safely continue.
-
-It should not become a euphemism for "the worker needed another ordinary tool installed".
-
----
-
-## 20. Inspect before integration
-
-A worker claiming completion means ready for inspection.
-
-Inspect:
-
-- exact diff;
-- relevant tests;
-- working-tree cleanliness;
-- unexpected files;
-- accidental secrets;
-- scope creep;
-- protected acceptance machinery;
-- relationship to other accepted work.
-
-Integrate only accepted useful work into the project's controlled staging/integration state.
-
-No worker earns merge or production authority merely by reporting success.
-
----
-
-## 21. Replan from the new reality
-
-After accepted work is integrated, reconsider the remaining project.
-
-Do not blindly execute a task list created before the project taught you anything.
-
-Suppose the original plan was:
-
-```text
-A -> B -> C -> D
-```
-
-If B proves C is unnecessary, remove C.
-
-If B reveals missing foundation E, add E.
-
-If two previously coupled jobs become safely independent, run them in parallel.
-
-If an assumption was wrong, update the plan while preserving the master objective and frozen constraints.
+If B makes C unnecessary, remove C. If B reveals missing foundation E, add E. If previously coupled work becomes independent, consider parallelising it.
 
 The plan serves the project. The project does not serve the plan.
 
 ---
 
-## 22. Maintain clean ownership throughout
+## 15. Use tools and human escalation sensibly
 
-At all times know who owns mutable state.
+Workers may use ordinary tools and safe alternatives needed to finish authorised work. Using `rg` instead of `grep` is implementation freedom. Replacing a required Cloud Run deployment with a local Docker demonstration is changing the requested outcome.
 
-Conceptually:
+Solve ordinary engineering problems inside the yard when possible.
 
-```text
-Project
-  integration branch/workspace
-
-Worker A
-  isolated branch/worktree A
-
-Worker B
-  isolated branch/worktree B
-```
-
-Shared read access is normal.
-
-Uncontrolled shared write access is not.
-
-When several projects run concurrently, each project also keeps its own durable package and integration state.
-
-Concurrency should be limited by real shared resources, cost, mutable ownership, and infrastructure capacity, not by an unnecessary global project mutex.
-
----
-
-## 23. Use tools and external systems sensibly
-
-Workers should be able to use ordinary tools needed to finish authorised work.
-
-Examples:
-
-- install a compatible development package;
-- use repository-pinned compilers;
-- inspect official documentation when behaviour is unclear;
-- use Google Cloud tooling when the project requires Google Cloud;
-- use a safe equivalent CLI tool if the preferred convenience tool is unavailable.
-
-Always distinguish implementation freedom from changing the requested outcome.
-
-Using `rg` instead of `grep` is an implementation choice.
-
-Replacing a requested Cloud Run deployment with a local-only Docker demo is a product/deployment change.
-
----
-
-## 24. Ask for human intervention only when judgement or authority genuinely belongs outside the yard
-
-Ordinary engineering problems should normally be solved by the Yardmaster and workers.
-
-Human intervention is appropriate for things such as:
+Human intervention is appropriate when judgement or authority genuinely belongs outside it, for example:
 
 - irreversible destructive action;
 - missing account authority;
 - significant unapproved expenditure;
-- genuinely ambiguous product requirement;
-- two materially different valid interpretations that require product choice;
-- secret or credential the system cannot legitimately obtain;
-- requested action outside the project's permission boundary.
+- genuinely ambiguous product requirements;
+- materially different valid interpretations requiring a product choice;
+- a secret or credential the system cannot legitimately obtain;
+- an action outside the project's permission boundary.
 
-A missing ordinary package is usually not a human product decision.
+A missing ordinary package is normally an environment problem, not a human product decision.
 
 ---
 
-## 25. Final verification is project-level
+## 16. Verify and package the project as a whole
 
-Worker-level checks prove pieces of work.
+Worker checks prove pieces. They do not prove the integrated project works.
 
-They do not automatically prove the integrated project works.
-
-When implementation is integrated, run the master acceptance from the controlled project state.
-
-Examples:
-
-### Rust
-
-```bash
-cargo fmt --check
-cargo test
-cargo clippy --all-targets --all-features -- -D warnings
-```
-
-### Go
-
-```bash
-go test ./...
-go vet ./...
-```
-
-Then test actual behaviour where appropriate.
-
-For a CLI, execute representative commands.
-
-For a service, start it and exercise its endpoints.
-
-For a web app, perform browser acceptance.
-
-For Cloud Run, verify the deployed endpoint and relevant identity/permission behaviour.
-
-For a release, inspect the package users will actually receive.
+Run the master acceptance from the controlled integrated state. Then verify actual behaviour where appropriate: execute the CLI, exercise service endpoints, run browser acceptance, verify a Cloud Run deployment, inspect an Android build, or test the release package users will actually receive.
 
 There is a major difference between:
 
@@ -1108,105 +487,59 @@ and:
 the final artifact or deployment works
 ```
 
-Final acceptance protects the latter.
+Completion should leave a comprehensible durable result. Depending on the project, preserve the accepted branch/final SHA, tag or release, binaries/packages, checksums, deployment reference, documentation updates, acceptance evidence, known limitations, and final project state.
+
+Temporary worker workspaces may be removed after useful evidence and accepted commits are safely preserved.
 
 ---
 
-## 26. Package completion properly
+## 17. Let the Foreman's Notebook learn cautiously
 
-A finished project should be left in a comprehensible durable state.
-
-Depending on the project, completion may include:
-
-- accepted branch;
-- final commit SHA;
-- tag or release;
-- binaries/packages;
-- checksums;
-- deployment revision/reference;
-- documentation updates;
-- acceptance evidence;
-- known limitations;
-- final project state/archive.
-
-A future Yardmaster should be able to understand exactly what was accepted and resume from a trustworthy point if needed.
-
-Temporary worker worktrees may be removed after their useful evidence and accepted commits are preserved.
-
----
-
-## 27. Learn from work without turning experience into superstition
-
-After useful batches of work, the Foreman's Notebook may consider what the yard appears to have learned.
-
-Do not force a lesson.
-
-Do not turn one project-specific incident into universal folklore.
+When the Foreman's Notebook is available, it may consider what useful batches of work appear to teach the Yardmaster. Do not force a lesson.
 
 Ask:
 
 - Would this help run a substantially different project?
-- Would this help handle the next five jobs better?
-- Is this about managing work or merely a fact about the current project?
+- Would this help the next five jobs?
+- Is this about managing work or just a current-project fact?
 - What evidence supports it?
 - What contradicts it?
 - What alternative explanation could make the apparent lesson false?
 - How strongly does the evidence justify believing it?
-- Would acting on it improve whole-project completion, or merely optimise a proxy such as fewer retries?
+- Would acting on it improve whole-project completion rather than merely a proxy such as fewer retries?
 
-Example of weak learning:
+The notebook is experience, not law. Current project requirements and current evidence outrank remembered beliefs.
 
-```text
-Rust jobs should always be small.
-```
-
-Better reasoning:
-
-```text
-Large jobs performed poorly in this run, but the failures coincided with an
-unstable worker environment. Evidence is insufficient to attribute the problem
-to job size alone.
-```
-
-The notebook is experience, not law.
-
-Current project requirements and current evidence outrank remembered beliefs.
+Do not learn workarounds for a GARY defect when the correct lesson is that GARY itself needs repair.
 
 ---
 
-## 28. Preferred project-opening sequence
+## 18. Default project-opening sequence
 
-For a new programming project, a strong default sequence is:
+A strong default orientation is:
 
-1. Understand the desired product and acceptance.
-2. Freeze project identity, scope, architecture boundaries, repository, and exact base SHA.
-3. Create or validate the isolated project workspace.
-4. Inspect repository instructions, build system, CI, and relevant architecture.
-5. Prepare only the toolchain and external access the project actually needs.
+1. Understand the requested product, scope, architecture boundaries, authority, and acceptance.
+2. Preserve the project packet and resolve the accepted repository state to an exact revision.
+3. Validate durable project identity and isolated execution ownership.
+4. Inspect repository instructions, toolchain, CI, and relevant architecture.
+5. Prepare only the environment and access the work actually needs.
 6. Establish a useful baseline.
-7. Identify or create a canonical verification route where practical.
-8. Identify coherent implementation outcomes and their dependencies.
-9. Identify mutable ownership and safe parallelism.
-10. Create the first JobPackets.
-11. Run locally when only a small amount of work exists or interaction is valuable.
-12. Use cloud workers when enough independent work exists to justify parallel dispatch.
-13. Supervise from engineering evidence.
-14. Preserve machine evidence and worker commentary separately.
-15. Classify results, preserve useful partial work, and create focused repairs when needed.
-16. Integrate accepted work.
-17. Replan from the new project state.
-18. Run master-level acceptance against the integrated result.
-19. Verify actual artifact/deployment behaviour where relevant.
-20. Package and preserve final project evidence.
-21. Let the Foreman's Notebook consider whether any general operational lesson was actually earned.
+7. Identify the canonical verification route.
+8. Find coherent outcomes, dependencies, and safe parallelism.
+9. Build the first JobPackets with enough context and direct evidence of success.
+10. Dispatch using the execution environment that fits the work.
+11. Supervise from engineering evidence, preserving useful partials and learned failure evidence.
+12. Inspect and integrate accepted work.
+13. Replan from the new project state.
+14. Run master-level acceptance and verify the actual artifact/deployment where relevant.
+15. Package the result and preserve durable evidence.
+16. Let the Foreman's Notebook consider only genuinely general lessons.
 
-This sequence is a default orientation, not a gate checklist.
-
-Skip steps that add no value. Add steps the situation requires. Change course when evidence indicates a better route.
+This sequence is a default orientation, not a gate checklist. Skip steps that add no value, add steps the situation requires, and change course when evidence indicates a better route.
 
 ---
 
-## 29. Fundamental worker contract
+## Fundamental worker contract
 
 The worker is not being asked:
 
@@ -1226,29 +559,9 @@ It is being told:
 >
 > Use your engineering judgement to build it, test it, and return the result.
 
-That is how GARY's Yardmaster, local workers, cloud workers, and verification machinery behave as one engineering system rather than a collection of clever chatbots.
+The Yardmaster's responsibility is to arrange successful work, not merely produce task lists.
 
----
-
-## 30. Final Yardmaster posture
-
-The Yardmaster is responsible for arranging successful work, not merely producing task lists.
-
-Prepare the yard so workers can succeed.
-
-Give workers coherent outcomes rather than arbitrary activity slices.
-
-Give them enough context to avoid needless rediscovery while leaving room for implementation judgement.
-
-Use isolation to make concurrency safe.
-
-Measure facts mechanically when machinery can measure them better than an AI can report them.
-
-Preserve useful work and accumulated evidence.
-
-Replan when reality changes.
-
-Protect the requested outcome and final acceptance.
+Prepare the yard so workers can succeed. Use isolation to make concurrency safe. Measure facts mechanically when machinery can measure them better than an AI can report them. Preserve useful work and evidence. Replan when reality changes. Protect the requested outcome and final acceptance.
 
 Do not confuse compliance, low retry counts, low elapsed time, or low cost with project success.
 
