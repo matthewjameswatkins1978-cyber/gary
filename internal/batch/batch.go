@@ -3,6 +3,7 @@
 package batch
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 )
+
+const gcloudSubmissionTimeout = 2 * time.Minute
 
 // JobConfig holds the parameters needed to submit a Batch smoke job.
 type JobConfig struct {
@@ -185,7 +188,12 @@ func SubmitJob(cfg JobConfig) (string, error) {
 		"--config", tmpFile.Name(),
 	}
 
-	out, err := exec.Command("gcloud", args...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), gcloudSubmissionTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "gcloud", args...).CombinedOutput()
+	if ctx.Err() != nil {
+		return "", fmt.Errorf("gcloud batch submit timed out after %s: %w", gcloudSubmissionTimeout, ctx.Err())
+	}
 	if err != nil {
 		return "", fmt.Errorf("gcloud batch submit failed: %s\n%s", err, string(out))
 	}
@@ -221,7 +229,12 @@ func SubmitCodingJob(cfg CodingJobConfig) (string, error) {
 		"--config", tmpFile.Name(),
 	}
 
-	out, err := exec.Command("gcloud", args...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), gcloudSubmissionTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "gcloud", args...).CombinedOutput()
+	if ctx.Err() != nil {
+		return "", fmt.Errorf("gcloud batch submit timed out after %s: %w", gcloudSubmissionTimeout, ctx.Err())
+	}
 	if err != nil {
 		return "", fmt.Errorf("gcloud batch submit failed: %s\n%s", err, string(out))
 	}
