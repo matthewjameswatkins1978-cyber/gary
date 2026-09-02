@@ -439,7 +439,23 @@ The Yardmaster should treat a worker result as a state transition proposal backe
 
 > What durable evidence now exists, what is safe to preserve, and what is the smallest correct next control action?
 
-A strong default response matrix is:
+While a worker is still live, use observable progress and the supervision actions rather than guessing from elapsed time:
+
+| Live worker situation | Yardmaster default |
+| --- | --- |
+| **Queued / not yet started** | Do not duplicate-dispatch merely because startup is slow. Confirm whether the original job is genuinely absent, cancelled, or terminal before creating overlapping work. |
+| **Running with useful progress** | `CONTINUE`. Give the worker room. Builds, tests, installs, downloads, and exploration count as useful activity when uncertainty or acceptance is moving. |
+| **Running, but a small factual correction would help** | `GUIDE` with one concise evidence-backed instruction. Preserve the worker's current useful state. |
+| **Running and repeating the same failed action** | First `GUIDE` if one concrete correction is likely to recover it. If equivalent failure continues without new evidence, `STOP_AND_REPLAN`. |
+| **Missing an ordinary tool/package/environment detail** | Usually `CONTINUE` or `GUIDE` toward authorised setup/recovery. Do not confuse setup friction with a product blocker. |
+| **Needs authority outside the worker boundary** | Preserve work and `STOP_AND_REPLAN` so the trusted control/Yardmaster layer can choose the authorised route or escalate. |
+| **Candidate appears complete** | `READY_FOR_INSPECTION`. Trusted acceptance still decides whether it is accepted. |
+| **Worker/telemetry disappears or infrastructure becomes ambiguous** | Establish the real external job state and cancel/close it if necessary before launching overlapping work that could mutate the same logical result. Treat unknown as unknown, not failed or safe-to-duplicate. |
+| **Healthy acceptance/build is simply taking a long time** | `CONTINUE` unless contrary evidence appears. Time is cost evidence, not proof of failure. |
+
+After a worker leaves live execution, use the result evidence to decide what becomes durable project state.
+
+A strong default result matrix is:
 
 | Worker situation | Yardmaster default | Avoid |
 | --- | --- | --- |
