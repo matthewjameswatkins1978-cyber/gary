@@ -2,102 +2,84 @@
 
 **General Agent Routing Yard**
 
-GARY routes bounded implementation jobs to disposable AI workers, verifies progress,
-controls retries and cost, and keeps planning on a small observable control plane.
+GARY turns project plans into bounded implementation work for disposable AI workers, preserves durable project context, supervises progress from observable evidence, controls cost and authority, integrates accepted work, and verifies completion at project level.
 
-Reliability R1 splits coordination from labour: Yardmaster planning is one direct
-Gemini API call on the control plane with a five-minute hard limit; Google Cloud
-Batch is reserved for isolated implementation workers.
+The control plane owns orchestration. Implementation workers operate in isolated repository state and return evidence-backed results. Rules protect authority, provenance, security, cost, and acceptance; the Yardmaster is otherwise expected to use judgement to get the real job finished.
+
+## Documentation
+
+Current documentation is organised deliberately:
+
+- `GARY_RULEBOOK.md` — completion principle, universal boundaries, Yardmaster and Worker roles.
+- `docs/YARDMASTER_OPERATING_GUIDE.md` — advisory engineering tradecraft for project setup, JobPackets, supervision, repair, integration, and completion.
+- `docs/project-context.md` — durable project packet/manual/state model.
+- `docs/github-app-setup.md` — short-lived GitHub result-push credentials.
+- `docs/github-oidc-setup.md` — GitHub Actions to Google Cloud identity setup.
+- `docs/reliability-r1.md` and `docs/verification/` — historical design/verification evidence, not current runtime doctrine.
+
+For exact mechanics, current code, schemas, tests, and workflows are authoritative.
 
 ## Quick start
 
 ```powershell
 go run ./cmd/gary version
+go run ./cmd/gary doctor
+go test ./...
 ```
 
-The decision-only routing entrypoint consumes one `telltail.adapter.v1`
-request from stdin and returns one `telltail.decision.v1` response without
-launching a worker or changing a repository:
+The decision-only Telltail adapter consumes one `telltail.adapter.v1` request from stdin and returns one `telltail.decision.v1` response without launching a worker or changing a repository:
 
 ```powershell
 Get-Content -Raw telltail-adapter-request.json | go run ./cmd/gary route --dry-run --json
 ```
 
-```powershell
-go run ./cmd/gary doctor
-```
-
-```powershell
-go test ./...
-```
-
 ## Configuration
 
-Set environment variables in PowerShell:
+Typical local/cloud configuration:
 
 ```powershell
 $env:GARY_GCP_PROJECT = "your-project-id"
-$env:GARY_GCP_REGION = "us-central1"
-$env:GARY_GCP_ZONE = "us-central1-a"
+$env:GARY_GCP_REGION = "europe-west2"
+$env:GARY_GCP_ZONE = "europe-west2-a"
 $env:GARY_GITHUB_REPO = "owner/repo"
 $env:GARY_RESULTS_DIR = ".\results"
 $env:GARY_PROJECTS_DIR = ".\gary\projects"
 ```
 
-Or copy `.env.example` to `.env` and source it. See `.env.example` for all
-supported variables.
+Or copy `.env.example` to `.env` and use the values appropriate to the current environment. Never commit credentials.
 
 | Variable | Required | Description |
 |---|---|---|
-| `GARY_GCP_PROJECT` | Yes (cloud ops) | Google Cloud project ID |
-| `GARY_GCP_REGION` | Yes (cloud ops) | Google Cloud region |
-| `GARY_GCP_ZONE` | No | Google Cloud zone |
-| `GARY_GITHUB_REPO` | No | GitHub repository (owner/repo) |
-| `GARY_RESULTS_DIR` | No | Local results directory (default: ./results) |
-| `GARY_WORKER_RUNTIME` | No | Default worker: `batch` or `managed` (default: batch) |
-| `GARY_PROJECTS_DIR` | No | Durable project context root (default: ./gary/projects) |
+| `GARY_GCP_PROJECT` | Yes for cloud operations | Google Cloud project ID |
+| `GARY_GCP_REGION` | Yes for cloud operations | Google Cloud region |
+| `GARY_GCP_ZONE` | No | Google Cloud zone when a path requires one |
+| `GARY_GITHUB_REPO` | No | GARY control repository (`owner/repo`) |
+| `GARY_RESULTS_DIR` | No | Local results directory |
+| `GARY_WORKER_RUNTIME` | No | Worker runtime selection where supported |
+| `GARY_PROJECTS_DIR` | No | Durable project-context root |
 
-## Layout
+See `.env.example` and current configuration code for the complete set and defaults.
+
+## Repository layout
 
 ```text
-cmd/gary/             CLI entry point
-internal/config/      configuration loading and validation
-internal/jobs/        job dossier and result types
+cmd/gary/             CLI and master/Yardmaster entry points
+internal/config/      configuration
+internal/jobs/        jobs, dossiers, and results
 internal/batch/       Google Cloud Batch boundary
-internal/overseer/    outcome-review policy
-internal/report/      terminal-only reporting
-internal/gitops/      worker repository operations
+internal/supervisor/  supervision state/evidence
+internal/project/     durable project context
+internal/gitops/      repository operations
+internal/githubapp/   short-lived GitHub App credentials
 docker/worker/        disposable worker image
-scripts/              local maintenance and smoke-test helpers
-examples/smoke-test/  smallest eventual Batch run fixture
-docs/                 decisions and operational notes
-testdata/             stable fixtures for tests
+scripts/              maintenance and smoke helpers
+docs/                 current guidance plus historical verification notes
+gary/                 durable/control-plane project and master state
 ```
-
-## Status
-
-Reliability R1: direct control-plane Yardmaster + Batch implementation workers.
-No workflow rewrites GARY source at runtime. See `docs/reliability-r1.md`.
-
-Terminal runs persist a structured cost record. Provider token usage is labelled
-`PROVIDER_REPORTED`; Batch VM runtime is priced from the observed runtime and
-labelled estimated because GARY does not query the final Cloud Billing invoice.
-Historical records retain their legacy estimate semantics.
-
-```powershell
-go run ./cmd/gary cost <job-or-master-id>
-```
-
-Ordinary results are stored under `results/runs/<job-id>.json`; master results
-are stored under `gary/master/status/<master-id>.json`. The GitHub-readable yard
-snapshot is `control/status.json` and reports `idle` when no jobs remain active.
 
 ## Durable projects
 
-Long master packets can be ingested into durable project context. The original
-packet is stored before the Yardmaster call, identified by SHA-256, and never
-rewritten. The Yardmaster produces versioned structured manuals; amendments
-produce new manual versions while preserving the packet and older manuals.
+Long master packets can be ingested into durable project context. The original packet is stored before Yardmaster execution, identified by SHA-256, and preserved. Versioned project manuals and amendments retain provenance rather than replacing the source packet.
 
 ```powershell
 go run ./cmd/gary project start --id book-burner --repo https://github.com/matthewjameswatkins1978-cyber/book-burner.git --base-branch master MASTER_PACKET.md
@@ -107,67 +89,43 @@ go run ./cmd/gary project amend book-burner AMENDMENT.md
 go run ./cmd/gary project inspect book-burner --json
 ```
 
-Project-backed master manifests use `project_id` instead of `brief_path`.
-Every master wave and child worker rehydrates and verifies the project packet
-and current manual before continuing. Missing or tampered context blocks the
-operation; project acceptance is required before archival.
+Project-backed master work rehydrates validated project context before planning and child execution. Missing or tampered provenance is an integrity problem, not something an agent is allowed to reason around.
 
-Do not put credentials in this repository; copy `.env.example` to `.env`
-for local development.
+## Worker model
 
-## First Cloud Heartbeat
+Workers are implementation agents. They receive a bounded outcome, relevant context, repository state, constraints, and executable evidence of success. They may choose implementation tactics and ordinary development setup within their authority.
+
+The Yardmaster should divide work into coherent outcomes, run independent work concurrently when isolation makes that safe, supervise from engineering evidence, preserve useful partial work, and replan when reality changes.
+
+Elapsed time and raw attempt count are observations, not project-success criteria. Genuine cost, infrastructure, security, authority, and acceptance boundaries remain enforceable limits.
+
+## Evidence and acceptance
+
+A worker saying "done" is not acceptance. GARY should prefer mechanically observed Git, build, test, runtime, and cost evidence where machinery can measure those facts directly.
+
+Master completion requires project-level acceptance against the integrated state, plus independent semantic inspection where configured. Ordinary workers do not gain merge or production authority merely by completing a child job.
+
+Structured result and master status locations are implementation details; use the current CLI and `docs/README.md` rather than historical verification notes when exact locations matter.
+
+## Cloud heartbeat
 
 ```powershell
 go run ./cmd/gary smoke
 ```
 
-Submits one tiny Google Cloud Batch job, waits for it to succeed, verifies
-the heartbeat marker in Cloud Logging, and records a local result. Requires
-`GARY_GCP_PROJECT` and `GARY_GCP_REGION` (or a configured `gcloud` project).
+This exercises the configured Google Cloud Batch path and records the result. It requires the current Google Cloud project/region identity setup.
 
-## Default Worker
+## Development
 
-Batch + Gemini CLI is the default worker (faster, lower-token, cheaper per
-Build 2E benchmark). Managed Agent is available as an alternate route.
+GARY is a Go project. At minimum use the repository-required Go toolchain and run:
 
 ```powershell
-go run ./cmd/gary worker
+go test ./...
+go vet ./...
 ```
 
-```
-Default worker: batch
-Model: gemini-3.5-flash-lite
-```
+Useful agent-development tools may include `gopls`, `goimports`, and `staticcheck`, but the repository's current tests and declared toolchain are the source of truth.
 
-## Go Development Tools
+## Doctrine
 
-### Required (built into Go)
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| `go` | Go toolchain | v1.24.0+ required |
-| `gofmt` | Code formatting | Built-in, runs automatically |
-| `go vet` | Basic static analysis | Built-in, catches common mistakes |
-
-### Recommended (for coding agents like opencode)
-
-| Tool | Purpose | Install |
-|------|---------|---------|
-| `gopls` | Language Server Protocol (LSP) | `go install golang.org/x/tools/gopls@latest` |
-| `goimports` | Import organization | `go install golang.org/x/tools/cmd/goimports@latest` |
-| `staticcheck` | Advanced static analysis | `go install honnef.co/go/tools/cmd/staticcheck@latest` |
-
-### Optional (not installed for GARY V1)
-
-| Tool | Reason skipped |
-|------|----------------|
-| `delve` | Debugger not needed for V1 CLI |
-| `golangci-lint` | Meta-linter overkill for small project |
-
-### Verification
-
-Run `gary doctor` to check all tools are available:
-
-```powershell
-go run ./cmd/gary doctor
-```
+**Small instructions. Clear roles. Small context. Hard evidence. Finish the work.**
