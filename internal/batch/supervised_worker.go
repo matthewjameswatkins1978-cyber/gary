@@ -266,7 +266,7 @@ while true; do
   set -e
   export GARY_ACCEPTANCE_EXIT="$ACCEPTANCE_EXIT"
   cat /workspace/acceptance_output.txt || true
-  if [ "$ACCEPTANCE_EXIT" -eq 0 ]; then
+  if [ $ACCEPTANCE_EXIT -eq 0 ]; then
     echo "ACCEPTANCE PASSED" | tee -a /workspace/acceptance_output.txt
   else
     echo "ACCEPTANCE FAILED (exit code $ACCEPTANCE_EXIT)" | tee -a /workspace/acceptance_output.txt
@@ -293,7 +293,7 @@ while true; do
     esac
   fi
 
-  if [ "$ACCEPTANCE_EXIT" -eq 0 ]; then
+  if [ $ACCEPTANCE_EXIT -eq 0 ]; then
     PHASE=candidate_ready
   else
     PHASE=turn_complete
