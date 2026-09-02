@@ -37,16 +37,14 @@ func acceptanceCommandSegments(command string) []string {
 }
 
 func validateAcceptanceCommand(command string) bool {
-	parts := acceptanceCommandSegments(command)
-	if len(parts) == 0 || len(parts) > 12 {
+	command = strings.TrimSpace(command)
+	if command == "" || len(command) > maxAcceptanceCommandBytes {
 		return false
 	}
-	for _, part := range parts {
-		if !inboxCommand.MatchString(part) {
-			return false
-		}
-	}
-	return true
+	// Acceptance commands are trusted verifier code supplied by the control
+	// plane. Reject transport-breaking payloads, but do not accidentally turn
+	// normal Bash into an unsupported mini-language.
+	return !strings.ContainsAny(command, "\x00\r\n")
 }
 
 type inboxStatus struct {
