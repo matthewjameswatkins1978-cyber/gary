@@ -228,6 +228,7 @@ func yardmasterVertexEndpoint(project, model string) string {
 
 func vertexAccessToken(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "gcloud", "auth", "print-access-token")
+	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("gcloud auth print-access-token: %w: %s", err, strings.TrimSpace(string(out)))

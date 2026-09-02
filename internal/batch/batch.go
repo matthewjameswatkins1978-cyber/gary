@@ -23,7 +23,12 @@ const (
 func runGcloud(args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), gcloudCommandTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "gcloud", args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, "gcloud", args...)
+	// gcloud launches Python helpers. WaitDelay closes inherited pipes after
+	// cancellation so a descendant cannot make CombinedOutput outlive the
+	// command timeout.
+	cmd.WaitDelay = 2 * time.Second
+	out, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
 		return out, fmt.Errorf("gcloud command timed out after %s: %w", gcloudCommandTimeout, ctx.Err())
 	}
@@ -204,7 +209,9 @@ func SubmitJob(cfg JobConfig) (string, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), gcloudSubmissionTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "gcloud", args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, "gcloud", args...)
+	cmd.WaitDelay = 2 * time.Second
+	out, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
 		return "", fmt.Errorf("gcloud batch submit timed out after %s: %w", gcloudSubmissionTimeout, ctx.Err())
 	}
@@ -246,7 +253,9 @@ func SubmitCodingJob(cfg CodingJobConfig) (string, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), gcloudSubmissionTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "gcloud", args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, "gcloud", args...)
+	cmd.WaitDelay = 2 * time.Second
+	out, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
 		return "", fmt.Errorf("gcloud batch submit timed out after %s: %w", gcloudSubmissionTimeout, ctx.Err())
 	}

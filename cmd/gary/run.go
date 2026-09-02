@@ -311,7 +311,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			break
 		}
 
-		logPrintln(prefix, "  SUBMITTED")
+		logPrint(prefix, "  SUBMITTED %s", batchJobID)
 
 		status, finishedAt, err := batch.WaitForTerminal(
 			cfg.GCPProject, cfg.GCPRegion, jobName,
@@ -627,6 +627,7 @@ func downloadGCSFile(tmpDir, gcsPath string) string {
 	} {
 		ctx, cancel := context.WithTimeout(context.Background(), cloudCommandTimeout)
 		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		cmd.WaitDelay = 2 * time.Second
 		if _, err := cmd.CombinedOutput(); err == nil {
 			data, readErr := os.ReadFile(path)
 			if readErr == nil {
@@ -669,6 +670,7 @@ func extractFromBatchLogs(project, region, jobName, marker string) string {
 		"--format", "json",
 		"--limit", "10000",
 	)
+	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return ""
@@ -1206,7 +1208,7 @@ func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.J
 		return false, closerCost, fmt.Errorf("submit closer: %w", err)
 	}
 
-	logPrintln(prefix, "  SUBMITTED")
+	logPrint(prefix, "  SUBMITTED %s", jobName)
 
 	status, finishedAt, err := batch.WaitForTerminal(
 		cfg.GCPProject, cfg.GCPRegion, jobName,
