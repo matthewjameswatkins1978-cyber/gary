@@ -25,6 +25,7 @@ jobs:
       GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
       GARY_MAX_COST_USD: "0.06"
       GARY_MAX_WORKERS: "2"
+      GARY_MASTER_RUN_SLICES: "3"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -89,15 +90,43 @@ jobs:
             if [ -f "$status_file" ]; then
               state="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("state", ""))' "$status_file")"
               case "$state" in
-                done|failed) ;;
+                done|failed|paused) ;;
                 *)
-                  echo "Refusing automatic restart of $manifest_id with existing non-final state: $state" >&2
+                  echo "Refusing automatic restart of $manifest_id with existing non-resumable state: $state" >&2
                   exit 1
                   ;;
               esac
             fi
             echo "Dispatching $manifest"
-            go run ./cmd/gary master "$manifest"
+            master_state=""
+            for slice in $(seq 1 "$GARY_MASTER_RUN_SLICES"); do
+              echo "[master] run slice $slice/$GARY_MASTER_RUN_SLICES"
+              if ! go run ./cmd/gary master "$manifest"; then
+                echo "Master execution failed during slice $slice." >&2
+                exit 1
+              fi
+              master_state="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("state", ""))' "$status_file")"
+              case "$master_state" in
+                done)
+                  echo "Master completed in slice $slice."
+                  break
+                  ;;
+                paused)
+                  echo "Continuing paused master after bounded slice $slice."
+                  ;;
+                failed)
+                  echo "Master entered failed state during slice $slice." >&2
+                  exit 1
+                  ;;
+                *)
+                  echo "Master returned unexpected state '$master_state' after slice $slice." >&2
+                  exit 1
+                  ;;
+              esac
+            done
+            if [ "$master_state" != "done" ]; then
+              echo "Master remains paused after $GARY_MASTER_RUN_SLICES workflow slices; state is safely resumable."
+            fi
           done
 
       - name: Record master status
@@ -116,11 +145,14 @@ jobs:
           mapfile -t status_paths < <(
             { git diff --name-only HEAD -- gary/master/status; git diff --cached --name-only -- gary/master/status; git ls-files --others --exclude-standard -- gary/master/status; } | sort -u
           )
-          if [ ${#status_paths[@]} -eq 0 ]; then
-            echo "No local master status changes."
+          mapfile -t project_paths < <(
+            { git diff --name-only HEAD -- gary/projects; git diff --cached --name-only -- gary/projects; git ls-files --others --exclude-standard -- gary/projects; } | sort -u
+          )
+          if [ ${#status_paths[@]} -eq 0 ] && [ ${#project_paths[@]} -eq 0 ]; then
+            echo "No local master status or project-context changes."
             exit 0
           fi
-          for path in "${status_paths[@]}"; do
+          for path in "${status_paths[@]}" "${project_paths[@]}"; do
             test -f "$path" || continue
             mkdir -p "$status_snapshot/$(dirname "$path")"
             cp "$path" "$status_snapshot/$path"
@@ -132,9 +164,16 @@ jobs:
           # the local file blindly.
           for attempt in 1 2 3; do
             git fetch origin master
-            git clean -fd -- gary/master/status
+            git clean -fd -- gary/master/status gary/projects
             git reset --hard origin/master
             publish_paths=()
+            for path in "${project_paths[@]}"; do
+              local_file="$status_snapshot/$path"
+              test -f "$local_file" || continue
+              mkdir -p "$(dirname "$path")"
+              cp "$local_file" "$path"
+              publish_paths+=("$path")
+            done
             for path in "${status_paths[@]}"; do
               local_file="$status_snapshot/$path"
               test -f "$local_file" || continue
