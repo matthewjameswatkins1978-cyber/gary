@@ -289,6 +289,19 @@ func TestChildQualityDisposition(t *testing.T) {
 	}
 }
 
+func TestYardmasterDoctrineDefinesFullChildHandover(t *testing.T) {
+	for _, required := range []string{
+		"trusted control layer must rerun",
+		"PASS, SMALL_FIX, MAJOR_FIX, or REPLAN",
+		"reasonable professional engineering standard",
+		"A child is accepted only after trusted mechanical verification passes, Yardmaster quality judgement is PASS",
+	} {
+		if !strings.Contains(doctrine.YardmasterRoleRules, required) {
+			t.Fatalf("Yardmaster doctrine missing handover invariant %q", required)
+		}
+	}
+}
+
 func TestMasterWaveBoundsGiveResumeAFreshBoundedBudget(t *testing.T) {
 	start, end := masterWaveBounds(6, 5, true)
 	if start != 7 || end != 11 {
@@ -418,8 +431,8 @@ func TestMasterPlannerPromptDefinesParallelIsolationAndSafeAcceptance(t *testing
 		"fresh isolated clone",
 		"Sibling jobs do not share virtualenvs",
 		"If P0/blocker verification is still unresolved",
-		"simple direct acceptance checks",
-		"GARY validates the command form before dispatch",
+		"Ordinary verifier shell composition",
+		"Do not put network access, repository pushes, privilege changes, destructive administration",
 	} {
 		if !strings.Contains(prompt, required) {
 			t.Fatalf("planner prompt missing %q", required)
