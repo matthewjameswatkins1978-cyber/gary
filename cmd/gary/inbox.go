@@ -48,14 +48,25 @@ var inboxID = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,29}$`)
 var inboxBranch = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$`)
 )
 
+func acceptanceCommandSegments(command string) []string {
+	raw := strings.Split(command, "&&")
+	parts := make([]string, 0, len(raw))
+	for _, part := range raw {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return parts
+}
+
 func validateAcceptanceCommand(command string) bool {
-	parts := strings.Split(command, "&&")
+	parts := acceptanceCommandSegments(command)
 	if len(parts) == 0 || len(parts) > 12 {
 		return false
 	}
 	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" || !inboxCommand.MatchString(part) {
+		if !inboxCommand.MatchString(part) {
 			return false
 		}
 	}
