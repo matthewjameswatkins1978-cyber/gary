@@ -26,6 +26,9 @@ type RunResult struct {
 	Branch           string  `json:"branch"`
 	CommitSHA        string  `json:"commit_sha"`
 	Accepted         bool    `json:"accepted"`
+	// Verification records who actually awarded the pass. Accepted results are
+	// integrable only when this is trusted-independent.
+	Verification     string  `json:"verification,omitempty"`
 	DurationSecs     float64 `json:"duration_seconds"`
 	EstimatedMinutes int     `json:"estimated_minutes,omitempty"`
 	PatchBytes       int64   `json:"patch_bytes"`
