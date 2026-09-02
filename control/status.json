@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-02T12:29:27Z",
+  "updated_at": "2026-09-02T12:29:28Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -44,11 +44,13 @@
     },
     {
       "id": "rust-worker-canary-20260902",
+      "batch_job_id": "gary-run-rust-worker-canary-20260902-1-20260902-122928",
       "state": "running",
       "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
       "base_branch": "master",
       "result_branch": "gary/rust-worker-canary-20260902-7097731c",
-      "started_at": "2026-09-02T12:29:27Z"
+      "started_at": "2026-09-02T12:29:27Z",
+      "attempts": 1
     }
   ],
   "recent_jobs": [
