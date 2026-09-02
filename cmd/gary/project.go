@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/project"
@@ -540,42 +541,59 @@ func callProjectYardmasterJSON(ctx context.Context, cfg *config.Config, prompt s
 	if err != nil {
 		return "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, yardmasterVertexEndpoint(cfg.GCPProject, cfg.MasterModel), bytes.NewReader(body))
-	if err != nil {
-		return "", err
+
+	const maxAttempts = 4
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, yardmasterVertexEndpoint(cfg.GCPProject, cfg.MasterModel), bytes.NewReader(body))
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("project Yardmaster transport: %w", err)
+		}
+		respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+		if readErr != nil {
+			return "", readErr
+		}
+		if resp.StatusCode == http.StatusTooManyRequests && attempt < maxAttempts {
+			delay := time.Duration(attempt*attempt*5) * time.Second
+			fmt.Fprintf(os.Stderr, "project Yardmaster API 429; retrying attempt %d/%d after %s\n", attempt+1, maxAttempts, delay)
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return "", ctx.Err()
+			case <-timer.C:
+			}
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("project Yardmaster API %d: %s", resp.StatusCode, compactPlannerError(string(respBody), 2000))
+		}
+		var apiResp struct {
+			Candidates []struct {
+				Content struct {
+					Parts []struct {
+						Text string `json:"text"`
+					} `json:"parts"`
+				} `json:"content"`
+			} `json:"candidates"`
+		}
+		if err := json.Unmarshal(respBody, &apiResp); err != nil {
+			return "", err
+		}
+		if len(apiResp.Candidates) == 0 {
+			return "", errors.New("project Yardmaster returned no candidates")
+		}
+		var text strings.Builder
+		for _, part := range apiResp.Candidates[0].Content.Parts {
+			text.WriteString(part.Text)
+		}
+		return stripJSONFence(strings.TrimSpace(text.String())), nil
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("project Yardmaster transport: %w", err)
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return "", err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("project Yardmaster API %d: %s", resp.StatusCode, compactPlannerError(string(respBody), 2000))
-	}
-	var apiResp struct {
-		Candidates []struct {
-			Content struct {
-				Parts []struct {
-					Text string `json:"text"`
-				} `json:"parts"`
-			} `json:"content"`
-		} `json:"candidates"`
-	}
-	if err := json.Unmarshal(respBody, &apiResp); err != nil {
-		return "", err
-	}
-	if len(apiResp.Candidates) == 0 {
-		return "", errors.New("project Yardmaster returned no candidates")
-	}
-	var text strings.Builder
-	for _, part := range apiResp.Candidates[0].Content.Parts {
-		text.WriteString(part.Text)
-	}
-	return stripJSONFence(strings.TrimSpace(text.String())), nil
+	return "", errors.New("project Yardmaster retry budget exhausted")
 }
