@@ -15,7 +15,20 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 )
 
-const gcloudSubmissionTimeout = 2 * time.Minute
+const (
+	gcloudCommandTimeout    = 45 * time.Second
+	gcloudSubmissionTimeout = 2 * time.Minute
+)
+
+func runGcloud(args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), gcloudCommandTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "gcloud", args...).CombinedOutput()
+	if ctx.Err() != nil {
+		return out, fmt.Errorf("gcloud command timed out after %s: %w", gcloudCommandTimeout, ctx.Err())
+	}
+	return out, err
+}
 
 // JobConfig holds the parameters needed to submit a Batch smoke job.
 type JobConfig struct {
@@ -253,7 +266,7 @@ func DescribeJob(project, region, jobID string) (*JobStatus, error) {
 		"--format", "json",
 	}
 
-	out, err := exec.Command("gcloud", args...).CombinedOutput()
+	out, err := runGcloud(args...)
 	if err != nil {
 		return nil, fmt.Errorf("gcloud batch describe failed: %s\n%s", err, string(out))
 	}
@@ -271,10 +284,10 @@ func ListJobs(project, region string, limit int) ([]JobSummary, error) {
 	if limit < 1 || limit > 50 {
 		return nil, fmt.Errorf("limit must be between 1 and 50")
 	}
-	out, err := exec.Command("gcloud", "batch", "jobs", "list",
+	out, err := runGcloud("batch", "jobs", "list",
 		"--project", project, "--location", region,
 		"--limit", fmt.Sprintf("%d", limit),
-		"--format", "json(name,status.state,createTime)").CombinedOutput()
+		"--format", "json(name,status.state,createTime)")
 	if err != nil {
 		return nil, fmt.Errorf("gcloud batch list failed: %w\n%s", err, string(out))
 	}
@@ -301,9 +314,9 @@ func RecentLogs(project, jobUID string, limit int) (string, error) {
 		return "", fmt.Errorf("limit must be between 1 and 50")
 	}
 	filter := fmt.Sprintf(`logName="projects/%s/logs/batch_task_logs" AND labels.job_uid="%s"`, project, jobUID)
-	out, err := exec.Command("gcloud", "logging", "read", filter,
+	out, err := runGcloud("logging", "read", filter,
 		"--project", project, "--format", "value(textPayload)",
-		"--limit", fmt.Sprintf("%d", limit)).CombinedOutput()
+		"--limit", fmt.Sprintf("%d", limit))
 	if err != nil {
 		return "", fmt.Errorf("gcloud logging read failed: %w\n%s", err, string(out))
 	}
@@ -312,8 +325,8 @@ func RecentLogs(project, jobUID string, limit int) (string, error) {
 
 // CancelJob cancels one non-terminal Batch job by its exact GARY job ID.
 func CancelJob(project, region, jobID string) error {
-	out, err := exec.Command("gcloud", "batch", "jobs", "cancel", jobID,
-		"--project", project, "--location", region, "--quiet").CombinedOutput()
+	out, err := runGcloud("batch", "jobs", "cancel", jobID,
+		"--project", project, "--location", region, "--quiet")
 	if err != nil {
 		return fmt.Errorf("gcloud batch cancel failed: %w\n%s", err, string(out))
 	}
@@ -336,7 +349,7 @@ func QueryLogs(project, jobUID, heartbeat string) (string, error) {
 		"--limit", "10",
 	}
 
-	out, err := exec.Command("gcloud", args...).CombinedOutput()
+	out, err := runGcloud(args...)
 	if err != nil {
 		return "", fmt.Errorf("gcloud logging read failed: %s\n%s", err, string(out))
 	}
@@ -487,7 +500,7 @@ func generateCodingWorkerScript(cfg CodingJobConfig) string {
 		"echo \"GEMINI_EXIT=$GEMINI_EXIT\" | tee -a /workspace/acceptance_output.txt",
 		"",
 		"# Remove disposable worker artifacts before staging; never publish environments or caches.",
-		"find . -type d \\( -name .venv -o -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache -o -name .tox -o -name .nox -o -name .swiftpm -o -name .build -o -name DerivedData \\) -prune -exec rm -rf {} + 2>/dev/null || true",
+		"find . -type d \\( -name .venv -o -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache -o -name .tox -o -name .nox -o -name .swiftpm -o -name .build -o -name target -o -name DerivedData \\) -prune -exec rm -rf {} + 2>/dev/null || true",
 		"find . -type d -name '*.egg-info' -prune -exec rm -rf {} + 2>/dev/null || true",
 		"",
 		"# Commit changes",

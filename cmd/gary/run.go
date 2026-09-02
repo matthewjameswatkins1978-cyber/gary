@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -28,6 +29,8 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/project"
 )
+
+const cloudCommandTimeout = 45 * time.Second
 
 const (
 	maxAttempts            = 8
@@ -622,13 +625,16 @@ func downloadGCSFile(tmpDir, gcsPath string) string {
 		{"gsutil", "cp", gcsPath, path},
 		{"gcloud", "storage", "cp", gcsPath, path},
 	} {
-		cmd := exec.Command(args[0], args[1:]...)
+		ctx, cancel := context.WithTimeout(context.Background(), cloudCommandTimeout)
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 		if _, err := cmd.CombinedOutput(); err == nil {
 			data, readErr := os.ReadFile(path)
 			if readErr == nil {
+				cancel()
 				return string(data)
 			}
 		}
+		cancel()
 	}
 	return ""
 }
@@ -656,7 +662,9 @@ func extractFromBatchLogs(project, region, jobName, marker string) string {
 		`logName="projects/%s/logs/batch_task_logs" AND timestamp >= "%s" AND timestamp <= "%s"`,
 		project, status.CreateTime, status.UpdateTime,
 	)
-	cmd := exec.Command("gcloud", "logging", "read", filter,
+	ctx, cancel := context.WithTimeout(context.Background(), cloudCommandTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "gcloud", "logging", "read", filter,
 		"--project", project,
 		"--format", "json",
 		"--limit", "10000",
@@ -789,6 +797,7 @@ func cleanupDisposableWorkerArtifacts(root string) error {
 		".nox":          true,
 		".swiftpm":      true,
 		".build":        true,
+		"target":        true,
 		"DerivedData":   true,
 	}
 	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {

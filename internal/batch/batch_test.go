@@ -514,7 +514,7 @@ func TestCodingWorkerPromptOnlyIncludesValidYardmasterEstimate(t *testing.T) {
 
 func TestCodingWorkerScriptCleansDisposableArtifacts(t *testing.T) {
 	script := generateCodingWorkerScript(CodingJobConfig{RepoURL: "https://example.com/repo.git", BaseBranch: "main", GaryBranch: "gary/job", Task: "task", Acceptance: "echo ok"})
-	for _, marker := range []string{"-name .venv", "-name __pycache__", "-name .build", "timeout --signal=TERM --kill-after=90s 480s gemini", "GARY WORKER SOFT DEADLINE", "git add -A"} {
+	for _, marker := range []string{"-name .venv", "-name __pycache__", "-name .build", "-name target", "timeout --signal=TERM --kill-after=90s 480s gemini", "GARY WORKER SOFT DEADLINE", "git add -A"} {
 		if !strings.Contains(script, marker) {
 			t.Fatalf("worker script missing artifact hygiene marker %q", marker)
 		}
