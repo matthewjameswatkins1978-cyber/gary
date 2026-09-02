@@ -5,5 +5,8 @@
   "target_repo": "matthewjameswatkins1978-cyber/Suture",
   "merged_commit": "2c1bc397f24cdfdd526c2803fa3bd56e4cc98771",
   "source_staging_branch": "gary/master-suture-v0-1-buil-84399e",
-  "note": "Cumulative W8-W17 result was merged by owner intervention. This archive does not assert that GARY completed its own acceptance workflow."
+  "note": "Cumulative W8-W17 result was merged by owner intervention. The legacy Suture master run later attempted waves 19-20, was cancelled, and the project was resealed ARCHIVED. This archive does not assert that GARY completed its own acceptance workflow.",
+  "orphaned_workflow_run": 33659094307,
+  "orphaned_workflow_cancelled_at": "2026-09-02T19:37:11Z",
+  "final_seal_at": "2026-09-02T19:37:50Z"
 }
