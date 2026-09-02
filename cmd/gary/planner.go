@@ -295,43 +295,59 @@ func callWorkerSupervisorAPI(ctx context.Context, cfg *config.Config, prompt str
 	return decision, component, nil
 }
 
-func runChildQualityInspection(cfg *config.Config, job *jobs.Job, result jobs.RunResult) (*masterPlan, cost.Component, error) {
-	component := estimatedComponent("child-quality-inspector", cfg.MasterModel, "child quality inspector did not return provider usage")
-	tmp, err := os.MkdirTemp("", "gary-child-inspector-*")
-	if err != nil {
-		return nil, component, err
-	}
-	defer os.RemoveAll(tmp)
+type childQualityDisposition string
 
-	if err := gitops.CloneBranch(job.Repo, result.Branch, tmp); err != nil {
-		return nil, component, fmt.Errorf("child inspector clone: %w", err)
+const (
+	childQualityPass     childQualityDisposition = "PASS"
+	childQualitySmallFix childQualityDisposition = "SMALL_FIX"
+	childQualityMajorFix childQualityDisposition = "MAJOR_FIX"
+	childQualityReplan   childQualityDisposition = "REPLAN"
+)
+
+func classifyChildQuality(plan *masterPlan) childQualityDisposition {
+	if plan == nil {
+		return childQualityMajorFix
 	}
-	head, err := gitops.CommitSHA(tmp)
+	if plan.Done {
+		return childQualityPass
+	}
+	summary := strings.ToUpper(strings.TrimSpace(plan.Summary))
+	switch {
+	case strings.HasPrefix(summary, "SMALL_FIX:"):
+		return childQualitySmallFix
+	case strings.HasPrefix(summary, "REPLAN:"):
+		return childQualityReplan
+	case strings.HasPrefix(summary, "MAJOR_FIX:"):
+		return childQualityMajorFix
+	default:
+		// A rejection without a clear classification is treated conservatively
+		// as a material repair, not as a pass and not as a route-changing replan.
+		return childQualityMajorFix
+	}
+}
+
+func runChildQualityInspection(cfg *config.Config, job *jobs.Job, workDir string) (*masterPlan, cost.Component, error) {
+	component := estimatedComponent("child-quality-inspector", cfg.MasterModel, "child quality inspector did not return provider usage")
+
+	head, err := gitops.CommitSHA(workDir)
 	if err != nil {
 		return nil, component, fmt.Errorf("child inspector candidate SHA: %w", err)
 	}
-	if strings.TrimSpace(result.CommitSHA) == "" || head != result.CommitSHA {
-		return nil, component, fmt.Errorf("child inspector candidate moved: expected %s, got %s", result.CommitSHA, head)
-	}
-	if err := gitops.FetchBranch(tmp, "origin", job.BaseBranch); err != nil {
-		return nil, component, fmt.Errorf("child inspector fetch base: %w", err)
-	}
-
-	repoContext, err := buildYardmasterRepoContext(tmp, yardmasterContextMaxBytes)
+	repoContext, err := buildYardmasterRepoContext(workDir, yardmasterContextMaxBytes)
 	if err != nil {
 		return nil, component, fmt.Errorf("child inspector repository snapshot: %w", err)
 	}
-	diffStat, _ := plannerCommandOutput(tmp, "git", "diff", "--stat", "origin/"+job.BaseBranch+"...HEAD")
-	diffText, _ := plannerCommandOutput(tmp, "git", "diff", "--find-renames", "origin/"+job.BaseBranch+"...HEAD")
+	diffStat, _ := plannerCommandOutput(workDir, "git", "diff", "--stat", job.BaseBranch+"...HEAD")
+	diffText, _ := plannerCommandOutput(workDir, "git", "diff", "--find-renames", job.BaseBranch+"...HEAD")
 	if len(diffText) > 70000 {
 		diffText = diffText[:70000] + "\n[diff truncated]\n"
 	}
 
 	prompt := fmt.Sprintf(`You are GARY Yardmaster acting as the independent quality gate for a completed child job.
 
-The trusted control layer has already rerun the child's stated mechanical acceptance checks on this exact candidate commit in a fresh clone. Those checks passing is necessary but not sufficient for integration.
+The trusted control layer has already rerun the child's stated mechanical acceptance checks on this exact candidate in a fresh clone. Those checks passing is necessary but not sufficient for integration.
 
-Decide whether this bounded change is genuinely merge-worthy and up to a reasonable professional engineering standard for the assigned child objective.
+Judge whether this bounded change is genuinely merge-worthy and up to a reasonable professional engineering standard for the assigned child objective.
 
 PASS only when the actual implementation:
 - materially satisfies the child objective, not merely the literal narrow check;
@@ -340,11 +356,17 @@ PASS only when the actual implementation:
 - does not contain obvious hacks, placeholders, dead-end scaffolding or unjustified scope expansion;
 - does not leave an obvious material correctness, security, portability or integration defect that should be fixed before dependent work builds on it.
 
-Do not demand optional polish, personal stylistic preferences, broad redesign, speculative future-proofing, or unrelated cleanup. This is a bounded merge review, not a search for perfection. Reject only for a material reason that makes the child result not good enough to integrate.
+Do not demand optional polish, personal stylistic preferences, broad redesign, speculative future-proofing, or unrelated cleanup. This is a bounded merge review, not a search for perfection.
 
-Do not trust worker prose or Batch status. Judge the exact candidate commit, its diff, the repository evidence, the child objective and the supplied project context.
+If it is not merge-worthy, classify the problem:
+- SMALL_FIX: the approach is sound and the candidate should be preserved; give the worker a short, exact list of small corrections. The next attempt should keep everything else.
+- MAJOR_FIX: substantial correction is needed but the core route/useful work should be preserved; explain what is materially wrong, what is worth keeping, and give concrete hints for the repair attempt.
+- REPLAN: the implementation route, job boundary, dependency assumption, or authority situation is fundamentally wrong enough that simply sending the same worker back with repair notes is the wrong control action.
 
-Return exactly:
+Do not trust worker prose or Batch status. Judge the exact candidate, its diff, repository evidence, child objective, constraints and already-rerun mechanical checks.
+
+Return exactly one of these shapes:
+
 {
   "done": true,
   "summary": "PASS: concise evidence basis",
@@ -352,18 +374,29 @@ Return exactly:
   "jobs": []
 }
 
-or, if it should not be merged:
+{
+  "done": false,
+  "summary": "SMALL_FIX: concise material issue",
+  "memory": "exact small corrections; explicitly say what to preserve",
+  "jobs": []
+}
 
 {
   "done": false,
-  "summary": "REJECT: concise material reason",
-  "memory": "specific repair guidance: what to keep, what must change, and why",
+  "summary": "MAJOR_FIX: concise material issue",
+  "memory": "strong repair guidance: what to keep, what must change, and useful implementation hints",
+  "jobs": []
+}
+
+{
+  "done": false,
+  "summary": "REPLAN: concise reason this route/job shape should change",
+  "memory": "evidence and the control-level issue the Yardmaster must account for",
   "jobs": []
 }
 
 CHILD JOB ID: %s
 BASE BRANCH: %s
-CANDIDATE BRANCH: %s
 CANDIDATE COMMIT: %s
 
 CHILD OBJECTIVE
@@ -389,7 +422,7 @@ CANDIDATE DIFF
 CURRENT CANDIDATE REPOSITORY SNAPSHOT
 =====================================
 %s
-`, job.ID, job.BaseBranch, result.Branch, result.CommitSHA, job.Task, strings.Join(job.Acceptance, "\n"), job.ProjectContext, diffStat, diffText, repoContext)
+`, job.ID, job.BaseBranch, head, job.Task, strings.Join(job.Acceptance, "\n"), job.ProjectContext, diffStat, diffText, repoContext)
 
 	ctx, cancel := context.WithTimeout(context.Background(), yardmasterPlannerTimeout)
 	defer cancel()
