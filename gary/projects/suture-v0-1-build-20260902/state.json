@@ -1,0 +1,9 @@
+{
+  "schema": "gary.project-state.v1",
+  "project_id": "suture-v0-1-build-20260902",
+  "state": "PLANNING",
+  "current_phase": "planning",
+  "current_strategy": "Bootstrap clean Rust repository, establish schema and typed protocol contracts, construct type-state execution core and safe commit boundary, implement text/json/toml providers with adversarial validation, and complete the falsification benchmark suite.",
+  "last_event": "planning wave 18",
+  "updated_at": "2026-09-02T16:30:33Z"
+}

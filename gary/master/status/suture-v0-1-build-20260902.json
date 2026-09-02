@@ -4,12 +4,12 @@
   "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
   "project_manual_version": 1,
   "state": "failed",
-  "updated_at": "2026-09-02T14:26:52Z",
+  "updated_at": "2026-09-02T16:30:53Z",
   "staging_branch": "gary/master-suture-v0-1-buil-84399e",
-  "wave": 13,
-  "summary": "Core pipeline is built; repair JSON source preservation before continuing remaining Suture stages.",
-  "error": "master job exhausted this run's wave budget (6 waves, through wave 13) without completion",
-  "planner_memory": "ACCEPTED: d3bdbfd foundation; 4608d94 engine; 7b2d13a workspace; b863b55 text provider; 865ad20 pipeline; 17cea62 JSON provider provisionally integrated. REQUIRED REPAIR BEFORE STAGE D: audit src/provider/json.rs against packet Invariant 5/source-preservation. Current implementation reserializes the whole JSON document into one full-file ByteEdit, so unrelated whitespace/formatting can change. Replace with target-span/source-preserving edits and add a regression test proving untouched byte regions remain byte-for-byte identical. THEN continue Stage D TOML, Stage E platform/path hardening, Stage F adversarial benchmark, Stage G docs/package/release. Do not declare done until full packet acceptance passes.",
+  "wave": 18,
+  "summary": "Stages A through E are complete and accepted. Implementing Stage F: 38+ adversarial corpus cases and verification test suite.",
+  "error": "planner failed in wave 18 after 19.0s: job 1 acceptance \"test -f README.md \u0026\u0026 test -f docs/ARCHITECTURE.md \u0026\u0026 test -f docs/PROTOCOL.md \u0026\u0026 test -f docs/THREAT_MODEL.md \u0026\u0026 test -f docs/PROVIDER_CONTRACT.md \u0026\u0026 test -f docs/BENCHMARK_REPORT.md\" contains unsupported shell syntax",
+  "planner_memory": "ACCEPTED: d3bdbfd foundation; 4608d94 engine; 7b2d13a workspace; b863b55 text provider; 865ad20 pipeline; 17cea62 JSON provider; 4ebf8b8 JSON repair; 36d70a0 TOML provider; 4b8c3bc PathNamespace \u0026 CLI. CURRENT STAGE F: Implement the full 38+ adversarial corpus cases in `tests/adversarial_corpus.rs` covering all Section 36 failure modes and Invariants 1-10. NEXT: Stage G documentation and benchmark report.",
   "waves": [
     {
       "wave": 1,
@@ -840,17 +840,280 @@
       "integrated": [
         "suture-v0-1-buil-w13-j1"
       ]
+    },
+    {
+      "wave": 14,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 15.004860153,
+      "plan_summary": "Stage C JSON provider needs targeted span source-preservation repair using jsonc-parser/CST edits to uphold Invariant 5.",
+      "results": [
+        {
+          "job_id": "suture-v0-1-buil-w14-j1",
+          "batch_job_id": "gary-run-suture-v0-1-buil-w14-j1-1-20260902-154837",
+          "branch": "gary/suture-v0-1-buil-w14-j1-89947b71",
+          "commit_sha": "4ebf8b8",
+          "accepted": true,
+          "duration_seconds": 763.643120996,
+          "estimated_minutes": 6,
+          "patch_bytes": 1279,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "project_id": "suture-v0-1-build-20260902",
+          "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+          "project_manual_version": 1,
+          "model_cost_estimated": 0,
+          "compute_cost_estimated": 0.004108778622572499,
+          "total_cost_estimated": 0.004108778622572499,
+          "cost": {
+            "pricing_status": "ESTIMATED",
+            "currency": "USD",
+            "pricing_version": "2026-08-30",
+            "model_cost_usd": 0,
+            "compute_cost_usd": 0.004108778622572499,
+            "total_cost_usd": 0.004108778622572499,
+            "components": [
+              {
+                "kind": "worker",
+                "model_requested": "gemini-3.5-flash-lite",
+                "usage_source": "ESTIMATED",
+                "model_cost_usd": 0,
+                "compute_cost_usd": 0.004108778622572499,
+                "total_cost_usd": 0.004108778622572499,
+                "runtime_seconds": 714.57019523,
+                "machine_type": "e2-small",
+                "provisioning_model": "STANDARD",
+                "pricing_version": "2026-08-30",
+                "pricing_effective_date": "2026-08-30",
+                "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+                "unmetered_reason": "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+              }
+            ],
+            "unmetered_components": [
+              "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+            ]
+          }
+        }
+      ],
+      "integrated": [
+        "suture-v0-1-buil-w14-j1"
+      ]
+    },
+    {
+      "wave": 15,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 18.569751302,
+      "plan_summary": "Stage A, B, and C (foundation, engine, workspace, text provider, core pipeline, strict JSON provider) are accepted. Starting Stage D: lossless TOML provider using toml_edit.",
+      "results": [
+        {
+          "job_id": "suture-v0-1-buil-w15-j1",
+          "batch_job_id": "gary-run-suture-v0-1-buil-w15-j1-1-20260902-160144",
+          "branch": "gary/suture-v0-1-buil-w15-j1-5d609f33",
+          "commit_sha": "36d70a0",
+          "accepted": true,
+          "duration_seconds": 513.62437012,
+          "estimated_minutes": 5,
+          "patch_bytes": 23671,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "project_id": "suture-v0-1-build-20260902",
+          "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+          "project_manual_version": 1,
+          "model_cost_estimated": 0.19487274999999998,
+          "compute_cost_estimated": 0.00261831877365725,
+          "total_cost_estimated": 0.19749106877365724,
+          "cost": {
+            "pricing_status": "MIXED",
+            "currency": "USD",
+            "pricing_version": "2026-08-30",
+            "worker_model_cost_usd": 0.19487274999999998,
+            "model_cost_usd": 0.19487274999999998,
+            "compute_cost_usd": 0.00261831877365725,
+            "total_cost_usd": 0.19749106877365724,
+            "components": [
+              {
+                "kind": "worker",
+                "model_requested": "gemini-3.5-flash-lite",
+                "usage_source": "PROVIDER_REPORTED",
+                "input_tokens": 1871448,
+                "cached_input_tokens": 1462395,
+                "fresh_input_tokens": 409053,
+                "output_tokens": 11314,
+                "total_tokens": 1882762,
+                "model_cost_usd": 0.19487274999999998,
+                "compute_cost_usd": 0.00261831877365725,
+                "total_cost_usd": 0.19749106877365724,
+                "runtime_seconds": 455.359786723,
+                "machine_type": "e2-small",
+                "provisioning_model": "STANDARD",
+                "pricing_version": "2026-08-30",
+                "pricing_effective_date": "2026-08-30",
+                "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+                "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+              }
+            ],
+            "unmetered_components": [
+              "Batch compute is estimated from observed runtime; invoice data was not queried"
+            ]
+          }
+        }
+      ],
+      "integrated": [
+        "suture-v0-1-buil-w15-j1"
+      ]
+    },
+    {
+      "wave": 16,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 15.03186428,
+      "plan_summary": "Stage A, B, C, and D are accepted. Implementing Stage E: PathNamespace model in src/path.rs, multi-provider pipeline integration in src/pipeline.rs and src/protocol.rs, and CLI subcommands in src/main.rs (apply, dry-run, schema, doctor, --version).",
+      "results": [
+        {
+          "job_id": "suture-v0-1-buil-w16-j1",
+          "batch_job_id": "gary-run-suture-v0-1-buil-w16-j1-1-20260902-161037",
+          "branch": "gary/suture-v0-1-buil-w16-j1-7dd1c95e",
+          "commit_sha": "4b8c3bc",
+          "accepted": true,
+          "duration_seconds": 517.847716126,
+          "estimated_minutes": 6,
+          "patch_bytes": 34832,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "project_id": "suture-v0-1-build-20260902",
+          "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+          "project_manual_version": 1,
+          "model_cost_estimated": 0.24448026999999994,
+          "compute_cost_estimated": 0.0027342700478785,
+          "total_cost_estimated": 0.24721454004787843,
+          "cost": {
+            "pricing_status": "MIXED",
+            "currency": "USD",
+            "pricing_version": "2026-08-30",
+            "worker_model_cost_usd": 0.24448026999999994,
+            "model_cost_usd": 0.24448026999999994,
+            "compute_cost_usd": 0.0027342700478785,
+            "total_cost_usd": 0.24721454004787843,
+            "components": [
+              {
+                "kind": "worker",
+                "model_requested": "gemini-3.5-flash-lite",
+                "usage_source": "PROVIDER_REPORTED",
+                "input_tokens": 2756240,
+                "cached_input_tokens": 2283599,
+                "fresh_input_tokens": 472641,
+                "output_tokens": 13672,
+                "total_tokens": 2769912,
+                "model_cost_usd": 0.24448026999999994,
+                "compute_cost_usd": 0.0027342700478785,
+                "total_cost_usd": 0.24721454004787843,
+                "runtime_seconds": 475.525225718,
+                "machine_type": "e2-small",
+                "provisioning_model": "STANDARD",
+                "pricing_version": "2026-08-30",
+                "pricing_effective_date": "2026-08-30",
+                "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+                "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+              }
+            ],
+            "unmetered_components": [
+              "Batch compute is estimated from observed runtime; invoice data was not queried"
+            ]
+          }
+        }
+      ],
+      "integrated": [
+        "suture-v0-1-buil-w16-j1"
+      ]
+    },
+    {
+      "wave": 17,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 18.298462119,
+      "plan_summary": "Stages A through E are complete and accepted. Implementing Stage F: 38+ adversarial corpus cases and verification test suite.",
+      "results": [
+        {
+          "job_id": "suture-v0-1-buil-w17-j1",
+          "batch_job_id": "gary-run-suture-v0-1-buil-w17-j1-1-20260902-161937",
+          "branch": "gary/suture-v0-1-buil-w17-j1-8ac72312",
+          "commit_sha": "c46e3a7",
+          "accepted": true,
+          "duration_seconds": 653.05914283,
+          "estimated_minutes": 6,
+          "patch_bytes": 29225,
+          "attempts": 1,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "DONE",
+          "project_id": "suture-v0-1-build-20260902",
+          "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+          "project_manual_version": 1,
+          "model_cost_estimated": 0.24920755,
+          "compute_cost_estimated": 0.0033887521415245,
+          "total_cost_estimated": 0.2525963021415245,
+          "cost": {
+            "pricing_status": "MIXED",
+            "currency": "USD",
+            "pricing_version": "2026-08-30",
+            "worker_model_cost_usd": 0.24920755,
+            "model_cost_usd": 0.24920755,
+            "compute_cost_usd": 0.0033887521415245,
+            "total_cost_usd": 0.2525963021415245,
+            "components": [
+              {
+                "kind": "worker",
+                "model_requested": "gemini-3.5-flash-lite",
+                "usage_source": "PROVIDER_REPORTED",
+                "input_tokens": 2361881,
+                "cached_input_tokens": 1825775,
+                "fresh_input_tokens": 536106,
+                "output_tokens": 13441,
+                "total_tokens": 2375322,
+                "model_cost_usd": 0.24920755,
+                "compute_cost_usd": 0.0033887521415245,
+                "total_cost_usd": 0.2525963021415245,
+                "runtime_seconds": 589.348198526,
+                "machine_type": "e2-small",
+                "provisioning_model": "STANDARD",
+                "pricing_version": "2026-08-30",
+                "pricing_effective_date": "2026-08-30",
+                "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+                "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+              }
+            ],
+            "unmetered_components": [
+              "Batch compute is estimated from observed runtime; invoice data was not queried"
+            ]
+          }
+        }
+      ],
+      "integrated": [
+        "suture-v0-1-buil-w17-j1"
+      ]
+    },
+    {
+      "wave": 18,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 18.960094042
     }
   ],
   "cost": {
     "pricing_status": "MIXED",
     "currency": "USD",
     "pricing_version": "2026-08-30",
-    "yardmaster_model_cost_usd": 0.35150625,
-    "worker_model_cost_usd": 0.87924835,
-    "model_cost_usd": 1.2307546,
-    "compute_cost_usd": 0.051786053672902246,
-    "total_cost_usd": 1.282540653672902,
+    "yardmaster_model_cost_usd": 0.570198,
+    "worker_model_cost_usd": 1.5678089199999998,
+    "model_cost_usd": 2.13800692,
+    "compute_cost_usd": 0.06463617325853499,
+    "total_cost_usd": 2.2026430932585344,
     "components": [
       {
         "kind": "yardmaster",
@@ -1405,6 +1668,171 @@
         "pricing_effective_date": "2026-08-30",
         "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
         "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+      },
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 48853,
+        "fresh_input_tokens": 48853,
+        "output_tokens": 404,
+        "thinking_tokens": 862,
+        "total_tokens": 50119,
+        "model_cost_usd": 0.03815475,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.03815475,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "RUWYatO_FZbSodAP5v3T2A0"
+      },
+      {
+        "kind": "worker",
+        "model_requested": "gemini-3.5-flash-lite",
+        "usage_source": "ESTIMATED",
+        "model_cost_usd": 0,
+        "compute_cost_usd": 0.004108778622572499,
+        "total_cost_usd": 0.004108778622572499,
+        "runtime_seconds": 714.57019523,
+        "machine_type": "e2-small",
+        "provisioning_model": "STANDARD",
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "unmetered_reason": "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+      },
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 49064,
+        "fresh_input_tokens": 49064,
+        "output_tokens": 409,
+        "thinking_tokens": 649,
+        "total_tokens": 50122,
+        "model_cost_usd": 0.038331750000000005,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.038331750000000005,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "VEiYarGFNZbSodAP5v3T2A0"
+      },
+      {
+        "kind": "worker",
+        "model_requested": "gemini-3.5-flash-lite",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 1871448,
+        "cached_input_tokens": 1462395,
+        "fresh_input_tokens": 409053,
+        "output_tokens": 11314,
+        "total_tokens": 1882762,
+        "model_cost_usd": 0.19487274999999998,
+        "compute_cost_usd": 0.00261831877365725,
+        "total_cost_usd": 0.19749106877365724,
+        "runtime_seconds": 455.359786723,
+        "machine_type": "e2-small",
+        "provisioning_model": "STANDARD",
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+      },
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 54673,
+        "fresh_input_tokens": 54673,
+        "output_tokens": 663,
+        "thinking_tokens": 721,
+        "total_tokens": 56057,
+        "model_cost_usd": 0.043491,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.043491,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "b0qYasDgAaHXodAPiqKjmAw"
+      },
+      {
+        "kind": "worker",
+        "model_requested": "gemini-3.5-flash-lite",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 2756240,
+        "cached_input_tokens": 2283599,
+        "fresh_input_tokens": 472641,
+        "output_tokens": 13672,
+        "total_tokens": 2769912,
+        "model_cost_usd": 0.24448026999999994,
+        "compute_cost_usd": 0.0027342700478785,
+        "total_cost_usd": 0.24721454004787843,
+        "runtime_seconds": 475.525225718,
+        "machine_type": "e2-small",
+        "provisioning_model": "STANDARD",
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+      },
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 58129,
+        "fresh_input_tokens": 58129,
+        "output_tokens": 675,
+        "thinking_tokens": 598,
+        "total_tokens": 59402,
+        "model_cost_usd": 0.046128,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.046128,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "h0yYao6sMLb0odAPpPmLiAQ"
+      },
+      {
+        "kind": "worker",
+        "model_requested": "gemini-3.5-flash-lite",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 2361881,
+        "cached_input_tokens": 1825775,
+        "fresh_input_tokens": 536106,
+        "output_tokens": 13441,
+        "total_tokens": 2375322,
+        "model_cost_usd": 0.24920755,
+        "compute_cost_usd": 0.0033887521415245,
+        "total_cost_usd": 0.2525963021415245,
+        "runtime_seconds": 589.348198526,
+        "machine_type": "e2-small",
+        "provisioning_model": "STANDARD",
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+      },
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 66490,
+        "fresh_input_tokens": 66490,
+        "output_tokens": 725,
+        "thinking_tokens": 518,
+        "total_tokens": 67733,
+        "model_cost_usd": 0.05258625,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.05258625,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "K0-YauHtCI6Y4_UP79jf8A4"
       }
     ],
     "unmetered_components": [
@@ -1422,6 +1850,10 @@
       "Batch compute is estimated from observed runtime; invoice data was not queried",
       "Batch compute is estimated from observed runtime; invoice data was not queried",
       "Batch compute is estimated from observed runtime; invoice data was not queried",
+      "Batch compute is estimated from observed runtime; invoice data was not queried",
+      "Batch compute is estimated from observed runtime; invoice data was not queried",
+      "Batch compute is estimated from observed runtime; invoice data was not queried",
+      "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried",
       "Batch compute is estimated from observed runtime; invoice data was not queried",
       "Batch compute is estimated from observed runtime; invoice data was not queried",
       "Batch compute is estimated from observed runtime; invoice data was not queried"

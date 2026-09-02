@@ -1,0 +1,724 @@
+{
+  "schema": "gary.project-manual.v1",
+  "project_id": "suture-v0-1-build-20260902",
+  "objective": "Build, verify, benchmark, document, and package Suture v0.1 in Rust as an AI-first deterministic file-mutation protocol and runtime that identifies exact targets, guards pre-state, applies only authorised mutations, preserves protected state, refuses ambiguity informatively, and returns compact verification certificates without requiring full-file rereads.",
+  "definition_of_done": "Strict structured JSON/schema request-response tool protocol implemented for Raw Text, Strict JSON, and TOML providers.\nDeterministic identity-guarding and cardinality enforcement (default 1) rejecting ambiguity, stale snapshots, and duplicate targets without first-match guessing.\nUnrelated byte and structured state preservation verified with explicit guarantees; lossy operations strictly opt-in.\nInformative structured refusal diagnostics emitted for cardinality mismatch, near-miss invisible characters, malformed structure, and stale hashes.\nSuture Core solely owns safe/atomic commits within workspace boundaries; providers parse and plan but never write to disk.\nPre-commit verification and post-commit compact evidence certificates (with minimal diffs and hashes) generated so agents do not reread full files.\nDry-run execution uses identical planning and verification pipelines without mutating files.\nNative single-binary distributions built and verified for Windows x86_64 and Linux x86_64 (including WSL) with working 'suture doctor'.\nAdversarial corpus (38+ cases) executed and comparative benchmark report published measuring 'wrong mutation reported as successful' and token reread reduction.\nAll test suites (cargo test, cargo clippy, cargo fmt) pass cleanly with #![forbid(unsafe_code)] in Suture-owned code.\nFull documentation suite complete: README, architecture, protocol schema, threat model, provider contract, and benchmark report.",
+  "hard_constraints": [
+    {
+      "id": "HC-01",
+      "type": "hard_constraint",
+      "text": "Never guess a destructive target: If exactly one target is expected and reality yields zero or multiple matches, Suture must fail-closed and refuse without choosing a candidate silently.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 4 / Invariant 1"
+      }
+    },
+    {
+      "id": "HC-02",
+      "type": "hard_constraint",
+      "text": "Every mutation must be identity-guarded against stale context and target substitution before execution.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 4 / Invariant 2"
+      }
+    },
+    {
+      "id": "HC-03",
+      "type": "hard_constraint",
+      "text": "Providers must never open file paths or commit bytes directly; only Suture Core validates MutationPlans and performs writes.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 4 / Invariant 3 \u0026 Section 12"
+      }
+    },
+    {
+      "id": "HC-04",
+      "type": "hard_constraint",
+      "text": "No silent weakening: structural requests must never fall back to raw text, regex, or unverified writes upon parse failure.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 4 / Invariant 4"
+      }
+    },
+    {
+      "id": "HC-05",
+      "type": "hard_constraint",
+      "text": "Unauthorised state is protected: byte regions outside authorised edits must remain byte-for-byte unchanged.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 4 / Invariant 5"
+      }
+    },
+    {
+      "id": "HC-06",
+      "type": "hard_constraint",
+      "text": "Pre-commit verification is mandatory before reporting APPLIED; all successful mutations must return compact deterministic evidence certificates.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 4 / Invariant 6 \u0026 7"
+      }
+    },
+    {
+      "id": "HC-07",
+      "type": "hard_constraint",
+      "text": "Workspace confinement is mandatory: path traversal, symlink escape, or TOCTOU exploits beyond the declared workspace root must be refused.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 4 / Invariant 8 \u0026 Section 22"
+      }
+    },
+    {
+      "id": "HC-08",
+      "type": "hard_constraint",
+      "text": "Malformed structured input must refuse with precise diagnostics; no automatic or silent syntax repairs permitted.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 4 / Invariant 9"
+      }
+    },
+    {
+      "id": "HC-09",
+      "type": "hard_constraint",
+      "text": "Outcome semantics are strictly typed to exactly four values: APPLIED, NO_CHANGE, REFUSED, FAILED.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 4 / Invariant 10 \u0026 Section 5"
+      }
+    },
+    {
+      "id": "HC-10",
+      "type": "hard_constraint",
+      "text": "Use #![forbid(unsafe_code)] across all Suture-owned Rust code unless strictly justified, isolated, and documented.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 9"
+      }
+    }
+  ],
+  "architecture_decisions": [
+    {
+      "id": "AD-01",
+      "type": "architecture_decision",
+      "text": "Single-source-of-truth Rust schema types: Derive serde serialization, schemars JSON schema, and CLI tool interfaces from Rust types to prevent schema drift.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 8 \u0026 9"
+      }
+    },
+    {
+      "id": "AD-02",
+      "type": "architecture_decision",
+      "text": "Single-crate repository structure for v0.1 under src/ (protocol, engine, document, workspace, path, certificate, diff, provider/).",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 10"
+      }
+    },
+    {
+      "id": "AD-03",
+      "type": "architecture_decision",
+      "text": "Type-state mutation pipeline: ObservedDocument -\u003e IdentifiedTarget -\u003e PreparedPlan -\u003e VerifiedPlan -\u003e CommittedMutation; unverified plans cannot invoke commit.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 12 \u0026 13"
+      }
+    },
+    {
+      "id": "AD-04",
+      "type": "architecture_decision",
+      "text": "Format-native concrete syntax representation for providers (CST/lossless parser) rather than generic AST/JSON trees to preserve comments, formatting, and quote styles.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 16 \u0026 17"
+      }
+    },
+    {
+      "id": "AD-05",
+      "type": "architecture_decision",
+      "text": "Content-and-context addressed stable anchors rather than position-only line or byte offset anchors.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 20"
+      }
+    },
+    {
+      "id": "AD-06",
+      "type": "architecture_decision",
+      "text": "Explicit PathNamespace model (Native, Windows, WSL, Posix) to handle path cross-translation and symlinks without relying on host shell escaping.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 23"
+      }
+    },
+    {
+      "id": "AD-07",
+      "type": "architecture_decision",
+      "text": "Unified dry-run execution reusing identical plan preparation, candidate generation, and validation pipelines, omitting only the commit phase.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 26"
+      }
+    }
+  ],
+  "technology_choices": [
+    {
+      "id": "TC-01",
+      "type": "technology_choice",
+      "text": "Full-strength idiomatic Rust (edition 2021/current stable) as sole runtime language.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 9"
+      }
+    },
+    {
+      "id": "TC-02",
+      "type": "technology_choice",
+      "text": "Core crates: serde, serde_json, schemars, thiserror, sha2, similar, cap-std (or capability-safe fs abstraction).",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 11"
+      }
+    },
+    {
+      "id": "TC-03",
+      "type": "technology_choice",
+      "text": "Provider parsers: jsonc-parser (strict CST configuration) for JSON; toml_edit for TOML.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 11 \u0026 17"
+      }
+    },
+    {
+      "id": "TC-04",
+      "type": "technology_choice",
+      "text": "Native single-binary distribution via cargo-dist / release CI generating standalone executables and SHA256 checksums.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 28"
+      }
+    }
+  ],
+  "forbidden_changes": [
+    {
+      "id": "FC-01",
+      "type": "forbidden_change",
+      "text": "No general regex mutation engine in v0.1.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 15"
+      }
+    },
+    {
+      "id": "FC-02",
+      "type": "forbidden_change",
+      "text": "No AST/Tree-sitter/LSP code parsers, semantic symbol renaming, or workspace-wide find-references.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 15"
+      }
+    },
+    {
+      "id": "FC-03",
+      "type": "forbidden_change",
+      "text": "No YAML, HTML, XML, or Markdown structural providers in v0.1.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 15"
+      }
+    },
+    {
+      "id": "FC-04",
+      "type": "forbidden_change",
+      "text": "No scripting languages, loops, conditionals, workflow engines, variables, or dynamic plugin loaders.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 15"
+      }
+    },
+    {
+      "id": "FC-05",
+      "type": "forbidden_change",
+      "text": "No network calls, Git operations, background daemons, telemetry, or external service integrations.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 15"
+      }
+    },
+    {
+      "id": "FC-06",
+      "type": "forbidden_change",
+      "text": "No mandatory custom textual DSL syntax (.sut) for tool invocation; protocol must be strict JSON schema.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 8 \u0026 15"
+      }
+    }
+  ],
+  "functional_requirements": [
+    {
+      "id": "FR-01",
+      "type": "requirement",
+      "text": "Raw Text Provider: Support identify, replace, insert_before, insert_after, delete, and optional move on exact content/context targets.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 14 \u0026 17.1"
+      }
+    },
+    {
+      "id": "FR-02",
+      "type": "requirement",
+      "text": "Strict JSON Provider: Parse strict JSON, identify path targets, support set, insert mapping/array items, delete, and key rename while preserving formatting and validating final JSON.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 17.2"
+      }
+    },
+    {
+      "id": "FR-03",
+      "type": "requirement",
+      "text": "TOML Provider: Parse TOML via toml_edit, support path selection, set, insert, delete, and key rename while preserving comments, spacing, and ordering.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 17.3"
+      }
+    },
+    {
+      "id": "FR-04",
+      "type": "requirement",
+      "text": "Cardinality \u0026 Diagnostics: Enforce expected cardinality (default 1). Emit candidate anchors/context hashes for multiple matches and byte-diff diagnostics for near misses (invisible characters, whitespace, newlines, BOM).",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 6 \u0026 7"
+      }
+    },
+    {
+      "id": "FR-05",
+      "type": "requirement",
+      "text": "Encoding \u0026 Newline Handling: Support UTF-8, UTF-8 with BOM, LF, CRLF, and preserve existing trailing newline state.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 19"
+      }
+    },
+    {
+      "id": "FR-06",
+      "type": "requirement",
+      "text": "Idempotence \u0026 Replay: Re-applying an already satisfied desired state returns NO_CHANGE; stale pre-state returns REFUSED:STALE_IDENTITY.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 21"
+      }
+    },
+    {
+      "id": "FR-07",
+      "type": "requirement",
+      "text": "Confinement \u0026 Commit: Execute pre-commit validation and atomic single-file commit strictly within workspace root, preventing symlink escapes and TOCTOU vulnerabilities.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 22 \u0026 24"
+      }
+    },
+    {
+      "id": "FR-08",
+      "type": "requirement",
+      "text": "Evidence Certificate: Return compact machine-readable certificate containing status, minimal bounded diff, pre/post hashes, cardinality, and preservation facts.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 25"
+      }
+    },
+    {
+      "id": "FR-09",
+      "type": "requirement",
+      "text": "CLI Interface: Provide CLI commands ('suture apply', 'suture dry-run', 'suture schema', 'suture doctor', '--version') reading JSON requests from stdin or file.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 26 \u0026 27"
+      }
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "id": "NFR-01",
+      "type": "non_functional_requirement",
+      "text": "Performance: File mutations on standard files must execute with near-zero latency without background daemons.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 29"
+      }
+    },
+    {
+      "id": "NFR-02",
+      "type": "non_functional_requirement",
+      "text": "Zero-Dependency Distribution: Single statically linkable binary for Windows and Linux/WSL requiring no runtime, Cargo, or external dependencies.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 28"
+      }
+    },
+    {
+      "id": "NFR-03",
+      "type": "non_functional_requirement",
+      "text": "Privacy: Never echo full files or unrelated file contents into certificates; bound diff context to prevent credential leakage.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 32"
+      }
+    },
+    {
+      "id": "NFR-04",
+      "type": "non_functional_requirement",
+      "text": "Typed Error Taxonomy: Stable machine-readable refusal and failure error codes with structured payload details.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 33"
+      }
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-01",
+      "type": "acceptance",
+      "text": "cargo test, cargo fmt --check, and strict cargo clippy pass with zero warnings and no unexplained unsafe code on Windows and Linux targets.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 38 / Build"
+      }
+    },
+    {
+      "id": "AC-02",
+      "type": "acceptance",
+      "text": "Text provider tests pass for single replace, duplicate refusal, near-miss invisible character diagnostics, insert, delete, and CRLF/LF/BOM preservation.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 38 / Raw text"
+      }
+    },
+    {
+      "id": "AC-03",
+      "type": "acceptance",
+      "text": "JSON and TOML provider tests verify structured set/insert/delete, comment/whitespace preservation, malformed rejection, and final validation.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 38 / JSON \u0026 TOML"
+      }
+    },
+    {
+      "id": "AC-04",
+      "type": "acceptance",
+      "text": "Workspace traversal and symlink escape fixtures are refused without modifying target files.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 38 / Security"
+      }
+    },
+    {
+      "id": "AC-05",
+      "type": "acceptance",
+      "text": "Certificates emit bounded minimal diffs and verified pre/post hashes; dry-run produces matching output without persisting changes.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 38 / Certificates \u0026 Dry-run"
+      }
+    },
+    {
+      "id": "AC-06",
+      "type": "acceptance",
+      "text": "38+ adversarial corpus cases run; benchmark report published comparing Suture against baselines on 'wrong mutation reported as successful' and token reread metrics; README, architecture, protocol, threat model, and provider contract docs complete.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 38 / Benchmark \u0026 Docs"
+      }
+    }
+  ],
+  "important_context": [
+    {
+      "id": "CTX-01",
+      "type": "context",
+      "text": "Verification-by-rereading is a major token and reasoning cost for coding agents; Suture functions as a context-compression and safety boundary.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 2"
+      }
+    },
+    {
+      "id": "CTX-02",
+      "type": "context",
+      "text": "AI research consensus across Gemini, DeepSeek, and Claude emphasized strict JSON tool schemas, content-addressed anchors, fail-closed diagnostics, and CST-preserving providers over AST/LSP expansions.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 3"
+      }
+    },
+    {
+      "id": "CTX-03",
+      "type": "context",
+      "text": "Suture cooperates with existing tools: it is not a search engine (rg), VCS (git), formatter (rustfmt/prettier), or test runner.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 30"
+      }
+    }
+  ],
+  "important_rationale": [
+    {
+      "id": "RAT-01",
+      "type": "rationale",
+      "text": "Rust was selected over Go and OCaml to enforce memory safety, impossible-state modeling via type-state, and single-binary native portability without runtime baggage.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 9 \u0026 43"
+      }
+    },
+    {
+      "id": "RAT-02",
+      "type": "rationale",
+      "text": "Explicit hard-fact preservation claims (e.g. comments_removed: 0) replace subjective formatting drift scores to ensure auditable deterministic guarantees.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 18"
+      }
+    },
+    {
+      "id": "RAT-03",
+      "type": "rationale",
+      "text": "'Wrong mutation reported as successful' is the primary benchmark metric because silent edit corruption is the most damaging agent failure mode.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 37"
+      }
+    }
+  ],
+  "known_dependencies": [
+    {
+      "id": "DEP-01",
+      "type": "dependency",
+      "text": "serde and serde_json for JSON protocol deserialization and schema generation.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 11"
+      }
+    },
+    {
+      "id": "DEP-02",
+      "type": "dependency",
+      "text": "schemars for automatic derived JSON schema emission.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 11"
+      }
+    },
+    {
+      "id": "DEP-03",
+      "type": "dependency",
+      "text": "toml_edit for concrete-syntax lossless TOML manipulation.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 11"
+      }
+    },
+    {
+      "id": "DEP-04",
+      "type": "dependency",
+      "text": "jsonc-parser (or equivalent strict CST parser) for non-destructive JSON editing.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 11"
+      }
+    },
+    {
+      "id": "DEP-05",
+      "type": "dependency",
+      "text": "sha2 for cryptographic identity hashes.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 11"
+      }
+    },
+    {
+      "id": "DEP-06",
+      "type": "dependency",
+      "text": "similar for minimal bounded unified diff computation.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 11"
+      }
+    },
+    {
+      "id": "DEP-07",
+      "type": "dependency",
+      "text": "cap-std / atomic file replacement utility for capability-confinement and TOCTOU safety.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 11"
+      }
+    }
+  ],
+  "known_risks": [
+    {
+      "id": "RSK-01",
+      "type": "risk",
+      "text": "TOCTOU race conditions during file replace if handle verification is uncoupled from atomic commit.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 22"
+      }
+    },
+    {
+      "id": "RSK-02",
+      "type": "risk",
+      "text": "WSL vs Windows filesystem path translation inconsistencies (e.g. non-standard mount paths or case-sensitivity mismatch).",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 23"
+      }
+    },
+    {
+      "id": "RSK-03",
+      "type": "risk",
+      "text": "Third-party parser limitations in preserving unusual comments, whitespace, or key ordering in JSON/TOML documents.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 17.2 \u0026 17.3"
+      }
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "OQ-01",
+      "type": "open_question",
+      "text": "Whether the core 'move' operation will be fully implemented in v0.1 or deferred if it introduces disproportionate initial complexity after replace/insert/delete.",
+      "status": "INFERRED",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 14 \u0026 17.1"
+      }
+    },
+    {
+      "id": "OQ-02",
+      "type": "open_question",
+      "text": "Whether UTF-16LE/BE with BOM support will be cleanly included in v0.1 or deferred to future releases.",
+      "status": "INFERRED",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 19"
+      }
+    }
+  ],
+  "current_phase": "Stage A — foundation and frozen protocol",
+  "current_strategy": "Bootstrap clean Rust repository, establish schema and typed protocol contracts, construct type-state execution core and safe commit boundary, implement text/json/toml providers with adversarial validation, and complete the falsification benchmark suite.",
+  "remaining_capabilities": [
+    "Repository bootstrap and strict CI configuration (#![forbid(unsafe_code)], clippy, fmt)",
+    "Core protocol types, JSON schema derivation, and outcome/refusal taxonomy",
+    "Document identity hashing, ByteEdit planning, and type-state pipeline",
+    "Capability-safe workspace confinement and atomic commit mechanism",
+    "Raw text provider with exact literal targeting, cardinality guards, and invisible character diagnostics",
+    "Strict JSON CST provider supporting set, insert, delete, and key rename with formatting preservation",
+    "TOML provider using toml_edit supporting set, insert, delete, and comment preservation",
+    "Evidence certificate generator with minimal bounded diffs and preservation facts",
+    "Dry-run execution pipeline",
+    "Cross-platform CLI (apply, dry-run, schema, doctor)",
+    "Windows and Linux/WSL path namespace resolution",
+    "Adversarial test corpus (38+ cases)",
+    "Comparative benchmark and falsification experiment harness",
+    "Full documentation suite (README, architecture, protocol, threat model, provider contract, benchmark report)",
+    "Single-binary release packaging and checksum generation"
+  ],
+  "active_decisions": [
+    {
+      "id": "DEC-01",
+      "type": "active_decision",
+      "text": "Tool interface will be strict JSON tool-calls via stdin/file CLI flags; no custom textual DSL.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 8"
+      }
+    },
+    {
+      "id": "DEC-02",
+      "type": "active_decision",
+      "text": "Implementation will reside in a single primary crate rather than a premature Cargo workspace.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 10"
+      }
+    },
+    {
+      "id": "DEC-03",
+      "type": "active_decision",
+      "text": "Architectural boundary strictly separates format providers (parse/plan/validate) from Suture Core (commit/write).",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+        "locator": "Section 12"
+      }
+    }
+  ],
+  "source_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+  "manual_version": 1,
+  "manual_digest": "sha256:61368e4bf9248b3078b60e869ef01470c1835c240de11b64562f4ea3968b5147"
+}
