@@ -328,12 +328,16 @@ func cmdMaster() {
 		_ = saveMasterStatus(status)
 
 		for _, result := range results {
-			if result.FinalStatus != "DONE" {
+			if err := validateIntegrableMasterResult(result); err != nil {
+				status.Waves = append(status.Waves, record)
+				failMaster(status, fmt.Errorf("worker result integrity %s: %w", result.JobID, err))
+			}
+			if !result.Accepted {
 				continue
 			}
 			if err := integrateMasterResult(manifest.Repo, stagingBranch, result); err != nil {
 				status.Waves = append(status.Waves, record)
-				failMaster(status, fmt.Errorf("integrate %s: %w", result.JobID, err))
+				failMaster(status, fmt.Errorf("integrate accepted result %s: %w", result.JobID, err))
 			}
 			record.Integrated = append(record.Integrated, result.JobID)
 		}
@@ -490,6 +494,9 @@ PLANNER-SPECIFIC RULES
 - SUPERVISION: roughly every five minutes of active work, and at natural checkpoints, the Yardmaster may CONTINUE, GUIDE, STOP_AND_REPLAN, or send the candidate to inspection. Plan work that can benefit from this feedback loop.
 - TIME ESTIMATION: every job must include an estimated_minutes value from 1 through 60. This is a pacing/cost estimate, not a deadline. Prefer the smallest coherent independently verifiable outcome; compare estimates with actual_seconds to improve later planning without killing productive work.
 - ECONOMY: never repeat a scaffold or setup job merely because an earlier attempt was unsuccessful. If the same objective failed or was budget-stopped, use the evidence to split it into a smaller bounded slice or stop and report the blocker.
+- CONTROL FLOW: accepted child work is an integration obligation. An accepted result with a pushed branch and commit is integrated into staging by the control plane before dependent planning continues. Plan from that new staging truth; do not recreate or strand accepted work.
+- CONTROL FLOW: interpret non-accepted results from evidence. BLOCKED means distinguish genuine authority/external blockage from solvable setup. REPLAN_REQUIRED means change job shape, dependency order, or strategy. BUDGET_STOPPED, timeout, cancellation, or infrastructure interruption are incomplete/indeterminate, not automatic implementation failure. FAILED should only be retried when the next attempt materially changes based on the failure evidence.
+- CONTROL FLOW: repeated equivalent failure with no new evidence means stop and replan. A DONE result without mechanical acceptance, or an accepted result without a recoverable branch and commit, is a control-plane integrity fault rather than success.
 - ECONOMY: after an accepted result, plan from the current staging branch and extend it; do not recreate already accepted models, tests, configuration, or project structure.
 - Workers should use judgment about ordinary tool setup. Keep ephemeral setup, caches and build products out of repository content and do not make one Worker's disposable environment a dependency for another.
 - Create at most %d independent jobs that can safely start from the same current branch.
@@ -635,6 +642,25 @@ func verifyMasterStagingBranch(repoURL, stagingBranch string) error {
 	}
 	defer os.RemoveAll(tmp)
 	return gitops.CloneBranch(repoURL, stagingBranch, tmp)
+}
+
+func validateIntegrableMasterResult(result jobs.RunResult) error {
+	if result.Accepted {
+		if result.FinalStatus != "DONE" {
+			return fmt.Errorf("accepted result has final_status %q, want DONE", result.FinalStatus)
+		}
+		if strings.TrimSpace(result.Branch) == "" {
+			return errors.New("accepted result has no pushed branch")
+		}
+		if strings.TrimSpace(result.CommitSHA) == "" {
+			return errors.New("accepted result has no commit SHA")
+		}
+		return nil
+	}
+	if result.FinalStatus == "DONE" {
+		return errors.New("DONE result was not mechanically accepted")
+	}
+	return nil
 }
 
 func integrateMasterResult(repoURL, stagingBranch string, result jobs.RunResult) error {
