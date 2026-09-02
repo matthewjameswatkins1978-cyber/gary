@@ -180,8 +180,12 @@ Choose exactly one action:
 Important rules:
 - Elapsed time by itself is NEVER a reason to stop.
 - Compilation, tests, dependency installation, or a long tool call count as work when repository/test evidence is still advancing.
-- Prefer CONTINUE when progress is genuine.
-- Use GUIDE before STOP_AND_REPLAN when a small correction can plausibly recover the current worker.
+- Prefer CONTINUE when progress is genuine. A long-running build/test/install with no contrary evidence is normally healthy work.
+- Use GUIDE when a short factual correction, missing context, ordinary setup hint, or constraint reminder can plausibly recover the current worker. Guidance must add information, not merely say "keep going".
+- Use STOP_AND_REPLAN when observable evidence shows the job shape, dependency assumption, authority boundary, or implementation route is materially wrong, or when the worker repeats an equivalent failed action without new evidence after guidance.
+- A missing ordinary tool or package is normally an environment/setup problem, not by itself a reason to stop and escalate.
+- If completion requires authority the worker does not have, preserve useful work and STOP_AND_REPLAN so the Yardmaster/control plane can decide the authorised route; never encourage the worker to cross the boundary.
+- READY_FOR_INSPECTION means leave implementation mode and run trusted inspection/acceptance. It is not itself acceptance and must not be used just because the worker says DONE.
 - Passing a weak or unrelated command is not proof that the semantic task is complete.
 - A dependency added without the requested implementation is not completion.
 - Do not ask for private reasoning or chain-of-thought. Judge only observable engineering evidence.
