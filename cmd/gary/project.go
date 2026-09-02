@@ -284,6 +284,15 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 			raw[field] = encoded
 		}
 	}
+	for _, field := range []string{"completed_capabilities", "remaining_capabilities"} {
+		if value, ok := raw[field]; ok {
+			encoded, err := normalizeCapabilityList(value)
+			if err != nil {
+				return project.ProjectManual{}, fmt.Errorf("%s: %w", field, err)
+			}
+			raw[field] = encoded
+		}
+	}
 	if value, ok := raw["conflicts"]; ok {
 		var rawItems []json.RawMessage
 		if err := json.Unmarshal(value, &rawItems); err != nil {
@@ -327,6 +336,52 @@ func normalizeArrayValue(value json.RawMessage) ([]json.RawMessage, error) {
 		return nil, err
 	}
 	return []json.RawMessage{json.RawMessage(value)}, nil
+}
+
+func normalizeCapabilityList(value json.RawMessage) (json.RawMessage, error) {
+	items, err := normalizeArrayValue(value)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(items))
+	for _, rawItem := range items {
+		var text string
+		if json.Unmarshal(rawItem, &text) == nil {
+			if strings.TrimSpace(text) != "" {
+				out = append(out, strings.TrimSpace(text))
+			}
+			continue
+		}
+		var item map[string]json.RawMessage
+		if err := json.Unmarshal(rawItem, &item); err != nil {
+			return nil, err
+		}
+		var title, description string
+		for _, key := range []string{"title", "name", "capability", "id"} {
+			if value, ok := item[key]; ok && json.Unmarshal(value, &title) == nil && strings.TrimSpace(title) != "" {
+				break
+			}
+			title = ""
+		}
+		for _, key := range []string{"description", "text", "objective", "purpose"} {
+			if value, ok := item[key]; ok && json.Unmarshal(value, &description) == nil && strings.TrimSpace(description) != "" {
+				break
+			}
+			description = ""
+		}
+		switch {
+		case strings.TrimSpace(title) != "" && strings.TrimSpace(description) != "":
+			out = append(out, strings.TrimSpace(title)+": "+strings.TrimSpace(description))
+		case strings.TrimSpace(description) != "":
+			out = append(out, strings.TrimSpace(description))
+		case strings.TrimSpace(title) != "":
+			out = append(out, strings.TrimSpace(title))
+		default:
+			return nil, errors.New("capability item has no usable text")
+		}
+	}
+	encoded, _ := json.Marshal(out)
+	return encoded, nil
 }
 
 func normalizeTopLevelText(value json.RawMessage) (json.RawMessage, bool) {
