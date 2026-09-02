@@ -274,6 +274,30 @@ func TestCodingWorkerDisablesHiddenGeminiRetries(t *testing.T) {
 	}
 }
 
+func TestCodingWorkerIsSteerableAndResumable(t *testing.T) {
+	script := generateCodingWorkerScript(CodingJobConfig{
+		RepoURL: "https://example.com/repo.git", BaseBranch: "main", GaryBranch: "gary/test",
+		Task: "implement the coherent outcome", Acceptance: "echo ok", GCSPath: "gs://bucket/run",
+		Model: "gemini-3.5-flash-lite",
+	})
+	for _, required := range []string{
+		"emit_telemetry running",
+		"sleep 60",
+		"apply_running_control",
+		"STOP_AND_REPLAN",
+		"READY_FOR_INSPECTION",
+		"--resume \"$SESSION_ID\"",
+		"Waiting for Yardmaster review after turn",
+	} {
+		if !strings.Contains(script, required) {
+			t.Fatalf("supervised worker script missing %q", required)
+		}
+	}
+	if strings.Contains(script, "480s gemini") || strings.Contains(script, "SOFT DEADLINE") {
+		t.Fatal("ordinary worker execution must not be killed by the old fixed deadline")
+	}
+}
+
 func TestCodingJobPassesOnlyShortLivedTokenToWorker(t *testing.T) {
 	cfg := CodingJobConfig{
 		Project: "p", Region: "r", JobName: "j",
@@ -483,11 +507,11 @@ func TestCodingWorkerPromptIncludesCorrectRoleUniversalRulesAndTask(t *testing.T
 	if !strings.Contains(prompt, "Keep generated environments, caches, build products") {
 		t.Fatal("worker prompt must include repository hygiene rules")
 	}
-	if !strings.Contains(prompt, "Work within the runtime's time limit") {
-		t.Fatal("worker prompt must include the runtime time limit")
+	if !strings.Contains(prompt, "You are live-supervised by the Yardmaster") || !strings.Contains(prompt, "Elapsed time is not failure") {
+		t.Fatal("worker prompt must describe live supervision instead of a runtime deadline")
 	}
-	if !strings.Contains(prompt, "YARDMASTER ESTIMATE: this slice is expected to take about 5 minutes") {
-		t.Fatal("worker prompt must include Yardmaster's bounded estimate")
+	if !strings.Contains(prompt, "YARDMASTER ESTIMATE: this coherent outcome is expected to take about 5 minutes") {
+		t.Fatal("worker prompt must include Yardmaster's advisory estimate")
 	}
 	if !strings.Contains(prompt, task) {
 		t.Fatal("worker prompt must preserve the bounded job")
@@ -506,9 +530,10 @@ func TestCodingWorkerPromptOnlyIncludesValidYardmasterEstimate(t *testing.T) {
 		want     string
 		estimate int
 	}{
-		{name: "valid", want: "YARDMASTER ESTIMATE: this slice is expected to take about 6 minutes", estimate: 6},
+		{name: "valid", want: "YARDMASTER ESTIMATE: this coherent outcome is expected to take about 6 minutes", estimate: 6},
+		{name: "long-valid", want: "YARDMASTER ESTIMATE: this coherent outcome is expected to take about 30 minutes", estimate: 30},
 		{name: "missing", estimate: 0},
-		{name: "out-of-range", estimate: 11},
+		{name: "out-of-range", estimate: 61},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			prompt := codingWorkerPrompt("bounded task", "go test ./...", test.estimate)
@@ -524,7 +549,7 @@ func TestCodingWorkerPromptOnlyIncludesValidYardmasterEstimate(t *testing.T) {
 
 func TestCodingWorkerScriptCleansDisposableArtifacts(t *testing.T) {
 	script := generateCodingWorkerScript(CodingJobConfig{RepoURL: "https://example.com/repo.git", BaseBranch: "main", GaryBranch: "gary/job", Task: "task", Acceptance: "echo ok"})
-	for _, marker := range []string{"-name .venv", "-name __pycache__", "-name .build", "-name target", "timeout --signal=TERM --kill-after=90s 480s gemini", "GARY WORKER SOFT DEADLINE", "git add -A"} {
+	for _, marker := range []string{"-name .venv", "-name __pycache__", "-name .build", "-name target", "telemetry.json", "control.json", "--resume", "Yardmaster supervision: CONTINUE", "git add -A"} {
 		if !strings.Contains(script, marker) {
 			t.Fatalf("worker script missing artifact hygiene marker %q", marker)
 		}
