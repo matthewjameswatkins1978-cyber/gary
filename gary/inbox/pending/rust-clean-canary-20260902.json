@@ -1,7 +1,0 @@
-{
-  "id": "rust-clean-canary-20260902",
-  "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
-  "base_branch": "master",
-  "task": "Create the smallest possible Rust crate at the repository root: Cargo.toml, src/lib.rs, and one unit test proving a trivial function. Do not modify or delete any existing Go files. This is a bounded cleanup canary; do not broaden beyond those Rust files.",
-  "acceptance": ["cargo test"]
-}
