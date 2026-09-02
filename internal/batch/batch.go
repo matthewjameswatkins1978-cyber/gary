@@ -431,6 +431,10 @@ type CodingJobConfig struct {
 // generateCodingWorkerScript builds the raw bash script for a coding worker.
 // Separated from GenerateCodingJobConfig for testability and prompt transport.
 func generateCodingWorkerScript(cfg CodingJobConfig) string {
+	return supervisedCodingWorkerScript(cfg)
+
+	// Legacy inline worker retained temporarily below for easy rollback while
+	// the supervised wrapper proves itself in cloud canaries.
 	parts := []string{
 		"#!/bin/bash",
 		"set -e -o pipefail",
@@ -596,7 +600,9 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 		cfg.Model = "gemini-3.5-flash-lite"
 	}
 	if cfg.MaxRunDurSec == 0 {
-		cfg.MaxRunDurSec = 600
+		// Emergency infrastructure ceiling only. Ordinary stopping decisions are
+		// made by live Yardmaster supervision from observable progress evidence.
+		cfg.MaxRunDurSec = 3600
 	}
 
 	// Build the full prompt for the worker.
@@ -611,7 +617,10 @@ func GenerateCodingJobConfig(cfg CodingJobConfig) ([]byte, error) {
 	script = "export GARY_PROMPT_B64=\"" + promptB64 + "\"\n" + script
 
 	variables := map[string]string{
-		"PREV_PATCH_GCS": cfg.PrevGCSPath,
+		"PREV_PATCH_GCS":   cfg.PrevGCSPath,
+		"GARY_GCS_PATH":    cfg.GCSPath,
+		"GARY_JOB_ID":      cfg.JobName,
+		"GARY_BASE_BRANCH": cfg.BaseBranch,
 	}
 	if cfg.GitHubToken != "" {
 		variables["GARY_GITHUB_TOKEN"] = cfg.GitHubToken
