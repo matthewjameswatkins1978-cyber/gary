@@ -243,9 +243,11 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 				if err != nil {
 					return project.ProjectManual{}, fmt.Errorf("%s[%d]: %w", field, i, err)
 				}
-				if _, ok := item["text"]; !ok {
+				textValue, hasText := item["text"]
+				if !hasText || !nonEmptyJSONString(textValue) {
+					delete(item, "text")
 					for _, candidate := range []string{"description", "decision", "choice", "command", "expected_outcome", "purpose", "technology", "objective", "strategy", "capability", "requirement", "statement", "risk", "tool", "name", "title", "value", "reason", "goal", "criterion"} {
-						if candidateValue, exists := item[candidate]; exists {
+						if candidateValue, exists := item[candidate]; exists && nonEmptyJSONString(candidateValue) {
 							item["text"] = candidateValue
 							break
 						}
@@ -272,7 +274,8 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 					encoded, _ := json.Marshal(typ)
 					item["type"] = encoded
 				}
-				if _, ok := item["id"]; !ok {
+				idValue, hasID := item["id"]
+				if !hasID || !nonEmptyJSONString(idValue) {
 					encoded, _ := json.Marshal(fmt.Sprintf("%s-%03d", field, i+1))
 					item["id"] = encoded
 				}
@@ -309,6 +312,11 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 		return project.ProjectManual{}, err
 	}
 	return manual, nil
+}
+
+func nonEmptyJSONString(value json.RawMessage) bool {
+	var text string
+	return json.Unmarshal(value, &text) == nil && strings.TrimSpace(text) != ""
 }
 
 func normalizeArrayValue(value json.RawMessage) ([]json.RawMessage, error) {
@@ -402,11 +410,13 @@ func normalizeSource(item map[string]json.RawMessage, packetDigest, field string
 			}
 		}
 		if sourceObject != nil {
-			if _, ok := sourceObject["packet_digest"]; !ok {
+			packetValue, hasPacket := sourceObject["packet_digest"]
+			if !hasPacket || !nonEmptyJSONString(packetValue) {
 				encoded, _ := json.Marshal(packetDigest)
 				sourceObject["packet_digest"] = encoded
 			}
-			if _, ok := sourceObject["locator"]; !ok {
+			locatorValue, hasLocator := sourceObject["locator"]
+			if !hasLocator || !nonEmptyJSONString(locatorValue) {
 				encoded, _ := json.Marshal("MASTER_PACKET.md#" + field)
 				sourceObject["locator"] = encoded
 			}
