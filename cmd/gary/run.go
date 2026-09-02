@@ -28,14 +28,17 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/gitops"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/project"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/supervisor"
 )
 
 const cloudCommandTimeout = 45 * time.Second
 
 const (
-	maxAttempts            = 8
-	maxLowProgressAttempts = 3
-	defaultWorkerMaxRunSec = 600
+	maxAttempts                 = 8
+	maxLowProgressAttempts      = 3
+	defaultWorkerMaxRunSec      = 3600
+	workerSupervisionInterval   = 5 * time.Minute
+	workerSupervisionPollPeriod = 10 * time.Second
 	// Batch maxRunDuration covers task execution, not queueing/provisioning.
 	// Keep enough bounded grace for a cold VM without abandoning an active job.
 	batchSchedulingGraceSec = 900
