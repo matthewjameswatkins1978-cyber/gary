@@ -377,6 +377,14 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 			lastAcceptance = acceptOutput
 		}
 
+		if batchSucceeded && strings.Contains(lastAcceptance, "SUPERVISION_TERMINAL=STOP_AND_REPLAN") {
+			lastFailure = fmt.Sprintf("Yardmaster stopped worker for replan; partial patch/evidence preserved at %s", attemptGCSPath)
+			finalStatus = "REPLAN_REQUIRED"
+			logPrint(prefix, "  %s", lastFailure)
+			os.RemoveAll(attemptDir)
+			break
+		}
+
 		if batchSucceeded && strings.TrimSpace(patchData) == "" {
 			batchSucceeded = false
 			lastFailure = "worker completed without a non-empty result patch"
