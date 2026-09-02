@@ -1,0 +1,13 @@
+{
+  "id": "completion-principle-cloud-canary-20260902",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
+  "base_branch": "master",
+  "brief_path": "gary/master/pending/completion-principle-cloud-canary-20260902.md",
+  "max_waves": 1,
+  "max_jobs_per_wave": 1,
+  "max_workers": 1,
+  "acceptance": [
+    "test -f Cargo.toml",
+    "cargo test"
+  ]
+}
