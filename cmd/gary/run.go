@@ -235,6 +235,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 	actualAttempts := 0
 	runCost := cost.NewSummary()
 
+attemptLoop:
 	for attempt := 1; attempt <= attemptLimit; attempt++ {
 		if cfg.MaxCostUSD > 0 {
 			projected := EstimateJobCostForModel(model, 1)
@@ -422,7 +423,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 						finalStatus = "BLOCKED"
 						logPrint(prefix, "  QUALITY GATE BLOCKED: %s", lastFailure)
 						os.RemoveAll(attemptDir)
-						break
+						break attemptLoop
 					}
 					duration := time.Since(submittedAt)
 					result := jobs.RunResult{
@@ -519,13 +520,13 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 					os.RemoveAll(attemptDir)
 					if attempt == attemptLimit {
 						escalated = true
-						break
+						break attemptLoop
 					}
 					// The next worker attempt receives the checkpointed patch and
 					// the Yardmaster's review. Small issues preserve the approach;
 					// major issues receive stronger guidance while preserving any
 					// useful work the review explicitly says to keep.
-					continue
+					continue attemptLoop
 
 				case childQualityReplan:
 					commitSHA, _ := gitops.CommitSHA(workDir)
@@ -533,7 +534,7 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 						lastFailure = fmt.Sprintf("%s; checkpoint push failed: %v", strings.TrimSpace(quality.Summary), pushErr)
 						finalStatus = "BLOCKED"
 						os.RemoveAll(attemptDir)
-						break
+						break attemptLoop
 					}
 					duration := time.Since(submittedAt)
 					result := jobs.RunResult{
@@ -569,7 +570,9 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 					return result
 				}
 			}
-			lastFailure = fmt.Sprintf("trusted acceptance rejected recovered candidate after Batch state %s: %v", batchState, localResult.err)
+			if !localResult.passed {
+				lastFailure = fmt.Sprintf("trusted acceptance rejected recovered candidate after Batch state %s: %v", batchState, localResult.err)
+			}
 		}
 
 		if !batchSucceeded {
