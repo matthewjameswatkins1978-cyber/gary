@@ -1,14 +1,16 @@
 {
-  "updated_at": "2026-09-02T17:17:09Z",
+  "updated_at": "2026-09-02T17:17:11Z",
   "yard_state": "running",
   "active_jobs": [
     {
       "id": "telltail-protocol-test",
+      "batch_job_id": "gary-run-telltail-protocol-test-1-20260902-181711",
       "state": "running",
       "repo": "https://github.com/example/example.git",
       "base_branch": "main",
       "result_branch": "gary/telltail-protocol-test-8c1ae7bc",
-      "started_at": "2026-09-02T17:17:09Z"
+      "started_at": "2026-09-02T17:17:09Z",
+      "attempts": 1
     }
   ],
   "recent_jobs": [
