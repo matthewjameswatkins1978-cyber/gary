@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-02T09:36:24Z",
+  "updated_at": "2026-09-02T09:49:38Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -41,31 +41,9 @@
       "result_branch": "gary/judgement-call-b-w10-j1-a9ff29c1",
       "started_at": "2026-08-30T03:22:32Z",
       "attempts": 2
-    },
-    {
-      "id": "suture-v0-1-buil-w3-j1",
-      "project_id": "suture-v0-1-build-20260902",
-      "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
-      "project_manual_version": 1,
-      "batch_job_id": "gary-run-suture-v0-1-buil-w3-j1-2-20260902-093624",
-      "state": "retrying",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/Suture.git",
-      "base_branch": "gary/master-suture-v0-1-buil-84399e",
-      "result_branch": "gary/suture-v0-1-buil-w3-j1-3c7f1629",
-      "started_at": "2026-09-02T09:23:47Z",
-      "attempts": 2
     }
   ],
   "recent_jobs": [
-    {
-      "id": "judgement-call-b-w7-j2",
-      "state": "failed",
-      "result_branch": "gary/judgement-call-b-w7-j2-84f6d109",
-      "finished_at": "2026-08-30T02:51:13Z",
-      "attempts": 2,
-      "est_cost": 0.05190942214945476,
-      "summary": "BUDGET_STOPPED"
-    },
     {
       "id": "judgement-call-b-w8-j1",
       "state": "failed",
@@ -832,6 +810,62 @@
         ]
       },
       "summary": "BLOCKED"
+    },
+    {
+      "id": "suture-v0-1-buil-w3-j1",
+      "project_id": "suture-v0-1-build-20260902",
+      "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+      "project_manual_version": 1,
+      "state": "failed",
+      "result_branch": "gary/suture-v0-1-buil-w3-j1-3c7f1629",
+      "finished_at": "2026-09-02T09:49:38Z",
+      "attempts": 2,
+      "est_cost": 0.00857338290228,
+      "cost": {
+        "pricing_status": "ESTIMATED",
+        "currency": "USD",
+        "pricing_version": "2026-08-30",
+        "model_cost_usd": 0,
+        "compute_cost_usd": 0.00857338290228,
+        "total_cost_usd": 0.00857338290228,
+        "components": [
+          {
+            "kind": "worker",
+            "model_requested": "gemini-3.5-flash-lite",
+            "usage_source": "ESTIMATED",
+            "model_cost_usd": 0,
+            "compute_cost_usd": 0.00418176529946075,
+            "total_cost_usd": 0.00418176529946075,
+            "runtime_seconds": 727.263530341,
+            "machine_type": "e2-small",
+            "provisioning_model": "STANDARD",
+            "pricing_version": "2026-08-30",
+            "pricing_effective_date": "2026-08-30",
+            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+            "unmetered_reason": "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+          },
+          {
+            "kind": "worker",
+            "model_requested": "gemini-3.5-flash-lite",
+            "usage_source": "ESTIMATED",
+            "model_cost_usd": 0,
+            "compute_cost_usd": 0.00439161760281925,
+            "total_cost_usd": 0.00439161760281925,
+            "runtime_seconds": 763.759583099,
+            "machine_type": "e2-small",
+            "provisioning_model": "STANDARD",
+            "pricing_version": "2026-08-30",
+            "pricing_effective_date": "2026-08-30",
+            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+            "unmetered_reason": "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+          }
+        ],
+        "unmetered_components": [
+          "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried",
+          "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+        ]
+      },
+      "summary": "BUDGET_STOPPED"
     }
   ]
 }
