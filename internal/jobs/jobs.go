@@ -29,6 +29,8 @@ type RunResult struct {
 	// Verification records who actually awarded the pass. Accepted results are
 	// integrable only when this is trusted-independent.
 	Verification     string  `json:"verification,omitempty"`
+	// QualityReview records the Yardmaster merge-worthiness verdict for child work.
+	QualityReview    string  `json:"quality_review,omitempty"`
 	DurationSecs     float64 `json:"duration_seconds"`
 	EstimatedMinutes int     `json:"estimated_minutes,omitempty"`
 	PatchBytes       int64   `json:"patch_bytes"`
