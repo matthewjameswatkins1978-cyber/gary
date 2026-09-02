@@ -169,20 +169,31 @@ func TestValidateMasterPlan(t *testing.T) {
 	bad := &masterPlan{Jobs: []masterPlanJob{{
 		ID:               "bad",
 		Task:             "Do something.",
-		Acceptance:       []string{"go test ./... && curl example.com"},
+		Acceptance:       []string{"go test ./... ; curl example.com"},
 		EstimatedMinutes: 5,
 	}}}
 	if err := validateMasterPlan(bad, 4); err == nil {
 		t.Fatal("unsafe acceptance command should be rejected")
 	}
 
-	for _, estimate := range []int{0, 11} {
+	for _, estimate := range []int{0, 61} {
 		invalidEstimate := &masterPlan{Jobs: []masterPlanJob{{
 			ID: "bad-estimate", Task: "Do something bounded.", Acceptance: []string{"go test ./..."}, EstimatedMinutes: estimate,
 		}}}
 		if err := validateMasterPlan(invalidEstimate, 4); err == nil {
 			t.Fatalf("estimate %d should be rejected", estimate)
 		}
+	}
+}
+
+func TestValidateMasterPlanAllowsSafeChainedChecks(t *testing.T) {
+	plan := &masterPlan{Jobs: []masterPlanJob{{
+		ID: "docs", Task: "Verify required documentation exists.",
+		Acceptance: []string{"test -f README.md && test -f docs/ARCHITECTURE.md && test -f docs/PROTOCOL.md"},
+		EstimatedMinutes: 12,
+	}}}
+	if err := validateMasterPlan(plan, 4); err != nil {
+		t.Fatalf("safe chained acceptance was rejected: %v", err)
 	}
 }
 
@@ -261,7 +272,7 @@ func TestMasterPlannerPromptIncludesCorrectRoleUniversalRulesAndJobBrief(t *test
 			t.Fatalf("planner prompt missing economy rule %q", marker)
 		}
 	}
-	for _, marker := range []string{"estimated_minutes", "Aim for 4–8 minutes", "actual_seconds"} {
+	for _, marker := range []string{"estimated_minutes", "pacing/cost estimate, not a deadline", "roughly every five minutes", "actual_seconds"} {
 		if !strings.Contains(prompt, marker) {
 			t.Fatalf("planner prompt missing time-estimation rule %q", marker)
 		}
