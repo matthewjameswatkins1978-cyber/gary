@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
@@ -64,6 +65,26 @@ func TestPlannerDisposablePathsAreExcludedFromContext(t *testing.T) {
 	} {
 		if got := plannerDisposablePath(test.path); got != test.want {
 			t.Fatalf("plannerDisposablePath(%q) = %t, want %t", test.path, got, test.want)
+		}
+	}
+}
+
+
+func TestWorkerSupervisorPromptContainsLiveControlDoctrine(t *testing.T) {
+	data, err := os.ReadFile("planner.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	for _, marker := range []string{
+		"missing ordinary tool or package",
+		"STOP_AND_REPLAN when observable evidence shows",
+		"READY_FOR_INSPECTION means leave implementation mode",
+		"not itself acceptance",
+		"authority the worker does not have",
+	} {
+		if !strings.Contains(source, marker) {
+			t.Fatalf("worker supervisor prompt missing %q", marker)
 		}
 	}
 }
