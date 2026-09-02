@@ -159,6 +159,59 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 	return enforceEconomicPlan(&plan), component, nil
 }
 
+
+func runFinalSemanticInspection(cfg *config.Config, manifest *masterManifest, brief, stagingBranch string) (*masterPlan, cost.Component, error) {
+	component := estimatedComponent("inspector", cfg.MasterModel, "final semantic inspector did not return provider usage")
+	tmp, err := os.MkdirTemp("", "gary-final-inspector-*")
+	if err != nil {
+		return nil, component, err
+	}
+	defer os.RemoveAll(tmp)
+	if err := gitops.CloneBranch(manifest.Repo, stagingBranch, tmp); err != nil {
+		return nil, component, fmt.Errorf("final inspector clone: %w", err)
+	}
+	repoContext, err := buildYardmasterRepoContext(tmp, yardmasterContextMaxBytes)
+	if err != nil {
+		return nil, component, fmt.Errorf("final inspector repository snapshot: %w", err)
+	}
+	prompt := fmt.Sprintf(`You are GARY's independent final acceptance inspector. This is a fresh context. Do not trust Builder or Yardmaster completion claims as evidence.
+
+Decide whether the repository at the inspected staging branch actually satisfies EVERY required acceptance criterion and frozen invariant in the complete master brief. Mechanical final acceptance commands have already passed, but that proves only those commands. For behavioural, preservation, packaging, platform, benchmark, security, documentation or evidence requirements, require concrete repository evidence. A dependency added without the requested implementation is not completion. A test that does not exercise the claimed invariant is not evidence for that invariant. If a required criterion cannot be substantiated, done MUST be false.
+
+Do not redesign the project and do not propose optional improvements. Report only material gaps against the supplied brief. Put a concise repair-oriented list of the missing or violated requirements in memory so the Yardmaster can continue from it.
+
+Return exactly:
+{
+  "done": true,
+  "summary": "short evidence-grounded verdict",
+  "memory": "if rejected, concrete missing/violated required items; if accepted, concise evidence basis",
+  "jobs": []
+}
+
+MASTER JOB: %s
+STAGING BRANCH: %s
+
+COMPLETE MASTER BRIEF
+=====================
+%s
+
+CURRENT REPOSITORY SNAPSHOT
+===========================
+%s
+`, manifest.ID, stagingBranch, brief, repoContext)
+
+	ctx, cancel := context.WithTimeout(context.Background(), yardmasterPlannerTimeout)
+	defer cancel()
+	plan, component, err := callYardmasterAPI(ctx, cfg, prompt, 0)
+	if err != nil {
+		return nil, component, fmt.Errorf("final semantic inspector: %w", err)
+	}
+	if len(plan.Jobs) != 0 {
+		return nil, component, fmt.Errorf("final semantic inspector returned jobs; expected verdict only")
+	}
+	return plan, component, nil
+}
+
 func estimatedComponent(kind, model, reason string) cost.Component {
 	return cost.Component{
 		Kind:                 kind,
