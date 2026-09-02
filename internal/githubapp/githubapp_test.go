@@ -149,3 +149,17 @@ func TestNewProviderRejectsNonRSAKey(t *testing.T) {
 		t.Fatal("expected invalid PEM to be rejected")
 	}
 }
+
+func TestNewProviderUsesBoundedHTTPClient(t *testing.T) {
+	provider, err := NewProvider("1", "2", testPrivateKeyPEM(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var timeout time.Duration
+	if provider.client != nil {
+		timeout = provider.client.Timeout
+	}
+	if timeout != 30*time.Second {
+		t.Fatalf("GitHub App client timeout = %v, want 30s", timeout)
+	}
+}

@@ -21,6 +21,7 @@ jobs:
       github.event.issue.title == 'GARY COMMAND' &&
       github.event.issue.pull_request == null
     runs-on: ubuntu-latest
+    timeout-minutes: 240
     env:
       GARY_GCP_PROJECT: ${{ vars.GARY_GCP_PROJECT }}
       GARY_GCP_REGION: ${{ vars.GARY_GCP_REGION }}

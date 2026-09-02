@@ -175,8 +175,10 @@ func NewProvider(appID, installationID, privateKeyPEM string) (*Provider, error)
 		installationID: installationID,
 		privateKey:     key,
 		apiURL:         defaultAPIURL,
-		client:         http.DefaultClient,
-		tokens:         make(map[string]cachedToken),
+		// App-token minting is a control-plane prerequisite. Never let a
+		// stalled network connection hold a workflow indefinitely.
+		client: &http.Client{Timeout: 30 * time.Second},
+		tokens: make(map[string]cachedToken),
 	}, nil
 }
 
