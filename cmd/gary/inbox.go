@@ -22,7 +22,7 @@ const defaultInboxPath = "gary/inbox/pending"
 
 var inboxID = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,29}$`)
 var inboxBranch = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$`)
-var inboxCommand = regexp.MustCompile(`^[A-Za-z0-9_./:=+@%,\\[\\]-]+( [A-Za-z0-9_./:=+@%,\\[\\]-]+)*$`)
+var inboxCommand = regexp.MustCompile(`^[A-Za-z0-9_./:=+@%,\[\]-]+( [A-Za-z0-9_./:=+@%,\[\]-]+)*$`)
 
 func acceptanceCommandSegments(command string) []string {
 	raw := strings.Split(command, "&&")
