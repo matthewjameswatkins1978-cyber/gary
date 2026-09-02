@@ -266,6 +266,11 @@ while true; do
   set -e
   export GARY_ACCEPTANCE_EXIT="$ACCEPTANCE_EXIT"
   cat /workspace/acceptance_output.txt || true
+  if [ "$ACCEPTANCE_EXIT" -eq 0 ]; then
+    echo "ACCEPTANCE PASSED" | tee -a /workspace/acceptance_output.txt
+  else
+    echo "ACCEPTANCE FAILED (exit code $ACCEPTANCE_EXIT)" | tee -a /workspace/acceptance_output.txt
+  fi
 
   if [ -f /workspace/control_action ]; then
     ACTION=$(cat /workspace/control_action)
@@ -367,6 +372,7 @@ gcloud storage cp /workspace/usage.jsonl "$GARY_GCS_PATH/usage.jsonl" 2>/dev/nul
   true
 emit_telemetry stopping
 
+echo "GARY CODING WORKER COMPLETE"
 echo "GARY SUPERVISED CODING WORKER COMPLETE"
 exit 0
 `
