@@ -5,6 +5,10 @@ on:
     branches: [feature/telltail-cloud-canary]
     paths:
       - ".github/workflows/telltail-cloud-canary.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/telltail-cloud-canary.yml"
 
 permissions:
   contents: read
