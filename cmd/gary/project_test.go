@@ -11,7 +11,7 @@ func TestDecodeProjectManualNormalizesYardmasterVariants(t *testing.T) {
   "project_id": "demo",
   "objective": "Test durable intake",
   "definition_of_done": [{"id":"DONE-001","description":"The marker exists"}],
-  "manual_version": "1.0.0",
+  "manual_version": "0.1.0",
   "source_packet_digest": "` + digest + `",
   "forbidden_changes": ["Do not add dependencies"],
   "important_rationale": "Keep the certification bounded",
