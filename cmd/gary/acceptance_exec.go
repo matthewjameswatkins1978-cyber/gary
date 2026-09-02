@@ -36,7 +36,7 @@ func runAcceptanceCommand(dir, command, pythonBin string) ([]byte, error) {
 	// GARY's hosted control plane has Bash. This fallback only exists for simple
 	// local checks on hosts without it; complex checks fail clearly instead of
 	// being silently misparsed.
-	if strings.ContainsAny(command, "|&;<>()$\`'\"") {
+	if strings.ContainsAny(command, "|&;<>()$`\'\\\"") {
 		return nil, errors.New("acceptance command requires bash but bash is unavailable")
 	}
 	parts := acceptanceCommandParts(command, pythonBin)
