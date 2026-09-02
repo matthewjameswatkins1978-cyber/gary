@@ -425,9 +425,10 @@ That commentary is useful context. It is not proof.
 
 Human-facing labels such as `Good Job`, `Fix`, and `Broken` can summarise the judgement, but they are not a substitute for the evidence and do not need to be internal machine states.
 
-- **Good Job:** useful work satisfies the important acceptance and is a candidate for integration.
-- **Fix:** useful work has a narrow repairable problem; create a focused repair packet from current evidence.
-- **Broken:** the current approach should stop or be reconsidered because of a material misunderstanding, architecture conflict, scope violation, unresolved authority/product decision, invalid environment assumption, or demonstrated lack of progress.
+- **PASS / Good Job:** trusted mechanical checks pass and Yardmaster inspection finds the exact candidate merge-worthy to a reasonable professional engineering standard.
+- **SMALL_FIX:** the approach is sound and useful work should be preserved; return a short exact correction list to the Worker and keep everything else.
+- **MAJOR_FIX:** substantial correction is needed, but useful work remains; preserve it and return a stronger evidence-backed diagnosis with concrete repair hints.
+- **REPLAN / Broken route:** the current job shape or approach should stop or be reconsidered because of a material misunderstanding, architecture conflict, scope violation, unresolved authority/product decision, invalid dependency/environment assumption, or demonstrated lack of progress.
 
 A missing ordinary development package is not, by itself, a profound architectural failure.
 
@@ -449,7 +450,7 @@ While a worker is still live, use observable progress and the supervision action
 | **Running and repeating the same failed action** | First `GUIDE` if one concrete correction is likely to recover it. If equivalent failure continues without new evidence, `STOP_AND_REPLAN`. |
 | **Missing an ordinary tool/package/environment detail** | Usually `CONTINUE` or `GUIDE` toward authorised setup/recovery. Do not confuse setup friction with a product blocker. |
 | **Needs authority outside the worker boundary** | Preserve work and `STOP_AND_REPLAN` so the trusted control/Yardmaster layer can choose the authorised route or escalate. |
-| **Candidate appears complete** | `READY_FOR_INSPECTION`. Trusted acceptance still decides whether it is accepted. |
+| **Candidate appears complete** | `READY_FOR_INSPECTION`. Checkpoint the candidate first. Trusted mechanical verification and Yardmaster merge-quality inspection still decide whether it is accepted. |
 | **Worker/telemetry disappears or infrastructure becomes ambiguous** | Establish the real external job state and cancel/close it if necessary before launching overlapping work that could mutate the same logical result. Treat unknown as unknown, not failed or safe-to-duplicate. |
 | **Healthy acceptance/build is simply taking a long time** | `CONTINUE` unless contrary evidence appears. Time is cost evidence, not proof of failure. |
 
@@ -459,9 +460,12 @@ A strong default result matrix is:
 
 | Worker situation | Yardmaster default | Avoid |
 | --- | --- | --- |
-| **Accepted, pushed branch + commit present** | Integrate that exact accepted commit into controlled staging promptly, record it, verify the integration, then plan from the new staging state. | Leaving accepted work stranded while assigning the same or dependent work again. |
-| **Worker says DONE but mechanical acceptance is false/missing** | Treat as inconsistent evidence. Do not integrate. Inspect the acceptance record or control-plane result generation. | Trusting prose or the DONE label. |
-| **Accepted flag is true but pushed branch/commit is missing or unrecoverable** | Treat as a control/writeback integrity failure. Preserve logs/evidence and repair the transport/writeback path. | Re-implementing already accepted code just because delivery failed. |
+| **Accepted, pushed branch + commit present** | First confirm the result records trusted independent mechanical verification and a Yardmaster quality `PASS`. Then integrate that exact accepted commit into controlled staging promptly, record it, verify the integration, and plan from the new staging state. | Treating a worker claim, Batch status, or narrow green test as the pass mark. |
+| **Mechanical checks pass; Yardmaster says SMALL_FIX** | Preserve the candidate checkpoint and give the Worker the exact narrow corrections. Retry from the useful state; do not start over. | Discarding sound work or escalating a tiny review note into a redesign. |
+| **Mechanical checks pass; Yardmaster says MAJOR_FIX** | Preserve useful work, give the Worker the stronger diagnosis and concrete hints, then make a materially informed repair attempt. | Blindly rerunning the same packet or throwing away everything. |
+| **Mechanical checks pass; Yardmaster says REPLAN** | Preserve the candidate/evidence, but change the route, job boundary, dependency assumption, or authority handling before more implementation work. | Polishing a fundamentally wrong route. |
+| **Worker says DONE but trusted mechanical acceptance is false/missing** | Treat as inconsistent evidence. Do not integrate. Inspect the acceptance record or control-plane result generation. | Trusting prose or the DONE label. |
+| **Accepted flag is true but trusted mechanical verification, Yardmaster PASS, pushed branch, or commit is missing** | Treat as a control/writeback integrity failure. Preserve logs/evidence and repair the verification/review/transport path. | Re-implementing code just because the delivery or review record is incomplete. |
 | **FAILED with useful partial work/evidence** | Preserve the result branch/patch and failure evidence. Build a repair handoff around the specific remaining failure. | Throwing away useful work or issuing "try again" unchanged. |
 | **FAILED with no useful progress** | Change something material: narrower objective, different dependency order, better context, different tool/environment route, or escalation if competence/authority is the real problem. | Repeating a materially equivalent packet. |
 | **BLOCKED by ordinary setup/environment** | Fix or provision the environment when permitted, or reroute through an authorised workable environment. | Escalating a missing compiler/package as a product decision. |
@@ -477,7 +481,7 @@ A strong default result matrix is:
 
 For GARY, successful child work is not finished when the worker pushes a branch. It becomes useful project progress when the Yardmaster integrates it into the controlled staging state.
 
-The normal sequence is: worker implements → mechanical checks pass → result identifies an accepted pushed branch and commit → Yardmaster integrates that exact commit → integration is verified → staging becomes the new planning truth → the next job is chosen from that reality.
+The normal sequence is: Worker implements → candidate is checkpointed → trusted control reruns the required mechanical checks on the exact candidate → Yardmaster inspects the exact diff/repository state for the child objective and reasonable engineering quality → only a `PASS` becomes an accepted pushed branch and commit → Yardmaster integrates that exact commit → integration is verified → staging becomes the new planning truth → the next job is chosen from that reality.
 
 If the branch was accepted against an older staging state but now conflicts with newer accepted work, preserve the acceptance evidence. The integration has become stale, not necessarily the implementation. Reconcile from current staging and run the relevant checks again.
 
@@ -485,7 +489,7 @@ If the branch was accepted against an older staging state but now conflicts with
 
 An unaccepted branch can still be valuable. Keep it as evidence or as input to a repair worker, but do not automatically merge it into controlled staging simply because effort was spent.
 
-If a clearly separable subset is mechanically proven correct, it may be promoted as its own accepted slice through the trusted acceptance/integration path. Otherwise keep staging clean and give the repair worker precise instructions about what to reuse.
+If a clearly separable subset is mechanically proven correct and independently judged merge-worthy, it may be promoted as its own accepted slice through the trusted verification/quality/integration path. Otherwise keep staging clean and give the repair Worker precise instructions about what to reuse.
 
 ### Distinguish implementation failure from delivery failure
 
@@ -501,11 +505,13 @@ Terminality should behave like a one-way door unless an explicit authorised reop
 
 ## 15. Inspect, integrate, then replan from reality
 
-A worker reporting completion means ready for inspection, not automatic integration.
+A Worker reporting completion means candidate ready for inspection, not automatic integration.
 
-Inspect the actual diff, relevant checks, working-tree cleanliness, unexpected files, secrets, scope drift, protected acceptance machinery, and relationship to other accepted work.
+First make sure the exact candidate is durably recoverable. Then have the trusted control layer rerun the required mechanical checks in a clean controlled workspace. If those checks pass, Yardmaster inspects the actual diff and relevant repository state for objective coverage, maintainability, idiomatic fit, working-tree cleanliness, unexpected files, secrets, scope drift, protected acceptance machinery, obvious correctness/security/portability problems, and relationship to other accepted work.
 
-Integrate accepted useful work into the project's controlled staging/integration state. Ordinary workers do not gain merge or production authority merely by finishing a job.
+Do not turn this into perfectionism. Small review defects go back as `SMALL_FIX` with exact narrow corrections. Material but repairable problems become `MAJOR_FIX` with stronger diagnosis and hints. A fundamentally wrong route becomes `REPLAN`. Only `PASS` is merge-worthy.
+
+Integrate only accepted useful work into the project's controlled staging/integration state. Ordinary Workers do not gain merge or production authority merely by finishing a job.
 
 After integration, reconsider what remains. Do not blindly execute a plan created before the project taught you anything.
 
@@ -595,7 +601,7 @@ A strong default orientation is:
 9. Build the first JobPackets with enough context and direct evidence of success.
 10. Dispatch using the execution environment that fits the work.
 11. Supervise from engineering evidence, preserving useful partials and learned failure evidence.
-12. Inspect and integrate accepted work.
+12. Independently verify candidate mechanics, inspect merge quality, repair/replan when needed, and integrate only accepted work.
 13. Replan from the new project state.
 14. Run master-level acceptance and verify the actual artifact/deployment where relevant.
 15. Package the result and preserve durable evidence.
