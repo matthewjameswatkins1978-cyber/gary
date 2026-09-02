@@ -202,6 +202,22 @@ apply_running_control() {
   esac
 }
 
+checkpoint_candidate() {
+  echo "Checkpointing candidate before Yardmaster handover..."
+  git add -A
+  git diff --cached --binary "$GARY_BASE_BRANCH" > /workspace/result.patch
+  gcloud storage cp /workspace/result.patch "$GARY_GCS_PATH/result.patch" >/dev/null 2>&1 ||
+    python3 -m gsutil cp /workspace/result.patch "$GARY_GCS_PATH/result.patch" >/dev/null 2>&1 ||
+    true
+  gcloud storage cp /workspace/acceptance_output.txt "$GARY_GCS_PATH/acceptance_output.txt" >/dev/null 2>&1 ||
+    python3 -m gsutil cp /workspace/acceptance_output.txt "$GARY_GCS_PATH/acceptance_output.txt" >/dev/null 2>&1 ||
+    true
+  gcloud storage cp /workspace/usage.jsonl "$GARY_GCS_PATH/usage.jsonl" >/dev/null 2>&1 ||
+    python3 -m gsutil cp /workspace/usage.jsonl "$GARY_GCS_PATH/usage.jsonl" >/dev/null 2>&1 ||
+    true
+  git reset >/dev/null 2>&1 || true
+}
+
 ACTIVE_STARTED=$(date +%s)
 export GARY_ACTIVE_STARTED="$ACTIVE_STARTED"
 TURN=0
@@ -268,6 +284,10 @@ while true; do
   cat /workspace/acceptance_output.txt || true
   if [ $ACCEPTANCE_EXIT -eq 0 ]; then
     echo "ACCEPTANCE PASSED" | tee -a /workspace/acceptance_output.txt
+    # A green candidate must survive the handover even if Batch or supervision
+    # fails immediately afterwards. Preserve the exact work before waiting for
+    # Yardmaster review.
+    checkpoint_candidate
   else
     echo "ACCEPTANCE FAILED (exit code $ACCEPTANCE_EXIT)" | tee -a /workspace/acceptance_output.txt
   fi
