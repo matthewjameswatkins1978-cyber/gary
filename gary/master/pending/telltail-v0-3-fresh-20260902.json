@@ -4,8 +4,8 @@
   "base_branch": "telltail-canonical-seed",
   "brief_path": "gary/master/pending/telltail-v0-3-mirror-gary-os-20260902.md",
   "max_waves": 4,
-  "max_workers": 2,
   "max_jobs_per_wave": 2,
+  "max_workers": 2,
   "acceptance": [
     "test -f go.mod",
     "test -f cmd/telltail/main.go",
