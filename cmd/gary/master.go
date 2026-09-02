@@ -327,7 +327,22 @@ func cmdMaster() {
 		}
 	}
 
-	failMaster(status, fmt.Errorf("master job exhausted this run's wave budget (%d waves, through wave %d) without completion", manifest.MaxWaves, endWave))
+	pauseMaster(status, projectCtx, manifest.MaxWaves, endWave)
+}
+
+func pauseMaster(status *masterStatus, projectCtx project.ProjectContext, waveBudget, endWave int) {
+	status.State = "paused"
+	status.Error = ""
+	status.Summary = fmt.Sprintf("Healthy bounded run paused after %d waves (through wave %d); project remains resumable.", waveBudget, endWave)
+	_ = saveMasterStatus(status)
+
+	state := projectCtx.State
+	state.State = "PAUSED"
+	state.CurrentPhase = "executing"
+	state.LastEvent = fmt.Sprintf("bounded master run paused after wave %d", endWave)
+	_ = project.DefaultStore().SaveState(projectCtx.Project.ProjectID, state)
+
+	fmt.Printf("GARY // MASTER PAUSED\nBranch: %s\nThrough wave: %d\nReason: bounded run slice completed; resume is safe\n", status.StagingBranch, endWave)
 }
 
 func ensureMasterProject(cfg *config.Config, manifest *masterManifest, brief string) (project.ProjectContext, string, error) {
