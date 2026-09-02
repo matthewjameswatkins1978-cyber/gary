@@ -44,3 +44,36 @@ func TestDecodeProjectManualRejectsTrailingJSON(t *testing.T) {
 		t.Fatal("trailing JSON was accepted")
 	}
 }
+
+func TestDecodeProjectManualRepairsBlankEquivalentFields(t *testing.T) {
+	digest := "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	text := `{
+  "schema": "gary.project-manual.v1",
+  "project_id": "demo",
+  "objective": "Test durable intake",
+  "definition_of_done": "The marker exists",
+  "manual_version": 1,
+  "source_packet_digest": "` + digest + `",
+  "functional_requirements": [{
+    "id": "",
+    "text": "",
+    "description": "Add the marker",
+    "source": {"packet_digest": "", "locator": ""}
+  }]
+}`
+	manual, err := decodeProjectManual(text, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manual.FunctionalRequirements) != 1 {
+		t.Fatalf("requirements = %+v", manual.FunctionalRequirements)
+	}
+	requirement := manual.FunctionalRequirements[0]
+	if requirement.ID != "functional_requirements-001" || requirement.Text != "Add the marker" {
+		t.Fatalf("requirement normalization = %+v", requirement)
+	}
+	if requirement.Source.PacketDigest != digest || requirement.Source.Locator != "MASTER_PACKET.md#functional_requirements" {
+		t.Fatalf("requirement source = %+v", requirement.Source)
+	}
+}
+
