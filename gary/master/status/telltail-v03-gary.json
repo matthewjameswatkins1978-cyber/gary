@@ -1,0 +1,175 @@
+{
+  "id": "telltail-v03-gary",
+  "project_id": "telltail-v03-gary",
+  "master_packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+  "project_manual_version": 1,
+  "state": "failed",
+  "updated_at": "2026-09-02T20:34:51Z",
+  "staging_branch": "gary/master-telltail-v03-gar-677853",
+  "wave": 2,
+  "summary": "Wave 1: Initializing Telltail 0.3.0 idiomatic Go CLI, core domain packages (scenario, trajectory, detectors, outcome, profiler, dossier, local, cloud/gcp, mirror), and comprehensive test suite.",
+  "error": "planner failed in wave 2 after 9.0s: job 1 acceptance \"go run ./cmd/telltail version | grep -Eiq 'telltail.*0\\\\.3'\" contains unsupported shell syntax",
+  "planner_memory": "Wave 1 initialization. Target repo contains sacrificial clamp code on branch telltail-canonical-seed. Objective: Implement complete Telltail 0.3.0 Go CLI in cmd/telltail and pkg/*, replacing clamp files. Requirements include append-only SHA-256 JSONL trajectory, deterministic behavioral detectors, outcome/severity/attribution classification, profiler, dossier, local runner, GCP Batch spec/runner, and mirror shift init/scoring. All hard constraints and frozen product principles apply.",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 11.806628581,
+      "plan_summary": "Wave 1: Initializing Telltail 0.3.0 idiomatic Go CLI, core domain packages (scenario, trajectory, detectors, outcome, profiler, dossier, local, cloud/gcp, mirror), and comprehensive test suite.",
+      "results": [
+        {
+          "job_id": "telltail-v03-gar-w1-j1",
+          "batch_job_id": "gary-run-telltail-v03-gar-w1-j1-2-20260902-193136",
+          "branch": "gary/telltail-v03-gar-w1-j1-18982f3b",
+          "commit_sha": "",
+          "accepted": false,
+          "duration_seconds": 7585.383402741,
+          "estimated_minutes": 15,
+          "patch_bytes": 0,
+          "attempts": 2,
+          "repair_count": 0,
+          "escalated": false,
+          "closer_used": false,
+          "final_status": "BUDGET_STOPPED",
+          "failure_reason": "ESTIMATED run committed $0.04 + job $0.02 = $0.07 exceeds limit $0.06",
+          "project_id": "telltail-v03-gary",
+          "master_packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+          "project_manual_version": 1,
+          "model_cost_estimated": 0,
+          "compute_cost_estimated": 0.04313763563405625,
+          "total_cost_estimated": 0.04313763563405625,
+          "cost": {
+            "pricing_status": "ESTIMATED",
+            "currency": "USD",
+            "pricing_version": "2026-08-30",
+            "model_cost_usd": 0,
+            "compute_cost_usd": 0.04313763563405625,
+            "total_cost_usd": 0.04313763563405625,
+            "components": [
+              {
+                "kind": "worker",
+                "model_requested": "gemini-3.5-flash-lite",
+                "usage_source": "ESTIMATED",
+                "model_cost_usd": 0,
+                "compute_cost_usd": 0.0215754001090725,
+                "total_cost_usd": 0.0215754001090725,
+                "runtime_seconds": 3752.24349723,
+                "machine_type": "e2-small",
+                "provisioning_model": "STANDARD",
+                "pricing_version": "2026-08-30",
+                "pricing_effective_date": "2026-08-30",
+                "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+                "unmetered_reason": "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+              },
+              {
+                "kind": "worker",
+                "model_requested": "gemini-3.5-flash-lite",
+                "usage_source": "ESTIMATED",
+                "model_cost_usd": 0,
+                "compute_cost_usd": 0.021562235524983753,
+                "total_cost_usd": 0.021562235524983753,
+                "runtime_seconds": 3749.954004345,
+                "machine_type": "e2-small",
+                "provisioning_model": "STANDARD",
+                "pricing_version": "2026-08-30",
+                "pricing_effective_date": "2026-08-30",
+                "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+                "unmetered_reason": "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+              }
+            ],
+            "unmetered_components": [
+              "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried",
+              "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "wave": 2,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 8.960857941
+    }
+  ],
+  "cost": {
+    "pricing_status": "MIXED",
+    "currency": "USD",
+    "pricing_version": "2026-08-30",
+    "yardmaster_model_cost_usd": 0.0318705,
+    "model_cost_usd": 0.0318705,
+    "compute_cost_usd": 0.04313763563405625,
+    "total_cost_usd": 0.07500813563405626,
+    "components": [
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 18216,
+        "fresh_input_tokens": 18216,
+        "output_tokens": 634,
+        "thinking_tokens": 683,
+        "total_tokens": 19533,
+        "model_cost_usd": 0.0160395,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.0160395,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "tGqYapyyLojg1dkPgO7h8Ao"
+      },
+      {
+        "kind": "worker",
+        "model_requested": "gemini-3.5-flash-lite",
+        "usage_source": "ESTIMATED",
+        "model_cost_usd": 0,
+        "compute_cost_usd": 0.0215754001090725,
+        "total_cost_usd": 0.0215754001090725,
+        "runtime_seconds": 3752.24349723,
+        "machine_type": "e2-small",
+        "provisioning_model": "STANDARD",
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "unmetered_reason": "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+      },
+      {
+        "kind": "worker",
+        "model_requested": "gemini-3.5-flash-lite",
+        "usage_source": "ESTIMATED",
+        "model_cost_usd": 0,
+        "compute_cost_usd": 0.021562235524983753,
+        "total_cost_usd": 0.021562235524983753,
+        "runtime_seconds": 3749.954004345,
+        "machine_type": "e2-small",
+        "provisioning_model": "STANDARD",
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "unmetered_reason": "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+      },
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.7-flash",
+        "model_version": "gemini-3.7-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 18543,
+        "fresh_input_tokens": 18543,
+        "output_tokens": 513,
+        "thinking_tokens": 325,
+        "total_tokens": 19381,
+        "model_cost_usd": 0.015831,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.015831,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "Y4iYau_6DKDa1dkPo5e24QQ"
+      }
+    ],
+    "unmetered_components": [
+      "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried",
+      "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+    ]
+  }
+}

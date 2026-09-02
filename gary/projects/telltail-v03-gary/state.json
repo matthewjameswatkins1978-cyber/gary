@@ -1,0 +1,9 @@
+{
+  "schema": "gary.project-state.v1",
+  "project_id": "telltail-v03-gary",
+  "state": "PLANNING",
+  "current_phase": "planning",
+  "current_strategy": "Implement idiomatic Go CLI `telltail` with deterministic behavioural detectors, SHA-256 hash-chained JSONL event trajectories, local and Google Cloud Batch runners, dossier aggregation, Mirror Shift evaluation framework, and execute local/cloud acceptance tests including GCP Batch canary.",
+  "last_event": "planning wave 2",
+  "updated_at": "2026-09-02T20:34:41Z"
+}
