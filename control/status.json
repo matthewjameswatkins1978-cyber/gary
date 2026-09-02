@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-02T13:16:51Z",
+  "updated_at": "2026-09-02T13:30:19Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -47,13 +47,11 @@
       "project_id": "suture-v0-1-build-20260902",
       "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
       "project_manual_version": 1,
-      "batch_job_id": "gary-run-suture-v0-1-buil-w8-j1-1-20260902-131651",
       "state": "running",
       "repo": "https://github.com/matthewjameswatkins1978-cyber/Suture.git",
       "base_branch": "gary/master-suture-v0-1-buil-84399e",
-      "result_branch": "gary/suture-v0-1-buil-w8-j1-e391aecd",
-      "started_at": "2026-09-02T13:16:50Z",
-      "attempts": 1
+      "result_branch": "gary/suture-v0-1-buil-w8-j1-269a1ffb",
+      "started_at": "2026-09-02T13:30:19Z"
     }
   ],
   "recent_jobs": [
