@@ -10,12 +10,70 @@ permissions:
   contents: write
   id-token: write
 
-concurrency:
-  group: gary-master
-  cancel-in-progress: false
-
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      manifests: ${{ steps.manifests.outputs.manifests }}
+      has_manifests: ${{ steps.manifests.outputs.has_manifests }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: manifests
+        name: Identify changed master jobs
+        env:
+          GARY_PUSH_BEFORE: ${{ github.event.before }}
+          GARY_PUSH_AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import pathlib
+          import subprocess
+
+          before = os.environ["GARY_PUSH_BEFORE"]
+          after = os.environ["GARY_PUSH_AFTER"]
+          changed = subprocess.check_output([
+              "git", "diff", "--name-only", before, after, "--", "gary/master/pending/*.json"
+          ], text=True).splitlines()
+
+          manifests = []
+          seen_ids = set()
+          for path in changed:
+              p = pathlib.Path(path)
+              if not p.is_file():
+                  continue
+              data = json.loads(p.read_text(encoding="utf-8"))
+              manifest_id = str(data.get("id", "")).strip()
+              if not manifest_id:
+                  raise SystemExit(f"master manifest has no id: {path}")
+              if manifest_id in seen_ids:
+                  raise SystemExit(f"duplicate master manifest id in push: {manifest_id}")
+              seen_ids.add(manifest_id)
+              manifests.append({"id": manifest_id, "path": path})
+
+          print("manifests=" + json.dumps(manifests, separators=(",", ":")))
+          print("has_manifests=" + ("true" if manifests else "false"))
+          PY
+
   dispatch:
+    needs: prepare
+    if: needs.prepare.outputs.has_manifests == 'true'
+    strategy:
+      fail-fast: false
+      # This is a yard-wide resource ceiling, not a project serialization gate.
+      # Each project may itself use GARY_MAX_WORKERS workers.
+      max-parallel: 3
+      matrix:
+        include: ${{ fromJSON(needs.prepare.outputs.manifests) }}
+    concurrency:
+      # Serialize repeat dispatches of the same master identity, while allowing
+      # unrelated projects/master jobs to proceed independently.
+      group: gary-master-${{ matrix.id }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
@@ -26,6 +84,8 @@ jobs:
       GARY_MAX_COST_USD: "0.06"
       GARY_MAX_WORKERS: "2"
       GARY_MASTER_RUN_SLICES: "3"
+      GARY_MASTER_MANIFEST: ${{ matrix.path }}
+      GARY_MASTER_ID: ${{ matrix.id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,65 +129,59 @@ jobs:
           set -euo pipefail
           go test ./...
 
-      - name: Dispatch changed master jobs
+      - name: Dispatch master job
         env:
           GARY_GITHUB_APP_ID: ${{ vars.GARY_GITHUB_APP_ID }}
           GARY_GITHUB_APP_INSTALLATION_ID: ${{ vars.GARY_GITHUB_APP_INSTALLATION_ID }}
           GARY_GITHUB_APP_PRIVATE_KEY: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
-          GARY_PUSH_BEFORE: ${{ github.event.before }}
-          GARY_PUSH_AFTER: ${{ github.sha }}
         run: |
           set -euo pipefail
-          mapfile -t manifests < <(git diff --name-only "$GARY_PUSH_BEFORE" "$GARY_PUSH_AFTER" -- 'gary/master/pending/*.json')
-          if [ ${#manifests[@]} -eq 0 ]; then
-            echo "No changed master manifests."
-            exit 0
-          fi
-          for manifest in "${manifests[@]}"; do
-            test -f "$manifest" || continue
-            manifest_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$manifest")"
-            status_file="gary/master/status/${manifest_id}.json"
-            if [ -f "$status_file" ]; then
-              state="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("state", ""))' "$status_file")"
-              case "$state" in
-                done|failed|paused) ;;
-                *)
-                  echo "Refusing automatic restart of $manifest_id with existing non-resumable state: $state" >&2
-                  exit 1
-                  ;;
-              esac
-            fi
-            echo "Dispatching $manifest"
-            master_state=""
-            for slice in $(seq 1 "$GARY_MASTER_RUN_SLICES"); do
-              echo "[master] run slice $slice/$GARY_MASTER_RUN_SLICES"
-              if ! go run ./cmd/gary master "$manifest"; then
-                echo "Master execution failed during slice $slice." >&2
+          manifest="$GARY_MASTER_MANIFEST"
+          test -f "$manifest"
+          manifest_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$manifest")"
+          test "$manifest_id" = "$GARY_MASTER_ID"
+          status_file="gary/master/status/${manifest_id}.json"
+          if [ -f "$status_file" ]; then
+            state="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("state", ""))' "$status_file")"
+            case "$state" in
+              done|failed|paused) ;;
+              *)
+                echo "Refusing automatic restart of $manifest_id with existing non-resumable state: $state" >&2
                 exit 1
-              fi
-              master_state="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("state", ""))' "$status_file")"
-              case "$master_state" in
-                done)
-                  echo "Master completed in slice $slice."
-                  break
-                  ;;
-                paused)
-                  echo "Continuing paused master after bounded slice $slice."
-                  ;;
-                failed)
-                  echo "Master entered failed state during slice $slice." >&2
-                  exit 1
-                  ;;
-                *)
-                  echo "Master returned unexpected state '$master_state' after slice $slice." >&2
-                  exit 1
-                  ;;
-              esac
-            done
-            if [ "$master_state" != "done" ]; then
-              echo "Master remains paused after $GARY_MASTER_RUN_SLICES workflow slices; state is safely resumable."
+                ;;
+            esac
+          fi
+
+          echo "Dispatching $manifest"
+          master_state=""
+          for slice in $(seq 1 "$GARY_MASTER_RUN_SLICES"); do
+            echo "[master] run slice $slice/$GARY_MASTER_RUN_SLICES"
+            if ! go run ./cmd/gary master "$manifest"; then
+              echo "Master execution failed during slice $slice." >&2
+              exit 1
             fi
+            master_state="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("state", ""))' "$status_file")"
+            case "$master_state" in
+              done)
+                echo "Master completed in slice $slice."
+                break
+                ;;
+              paused)
+                echo "Continuing paused master after bounded slice $slice."
+                ;;
+              failed)
+                echo "Master entered failed state during slice $slice." >&2
+                exit 1
+                ;;
+              *)
+                echo "Master returned unexpected state '$master_state' after slice $slice." >&2
+                exit 1
+                ;;
+            esac
           done
+          if [ "$master_state" != "done" ]; then
+            echo "Master remains paused after $GARY_MASTER_RUN_SLICES workflow slices; state is safely resumable."
+          fi
 
       - name: Record master status
         if: always()
@@ -159,9 +213,9 @@ jobs:
           done
 
           # Publish from the newest master without rebasing a status commit.
-          # If another run already wrote the same record, keep the record with
-          # the newer valid UTC timestamp; never resolve that race by taking
-          # the local file blindly.
+          # Concurrent project runs are expected. If another run already wrote
+          # the same status record, keep the newer valid UTC timestamp; never
+          # solve a race by blindly overwriting remote state.
           for attempt in 1 2 3; do
             git fetch origin master
             git clean -fd -- gary/master/status gary/projects
@@ -212,7 +266,7 @@ jobs:
               echo "Remote master already contains the status records."
               exit 0
             fi
-            git commit -m "GARY: update master status"
+            git commit -m "GARY: update master status ($GARY_MASTER_ID)"
             if git push origin HEAD:master; then
               exit 0
             fi
