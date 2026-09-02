@@ -71,39 +71,55 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 		return nil, component, fmt.Errorf("yardmaster Vertex auth: %w", err)
 	}
 	endpoint := yardmasterVertexEndpoint(cfg.GCPProject, cfg.MasterModel)
-
-	body := yardmasterRequestBody(prompt)
-
-	payload, err := json.Marshal(body)
+	payload, err := json.Marshal(yardmasterRequestBody(prompt))
 	if err != nil {
 		return nil, component, fmt.Errorf("yardmaster request encode: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
-	if err != nil {
-		return nil, component, fmt.Errorf("yardmaster request build: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	const maxAttempts = 3
+	var respBody []byte
+	var providerRequestID string
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+		if err != nil {
+			return nil, component, fmt.Errorf("yardmaster request build: %w", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, component, fmt.Errorf("yardmaster transport: %w", err)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, component, fmt.Errorf("yardmaster transport: %w", err)
+		}
+		providerRequestID = resp.Header.Get("x-goog-request-id")
+		component.ProviderRequestID = providerRequestID
+		respBody, err = io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+		if err != nil {
+			return nil, component, fmt.Errorf("yardmaster response read: %w", err)
+		}
+		if resp.StatusCode == http.StatusTooManyRequests && attempt < maxAttempts {
+			delay := time.Duration(attempt*5) * time.Second
+			fmt.Fprintf(os.Stderr, "[yardmaster] API 429; retrying attempt %d/%d after %s\n", attempt+1, maxAttempts, delay)
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, component, ctx.Err()
+			case <-timer.C:
+			}
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			component.UnmeteredReason = fmt.Sprintf("yardmaster HTTP %d returned no usable usage record", resp.StatusCode)
+			return nil, component, fmt.Errorf("yardmaster API %d: %s", resp.StatusCode, compactPlannerError(string(respBody), 2000))
+		}
+		break
 	}
-	defer resp.Body.Close()
-	component.ProviderRequestID = resp.Header.Get("x-goog-request-id")
 
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, component, fmt.Errorf("yardmaster response read: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		component.UnmeteredReason = fmt.Sprintf("yardmaster HTTP %d returned no usable usage record", resp.StatusCode)
-		return nil, component, fmt.Errorf("yardmaster API %d: %s", resp.StatusCode, compactPlannerError(string(respBody), 2000))
-	}
-	if usage, usageErr := cost.ParseVertexUsage(json.RawMessage(respBody), cfg.MasterModel, "", component.ProviderRequestID); usageErr == nil {
+	if usage, usageErr := cost.ParseVertexUsage(json.RawMessage(respBody), cfg.MasterModel, "", providerRequestID); usageErr == nil {
 		component = componentFromUsage("yardmaster", usage)
-		component.ProviderRequestID = resp.Header.Get("x-goog-request-id")
+		component.ProviderRequestID = providerRequestID
 	} else {
 		component.UnmeteredReason = "yardmaster response lacked complete usageMetadata: " + usageErr.Error()
 	}
@@ -129,8 +145,7 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 	for _, part := range apiResp.Candidates[0].Content.Parts {
 		raw.WriteString(part.Text)
 	}
-	text := strings.TrimSpace(raw.String())
-	text = stripJSONFence(text)
+	text := stripJSONFence(strings.TrimSpace(raw.String()))
 
 	var plan masterPlan
 	dec := json.NewDecoder(strings.NewReader(text))
