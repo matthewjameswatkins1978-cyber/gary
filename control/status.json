@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-02T10:41:22Z",
+  "updated_at": "2026-09-02T10:56:28Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -41,31 +41,9 @@
       "result_branch": "gary/judgement-call-b-w10-j1-a9ff29c1",
       "started_at": "2026-08-30T03:22:32Z",
       "attempts": 2
-    },
-    {
-      "id": "suture-v0-1-buil-w7-j1",
-      "project_id": "suture-v0-1-build-20260902",
-      "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
-      "project_manual_version": 1,
-      "batch_job_id": "gary-run-suture-v0-1-buil-w7-j1-2-20260902-104122",
-      "state": "retrying",
-      "repo": "https://github.com/matthewjameswatkins1978-cyber/Suture.git",
-      "base_branch": "gary/master-suture-v0-1-buil-84399e",
-      "result_branch": "gary/suture-v0-1-buil-w7-j1-e89f4ea6",
-      "started_at": "2026-09-02T10:37:39Z",
-      "attempts": 2
     }
   ],
   "recent_jobs": [
-    {
-      "id": "calle-tethers-ga-w1-j2",
-      "state": "failed",
-      "result_branch": "gary/calle-tethers-ga-w1-j2-d47b9d19",
-      "finished_at": "2026-08-30T13:15:36Z",
-      "attempts": 2,
-      "est_cost": 0.05260369816684326,
-      "summary": "BUDGET_STOPPED"
-    },
     {
       "id": "calle-tethers-ga-w2-j1",
       "state": "failed",
@@ -1005,6 +983,68 @@
             "compute_cost_usd": 0.00674199734116875,
             "total_cost_usd": 0.00674199734116875,
             "runtime_seconds": 1172.521276725,
+            "machine_type": "e2-small",
+            "provisioning_model": "STANDARD",
+            "pricing_version": "2026-08-30",
+            "pricing_effective_date": "2026-08-30",
+            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+            "unmetered_reason": "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+          }
+        ],
+        "unmetered_components": [
+          "Batch compute is estimated from observed runtime; invoice data was not queried",
+          "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
+        ]
+      },
+      "summary": "BLOCKED"
+    },
+    {
+      "id": "suture-v0-1-buil-w7-j1",
+      "project_id": "suture-v0-1-build-20260902",
+      "master_packet_digest": "sha256:bc6bc251f80e1bec7b6f88bf5790c103976bef8e6a0991ae41b8c8f3432b0de3",
+      "project_manual_version": 1,
+      "state": "failed",
+      "result_branch": "gary/suture-v0-1-buil-w7-j1-e89f4ea6",
+      "finished_at": "2026-09-02T10:56:28Z",
+      "attempts": 2,
+      "est_cost": 0.044634134313186496,
+      "cost": {
+        "pricing_status": "MIXED",
+        "currency": "USD",
+        "pricing_version": "2026-08-30",
+        "worker_model_cost_usd": 0.03701992,
+        "model_cost_usd": 0.03701992,
+        "compute_cost_usd": 0.0076142143131865,
+        "total_cost_usd": 0.044634134313186496,
+        "components": [
+          {
+            "kind": "worker",
+            "model_requested": "gemini-3.5-flash-lite",
+            "usage_source": "PROVIDER_REPORTED",
+            "input_tokens": 323490,
+            "cached_input_tokens": 228054,
+            "fresh_input_tokens": 95436,
+            "output_tokens": 619,
+            "total_tokens": 324109,
+            "model_cost_usd": 0.03701992,
+            "compute_cost_usd": 0.00112781881559975,
+            "total_cost_usd": 0.03814773881559975,
+            "runtime_seconds": 196.142402713,
+            "machine_type": "e2-small",
+            "provisioning_model": "STANDARD",
+            "pricing_version": "2026-08-30",
+            "pricing_effective_date": "2026-08-30",
+            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+            "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
+          },
+          {
+            "kind": "worker",
+            "model_requested": "gemini-3.5-flash-lite",
+            "usage_source": "ESTIMATED",
+            "model_cost_usd": 0,
+            "compute_cost_usd": 0.00648639549758675,
+            "total_cost_usd": 0.00648639549758675,
+            "runtime_seconds": 1128.068782189,
             "machine_type": "e2-small",
             "provisioning_model": "STANDARD",
             "pricing_version": "2026-08-30",
