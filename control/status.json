@@ -1,6 +1,16 @@
 {
-  "updated_at": "2026-08-31T06:59:40Z",
-  "yard_state": "idle",
+  "updated_at": "2026-09-02T17:17:09Z",
+  "yard_state": "running",
+  "active_jobs": [
+    {
+      "id": "telltail-protocol-test",
+      "state": "running",
+      "repo": "https://github.com/example/example.git",
+      "base_branch": "main",
+      "result_branch": "gary/telltail-protocol-test-8c1ae7bc",
+      "started_at": "2026-09-02T17:17:09Z"
+    }
+  ],
   "recent_jobs": [
     {
       "id": "resolve-google-a-w1-j3",
