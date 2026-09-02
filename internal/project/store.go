@@ -405,6 +405,12 @@ func (s Store) SaveState(id string, state ProjectState) error {
 	if state.ProjectID != id || !validProjectState(state.State) {
 		return fmt.Errorf("%w: invalid state", ErrProjectMissing)
 	}
+	if p.State == "ARCHIVED" && state.State != "ARCHIVED" {
+		return fmt.Errorf("%w: terminal project state ARCHIVED cannot transition to %s", ErrProjectNotAcceptable, state.State)
+	}
+	if p.State == "ACCEPTED" && state.State != "ACCEPTED" && state.State != "ARCHIVED" {
+		return fmt.Errorf("%w: terminal project state ACCEPTED cannot transition to %s", ErrProjectNotAcceptable, state.State)
+	}
 	state.Schema = StateSchema
 	state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	if err := writeJSON(filepath.Join(s.projectDir(id), "state.json"), state); err != nil {
