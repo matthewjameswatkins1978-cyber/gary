@@ -41,10 +41,25 @@ func validateAcceptanceCommand(command string) bool {
 	if command == "" || len(command) > maxAcceptanceCommandBytes {
 		return false
 	}
-	// Acceptance commands are trusted verifier code supplied by the control
-	// plane. Reject transport-breaking payloads, but do not accidentally turn
-	// normal Bash into an unsupported mini-language.
-	return !strings.ContainsAny(command, "\x00\r\n")
+	if strings.ContainsAny(command, "\x00\r\n") {
+		return false
+	}
+
+	// Acceptance is verifier code, so normal shell composition is allowed:
+	// pipes, &&, ;, quoting, command substitution and environment prefixes are
+	// ordinary ways to express checks. The Yardmaster is still not allowed to
+	// smuggle unrelated network/admin/destructive work into the control plane.
+	lower := strings.ToLower(" " + command + " ")
+	for _, forbidden := range []string{
+		" curl ", " wget ", " ssh ", " scp ", " sftp ", " nc ", " ncat ", " socat ",
+		" sudo ", " su ", " git push ", " gh ", " mkfs", " shutdown ", " reboot ",
+		" rm -rf /", " rm -rf ~", " rm -rf $home", " git reset --hard", " git clean -f",
+	} {
+		if strings.Contains(lower, forbidden) {
+			return false
+		}
+	}
+	return true
 }
 
 type inboxStatus struct {
