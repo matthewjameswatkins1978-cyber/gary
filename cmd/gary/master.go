@@ -94,7 +94,7 @@ type masterPlannerHistoryJob struct {
 func compactMasterHistory(waves []masterWaveRecord) string {
 	history := make([]masterPlannerHistory, 0, len(waves))
 	for _, wave := range waves {
-		record := masterPlannerHistory{Wave: wave.Wave, Plan: truncatePlannerText(wave.PlanSummary, 1200), Integrated: wave.Integrated}
+		record := masterPlannerHistory{Wave: wave.Wave, Plan: truncatePlannerText(wave.PlanSummary, 1000), Integrated: wave.Integrated}
 		for _, result := range wave.Results {
 			record.Results = append(record.Results, masterPlannerHistoryJob{
 				JobID: result.JobID, Status: result.FinalStatus, BatchJobID: result.BatchJobID, BatchState: result.BatchState,
@@ -513,7 +513,7 @@ PLANNER-SPECIFIC RULES
 - Respect dependency and priority ordering in the master brief. If P0/blocker verification is still unresolved, do not schedule P1/P2 or cosmetic work in the same wave unless it is truly independent and cannot mask or complicate P0.
 - Each job must be bounded and have one or more direct executable acceptance commands.
 - Keep each job task concise and under 1600 characters. It must describe one outcome, a small file scope, and one or two direct acceptance commands.
-- Give each job one or two simple direct acceptance checks that can be rerun mechanically in a fresh clone. GARY validates the command form before dispatch; do not work around that validation. Put any necessary setup or exploration in the child task.
+- Give each job one or two simple direct acceptance checks that can be rerun mechanically in a fresh clone. Ordinary verifier shell composition such as pipes, &&, quoting, environment prefixes, temporary directories and command substitution is allowed when it genuinely expresses the check. Do not put network access, repository pushes, privilege changes, destructive administration or unrelated work in acceptance. Put setup or exploration in the child task instead.
 - Jobs may inspect or modify the repository as needed, but keep scopes non-overlapping where practical.
 - If prior workers failed, replan around the evidence rather than repeating them blindly.
 - Set done=true only when the master objective is genuinely satisfied in the current repository state.
