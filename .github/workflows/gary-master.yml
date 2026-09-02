@@ -10,11 +10,6 @@ permissions:
   contents: write
   id-token: write
 
-# Temporary owner-termination gate for an orphaned legacy master run.
-concurrency:
-  group: gary-master
-  cancel-in-progress: true
-
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -78,7 +73,7 @@ jobs:
       # Serialize repeat dispatches of the same master identity, while allowing
       # unrelated projects/master jobs to proceed independently.
       group: gary-master-${{ matrix.id }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
