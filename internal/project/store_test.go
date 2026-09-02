@@ -203,6 +203,9 @@ func TestAmendmentVersionsAndArchiveLifecycle(t *testing.T) {
 	if err := store.AcceptProject("amend", "final acceptance passed"); err != nil {
 		t.Fatal(err)
 	}
+	if err := store.SaveState("amend", ProjectState{ProjectID: "amend", State: "PLANNING", CurrentPhase: "planning"}); !strings.Contains(err.Error(), ErrProjectNotAcceptable.Error()) {
+		t.Fatalf("accepted project was resurrected to planning: %v", err)
+	}
 	if err := store.ArchiveProject("amend"); err != nil {
 		t.Fatal(err)
 	}
@@ -215,6 +218,9 @@ func TestAmendmentVersionsAndArchiveLifecycle(t *testing.T) {
 	}
 	if _, err := store.AddAmendment("amend", []byte("post-acceptance change")); !strings.Contains(err.Error(), ErrProjectNotAcceptable.Error()) {
 		t.Fatalf("archived project accepted amendment: %v", err)
+	}
+	if err := store.SaveState("amend", ProjectState{ProjectID: "amend", State: "FAILED", CurrentPhase: "failed"}); !strings.Contains(err.Error(), ErrProjectNotAcceptable.Error()) {
+		t.Fatalf("archived project was resurrected to failed: %v", err)
 	}
 }
 
