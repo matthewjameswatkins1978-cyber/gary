@@ -22,7 +22,31 @@ const defaultInboxPath = "gary/inbox/pending"
 
 var inboxID = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,29}$`)
 var inboxBranch = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$`)
-var inboxCommand = regexp.MustCompile(`^[A-Za-z0-9_./:=+@%,-\[\]]+( [A-Za-z0-9_./:=+@%,-\[\]]+)*$`)
+var inboxCommand = regexp.MustCompile(`^[A-Za-z0-9_./:=+@%,\[\]-]+( [A-Za-z0-9_./:=+@%,\[\]-]+)*package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/githubapp"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
+)
+
+const defaultInboxPath = "gary/inbox/pending"
+
+var inboxID = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,29}$`)
+var inboxBranch = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$`)
+)
 
 func acceptanceCommandSegments(command string) []string {
 	raw := strings.Split(command, "&&")
