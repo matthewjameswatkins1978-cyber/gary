@@ -1,5 +1,5 @@
 {
-  "id": "gary-rust-worker-canary-20260902",
+  "id": "rust-worker-canary-20260902",
   "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
   "base_branch": "master",
   "task": "Create the smallest possible Rust crate at the repository root: Cargo.toml, src/lib.rs, and one unit test proving a trivial function. Do not modify or delete any existing Go files. This is an execution canary only; keep the patch to those Rust files.",
