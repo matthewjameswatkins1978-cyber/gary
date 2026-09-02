@@ -19,6 +19,9 @@ func TestFailedMasterStateIsRetryable(t *testing.T) {
 	if isFinalMasterState("failed") {
 		t.Fatal("failed master job should be retryable")
 	}
+	if isFinalMasterState("paused") {
+		t.Fatal("paused master job should be resumable")
+	}
 }
 
 func TestEnsureMasterCostLabelsOldWaveTotalsLegacy(t *testing.T) {
@@ -87,6 +90,24 @@ func TestLoadMasterManifestAcceptsProjectIDWithoutBriefPath(t *testing.T) {
 	}
 	if got.ProjectID != "book-burner" || brief != "" {
 		t.Fatalf("project manifest = %+v brief=%q", got, brief)
+	}
+}
+
+func TestMasterWorkflowAutoContinuesPausedRunsAndPersistsProjectContext(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "gary-master.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(data)
+	for _, required := range []string{
+		"GARY_MASTER_RUN_SLICES",
+		`paused)`,
+		"gary/projects",
+		"Continuing paused master",
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Fatalf("master workflow missing long-project continuity marker %q", required)
+		}
 	}
 }
 
