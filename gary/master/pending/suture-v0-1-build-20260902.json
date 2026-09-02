@@ -1,5 +1,6 @@
 {
   "id": "suture-v0-1-build-20260902",
+  "project_id": "suture-v0-1-build-20260902",
   "repo": "https://github.com/matthewjameswatkins1978-cyber/Suture.git",
   "base_branch": "main",
   "staging_branch": "gary/master-suture-v0-1-buil-84399e",
@@ -10,6 +11,5 @@
     "cargo fmt --check",
     "cargo test",
     "cargo clippy --all-targets --all-features -- -D warnings"
-  ],
-  "project_id": "suture-v0-1-build-20260902"
+  ]
 }
