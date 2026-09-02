@@ -101,9 +101,9 @@ Elapsed time and raw attempt count are observations, not project-success criteri
 
 ## Evidence and acceptance
 
-A worker saying "done" is not acceptance. GARY should prefer mechanically observed Git, build, test, runtime, and cost evidence where machinery can measure those facts directly.
+A worker saying "done" is not acceptance, and neither is a Batch terminal label. A recoverable child candidate is checkpointed, then GARY's trusted control layer reruns the required mechanical checks on the exact candidate in a clean workspace. If those checks pass, Yardmaster performs a bounded merge-quality inspection of the actual change. Only a quality `PASS` plus trusted mechanical verification makes the child result accepted and eligible for staging integration. `SMALL_FIX`, `MAJOR_FIX`, and `REPLAN` preserve useful work while routing the appropriate correction.
 
-Master completion requires project-level acceptance against the integrated state, plus independent semantic inspection where configured. Ordinary workers do not gain merge or production authority merely by completing a child job.
+Master completion is a separate gate: project-level acceptance runs against the integrated staging state, followed by independent semantic inspection where configured. Ordinary workers do not gain merge or production authority merely by completing a child job.
 
 Structured result and master status locations are implementation details; use the current CLI and `docs/README.md` rather than historical verification notes when exact locations matter.
 
