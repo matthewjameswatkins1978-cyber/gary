@@ -1,0 +1,30 @@
+name: Telltail telemetry probe
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/telltail-telemetry-probe.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GARY_WIF_PROVIDER }}
+          service_account: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read exact telemetry object
+        run: |
+          set -euo pipefail
+          OBJ="gs://gary-batch-results-418146339023/runs/telltail-v03-gar-w1-j1-18982f3b/attempt-1/telemetry.json"
+          echo "OBJECT=$OBJ"
+          gcloud storage cat "$OBJ"
