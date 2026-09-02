@@ -1,0 +1,27 @@
+{
+  "id": "rust-clean-canary-20260902",
+  "manifest": "gary/inbox/pending/rust-clean-canary-20260902.json",
+  "state": "accepted",
+  "updated_at": "2026-09-02T13:11:51Z",
+  "batch_job_id": "gary-run-rust-clean-canary-20260902-1-20260902-130634",
+  "branch": "gary/rust-clean-canary-20260902-8d183dbb",
+  "commit_sha": "0f9e796",
+  "detail": "local verification passed",
+  "transitions": [
+    {
+      "state": "queued",
+      "at": "2026-09-02T13:06:33Z",
+      "detail": "accepted by inbox"
+    },
+    {
+      "state": "running",
+      "at": "2026-09-02T13:06:33Z",
+      "detail": "dispatching through Batch"
+    },
+    {
+      "state": "accepted",
+      "at": "2026-09-02T13:11:51Z",
+      "detail": "local verification passed"
+    }
+  ]
+}
