@@ -1,9 +1,12 @@
 {
   "id": "rust-worker-canary-20260902",
   "manifest": "gary/inbox/pending/rust-worker-canary-20260902.json",
-  "state": "queued",
-  "updated_at": "2026-09-02T12:56:11Z",
-  "detail": "explicit recovery queued after controller cancellation; prior Batch succeeded with fixture acceptance error",
+  "state": "accepted",
+  "updated_at": "2026-09-02T13:03:14Z",
+  "batch_job_id": "gary-run-rust-worker-canary-20260902-1-20260902-125736",
+  "branch": "gary/rust-worker-canary-20260902-4bee42fb",
+  "commit_sha": "fee7310",
+  "detail": "local verification passed",
   "transitions": [
     {
       "state": "queued",
@@ -69,6 +72,21 @@
       "state": "queued",
       "at": "2026-09-02T12:56:11Z",
       "detail": "explicit recovery queued after controller cancellation; prior Batch succeeded with fixture acceptance error"
+    },
+    {
+      "state": "queued",
+      "at": "2026-09-02T12:57:34Z",
+      "detail": "accepted by inbox"
+    },
+    {
+      "state": "running",
+      "at": "2026-09-02T12:57:34Z",
+      "detail": "dispatching through Batch"
+    },
+    {
+      "state": "accepted",
+      "at": "2026-09-02T13:03:14Z",
+      "detail": "local verification passed"
     }
   ]
 }
