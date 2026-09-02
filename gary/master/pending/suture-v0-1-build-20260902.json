@@ -4,10 +4,12 @@
   "base_branch": "main",
   "staging_branch": "gary/master-suture-v0-1-buil-84399e",
   "brief_path": "gary/master/pending/suture-v0.1-build-20260902.md",
-
   "max_waves": 6,
   "max_jobs_per_wave": 4,
-
-  "max_workers": 2
-
+  "max_workers": 2,
+  "acceptance": [
+    "cargo fmt --check",
+    "cargo test",
+    "cargo clippy --all-targets --all-features -- -D warnings"
+  ]
 }
