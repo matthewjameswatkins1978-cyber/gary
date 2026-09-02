@@ -248,7 +248,25 @@ func cmdMaster() {
 					failMaster(status, fmt.Errorf("final acceptance: %w", err))
 				}
 			}
-			if err := project.DefaultStore().AcceptProject(projectID, "project-level master acceptance passed"); err != nil {
+			status.State = "final-inspection"
+			_ = saveMasterStatus(status)
+			inspection, inspectionCost, err := runFinalSemanticInspection(cfg, manifest, string(projectCtx.Packet), stagingBranch)
+			status.Cost.Add(inspectionCost)
+			if err != nil {
+				failMaster(status, fmt.Errorf("final semantic inspection: %w", err))
+			}
+			if !inspection.Done {
+				status.State = "planning"
+				status.Summary = "Independent final inspection rejected completion: " + strings.TrimSpace(inspection.Summary)
+				status.PlannerMemory = compactPlannerMemory("FINAL INSPECTOR REJECTED COMPLETION: "+inspection.Memory+"\n"+inspection.Summary, status.PlannerMemory)
+				if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "PLANNING", CurrentPhase: "planning", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: "final semantic inspection rejected completion"}); err != nil {
+					failMaster(status, fmt.Errorf("project state after final inspection rejection: %w", err))
+				}
+				_ = saveMasterStatus(status)
+				fmt.Printf("[inspector] REJECTED completion: %s\n", inspection.Summary)
+				continue
+			}
+			if err := project.DefaultStore().AcceptProject(projectID, "project-level mechanical and independent semantic acceptance passed"); err != nil {
 				failMaster(status, fmt.Errorf("project acceptance: %w", err))
 			}
 			status.State = "done"
