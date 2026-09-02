@@ -12,6 +12,7 @@ import (
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/supervisor"
 )
 
 func TestExtractMarkerFromBatchLogsFiltersUIDAndRestoresOrder(t *testing.T) {
@@ -31,8 +32,8 @@ func TestExtractMarkerFromBatchLogsFiltersUIDAndRestoresOrder(t *testing.T) {
 }
 
 func TestRuntimeBudgets(t *testing.T) {
-	if defaultWorkerMaxRunSec != 600 {
-		t.Fatalf("default worker runtime = %d, want 600", defaultWorkerMaxRunSec)
+	if defaultWorkerMaxRunSec != 3600 {
+		t.Fatalf("emergency worker runtime ceiling = %d, want 3600", defaultWorkerMaxRunSec)
 	}
 	if maxAttempts != 8 {
 		t.Fatalf("worker safety attempt limit = %d, want 8", maxAttempts)
@@ -43,8 +44,26 @@ func TestRuntimeBudgets(t *testing.T) {
 	if batchSchedulingGraceSec != 900 {
 		t.Fatalf("Batch scheduling grace = %d, want 900", batchSchedulingGraceSec)
 	}
+	if workerSupervisionInterval != 5*time.Minute {
+		t.Fatalf("worker supervision interval = %s, want 5m", workerSupervisionInterval)
+	}
 	if yardmasterPlannerTimeout != 5*time.Minute {
 		t.Fatalf("Yardmaster planner timeout = %s, want 5m", yardmasterPlannerTimeout)
+	}
+}
+
+func TestFallbackSupervisionPreservesWork(t *testing.T) {
+	running := supervisor.Telemetry{SchemaVersion: 1, JobID: "job", ReviewID: "r1", Phase: "running", Turn: 1}
+	d := fallbackSupervisionDecision(running, 1, errors.New("temporary supervisor outage"))
+	if d.Action != supervisor.ActionContinue {
+		t.Fatalf("running fallback action = %s, want CONTINUE", d.Action)
+	}
+	ready := running
+	ready.ReviewID = "r2"
+	ready.Phase = "candidate_ready"
+	d = fallbackSupervisionDecision(ready, 2, errors.New("temporary supervisor outage"))
+	if d.Action != supervisor.ActionReadyForInspection {
+		t.Fatalf("candidate fallback action = %s, want READY_FOR_INSPECTION", d.Action)
 	}
 }
 
