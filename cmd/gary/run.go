@@ -687,40 +687,85 @@ func runJobWithModelAttempts(cfg *config.Config, job *jobs.Job, prefix, model st
 				}
 			} else if closeResult {
 				workDir := filepath.Join(closerDir, "repo")
-				commitSHA, _ := gitops.CommitSHA(workDir)
-				if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
+				quality, qualityCost, qualityErr := runChildQualityInspection(cfg, job, workDir)
+				runCost.Add(qualityCost)
+				if qualityErr != nil {
 					finalStatus = "BLOCKED"
-					lastFailure = fmt.Sprintf("GitHub writeback push failed for %s: %v", garyBranch, err)
-					logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
-				} else {
-					duration := time.Since(submittedAt)
-					closerUsed = true
-					finalStatus = "DONE"
-
-					result := jobs.RunResult{
-						JobID:                job.ID,
-						ProjectID:            job.ProjectID,
-						MasterPacketDigest:   job.MasterPacketDigest,
-						ProjectManualVersion: job.ProjectManualVersion,
-						Branch:               garyBranch,
-						CommitSHA:            commitSHA,
-						Accepted:             true,
-					Verification:         "trusted-independent",
-						DurationSecs:         duration.Seconds(),
-						Attempts:             actualAttempts,
-						RepairCount:          repairCount,
-						Escalated:            escalated,
-						CloserUsed:           closerUsed,
-						FinalStatus:          "DONE",
-						ModelCostEstimated:   runCost.ModelCostUSD,
-						ComputeCostEstimated: runCost.ComputeCostUSD,
-						TotalCostEstimated:   runCost.TotalCostUSD,
-						Cost:                 runCost,
+					lastFailure = "Closer candidate passed trusted mechanics but Yardmaster quality inspection was unavailable: " + qualityErr.Error()
+					logPrint(prefix, "  QUALITY GATE BLOCKED: %s", lastFailure)
+				} else if classifyChildQuality(quality) != childQualityPass {
+					commitSHA, _ := gitops.CommitSHA(workDir)
+					if pushErr := gitops.Push(workDir, "origin", garyBranch); pushErr != nil {
+						finalStatus = "BLOCKED"
+						lastFailure = fmt.Sprintf("Closer quality review %s; checkpoint push failed: %v", strings.TrimSpace(quality.Summary), pushErr)
+					} else {
+						duration := time.Since(submittedAt)
+						result := jobs.RunResult{
+							JobID:                job.ID,
+							ProjectID:            job.ProjectID,
+							MasterPacketDigest:   job.MasterPacketDigest,
+							ProjectManualVersion: job.ProjectManualVersion,
+							ArtifactPrefix:       gcsPath + "/closer",
+							Branch:               garyBranch,
+							CommitSHA:            commitSHA,
+							Accepted:             false,
+							Verification:         "trusted-independent",
+							QualityReview:        strings.TrimSpace(quality.Summary),
+							DurationSecs:         duration.Seconds(),
+							Attempts:             actualAttempts,
+							RepairCount:          repairCount,
+							Escalated:            true,
+							CloserUsed:           true,
+							FinalStatus:          "REPLAN_REQUIRED",
+							FailureReason:        compactFailureLogs(strings.TrimSpace(quality.Summary)+"\n"+strings.TrimSpace(quality.Memory), 4000),
+							ModelCostEstimated:   runCost.ModelCostUSD,
+							ComputeCostEstimated: runCost.ComputeCostUSD,
+							TotalCostEstimated:   runCost.TotalCostUSD,
+							Cost:                 runCost,
+						}
+						saveRunResult(cfg, result)
+						writeLedger(cfg, result, model+"+"+cfg.CloserModel)
+						snapshotJobComplete(job.ID, result)
+						return result
 					}
-					saveRunResult(cfg, result)
-					writeLedger(cfg, result, model+"+"+cfg.CloserModel)
-					snapshotJobComplete(job.ID, result)
-					return result
+				} else {
+					commitSHA, _ := gitops.CommitSHA(workDir)
+					if err := gitops.Push(workDir, "origin", garyBranch); err != nil {
+						finalStatus = "BLOCKED"
+						lastFailure = fmt.Sprintf("GitHub writeback push failed for %s: %v", garyBranch, err)
+						logPrint(prefix, "  SERVICE/ENVIRONMENT BLOCKED: %s", lastFailure)
+					} else {
+						duration := time.Since(submittedAt)
+						closerUsed = true
+						finalStatus = "DONE"
+
+						result := jobs.RunResult{
+							JobID:                job.ID,
+							ProjectID:            job.ProjectID,
+							MasterPacketDigest:   job.MasterPacketDigest,
+							ProjectManualVersion: job.ProjectManualVersion,
+							ArtifactPrefix:       gcsPath + "/closer",
+							Branch:               garyBranch,
+							CommitSHA:            commitSHA,
+							Accepted:             true,
+							Verification:         "trusted-independent",
+							QualityReview:        "PASS: " + strings.TrimSpace(quality.Summary),
+							DurationSecs:         duration.Seconds(),
+							Attempts:             actualAttempts,
+							RepairCount:          repairCount,
+							Escalated:            escalated,
+							CloserUsed:           closerUsed,
+							FinalStatus:          "DONE",
+							ModelCostEstimated:   runCost.ModelCostUSD,
+							ComputeCostEstimated: runCost.ComputeCostUSD,
+							TotalCostEstimated:   runCost.TotalCostUSD,
+							Cost:                 runCost,
+						}
+						saveRunResult(cfg, result)
+						writeLedger(cfg, result, model+"+"+cfg.CloserModel)
+						snapshotJobComplete(job.ID, result)
+						return result
+					}
 				}
 			} else {
 				finalStatus = "FAILED"
@@ -1513,14 +1558,20 @@ func runCloser(cfg *config.Config, closerTask string, tmpDir string, job *jobs.J
 	closerCost = batchCostComponent(cfg.CloserModel, usageText, batch.ObservedRuntimeSeconds(status, startedAt, finishedAt), "e2-standard-4")
 	closerCost.Kind = "closer"
 
-	if status.State() != "SUCCEEDED" {
-		closerCost.UnmeteredReason = appendCostReason(closerCost.UnmeteredReason, "closer Batch job ended in "+status.State())
-		return false, closerCost, fmt.Errorf("closer job %s", status.State())
-	}
-
 	patchData := downloadGCSFile(tmpDir, attemptGCSPath+"/result.patch")
 	if patchData == "" {
+		patchData = extractFromBatchLogs(cfg.GCPProject, cfg.GCPRegion, jobName, "GARY_PATCH_B64")
+	}
+	if patchData == "" {
+		if status.State() != "SUCCEEDED" {
+			closerCost.UnmeteredReason = appendCostReason(closerCost.UnmeteredReason, "closer Batch job ended in "+status.State()+" with no recoverable candidate")
+			return false, closerCost, fmt.Errorf("closer job %s with no recoverable candidate", status.State())
+		}
 		return false, closerCost, fmt.Errorf("no patch from closer")
+	}
+	if status.State() != "SUCCEEDED" {
+		closerCost.UnmeteredReason = appendCostReason(closerCost.UnmeteredReason, "closer Batch job ended in "+status.State()+" but a candidate was recovered and independently verified")
+		logPrint(prefix, "  CLOSER BATCH %s BUT CANDIDATE EXISTS — independently verifying candidate", status.State())
 	}
 
 	return runLocalAcceptance(tmpDir, job, garyBranch, patchData, prefix), closerCost, nil
