@@ -186,6 +186,7 @@ func SubmitJob(cfg JobConfig) (string, error) {
 		"--location", cfg.Region,
 		"--project", cfg.Project,
 		"--config", tmpFile.Name(),
+		"--quiet",
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), gcloudSubmissionTimeout)
@@ -227,6 +228,7 @@ func SubmitCodingJob(cfg CodingJobConfig) (string, error) {
 		"--location", cfg.Region,
 		"--project", cfg.Project,
 		"--config", tmpFile.Name(),
+		"--quiet",
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), gcloudSubmissionTimeout)
