@@ -510,8 +510,18 @@ and background. Preserve ambiguity and contradictions instead of inventing
 answers. Record important requirements with stable IDs and source locators into
 the supplied packet digest. Return only one JSON object matching the
 gary.project-manual.v1 structure. Use status values KNOWN, INFERRED, UNRESOLVED,
-or CONTRADICTORY where useful. Keep the manual operational and compact, not a
-generic prose summary.
+or CONTRADICTORY where useful.
+
+The immutable master packet is persisted separately and remains the source of
+truth. The manual is an operational index for planning and narrow child
+contexts, NOT a restatement of the packet. Preserve all safety-critical,
+acceptance-critical, architectural, and scope-boundary semantics, but merge
+closely related details where that does not weaken meaning. Keep the entire
+manual compact enough to finish as valid JSON. Prefer concise requirement text,
+avoid prose duplication across categories, keep capability lists short, and
+emit completed_capabilities and remaining_capabilities as arrays of strings.
+Every requirement-like item must have usable non-empty text; omit genuinely
+empty items rather than emitting placeholders.
 
 PROJECT ID: %s
 PACKET DIGEST: %s
@@ -537,7 +547,14 @@ func callProjectYardmasterJSON(ctx context.Context, cfg *config.Config, prompt s
 	if err != nil {
 		return "", fmt.Errorf("project Yardmaster auth: %w", err)
 	}
-	body, err := json.Marshal(yardmasterRequestBody(prompt))
+	requestBody := yardmasterRequestBody(prompt)
+	if generationConfig, ok := requestBody["generationConfig"].(map[string]interface{}); ok {
+		// Durable intake can legitimately need more output than a one-wave plan.
+		// Keep the planner's normal 8k budget unchanged while allowing the one-time
+		// project manual to finish as valid JSON for large master packets.
+		generationConfig["maxOutputTokens"] = 32768
+	}
+	body, err := json.Marshal(requestBody)
 	if err != nil {
 		return "", err
 	}
