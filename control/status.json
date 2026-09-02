@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-02T10:56:28Z",
+  "updated_at": "2026-09-02T12:29:27Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -41,6 +41,14 @@
       "result_branch": "gary/judgement-call-b-w10-j1-a9ff29c1",
       "started_at": "2026-08-30T03:22:32Z",
       "attempts": 2
+    },
+    {
+      "id": "rust-worker-canary-20260902",
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary.git",
+      "base_branch": "master",
+      "result_branch": "gary/rust-worker-canary-20260902-7097731c",
+      "started_at": "2026-09-02T12:29:27Z"
     }
   ],
   "recent_jobs": [
