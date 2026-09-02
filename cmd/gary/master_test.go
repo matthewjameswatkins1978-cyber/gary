@@ -190,14 +190,32 @@ func TestValidateMasterPlan(t *testing.T) {
 	}
 }
 
-func TestValidateMasterPlanAllowsSafeChainedChecks(t *testing.T) {
+func TestValidateMasterPlanAllowsOrdinaryShellVerifierComposition(t *testing.T) {
 	plan := &masterPlan{Jobs: []masterPlanJob{{
 		ID: "docs", Task: "Verify required documentation exists.",
-		Acceptance: []string{"test -f README.md && test -f docs/ARCHITECTURE.md && test -f docs/PROTOCOL.md"},
+		Acceptance: []string{
+			"test -f README.md && test -f docs/ARCHITECTURE.md && test -f docs/PROTOCOL.md",
+			"go run ./cmd/telltail version | grep -Eiq 'telltail.*0\\.3'",
+			"tmpd=\"$(mktemp -d)\"; test -d \"$tmpd\"",
+			"GOOS=windows GOARCH=amd64 go build ./cmd/telltail",
+		},
 		EstimatedMinutes: 12,
 	}}}
 	if err := validateMasterPlan(plan, 4); err != nil {
-		t.Fatalf("safe chained acceptance was rejected: %v", err)
+		t.Fatalf("ordinary safe shell acceptance was rejected: %v", err)
+	}
+}
+
+func TestValidateAcceptanceRejectsDangerousControlPlaneActions(t *testing.T) {
+	for _, command := range []string{
+		"go test ./... ; curl example.com",
+		"git push origin main",
+		"sudo apt-get install something",
+		"rm -rf /",
+	} {
+		if validateAcceptanceCommand(command) {
+			t.Fatalf("dangerous acceptance command was allowed: %q", command)
+		}
 	}
 }
 
@@ -222,16 +240,23 @@ func TestMasterPlanJSONCarriesWorkerEstimate(t *testing.T) {
 }
 
 func TestValidateIntegrableMasterResult(t *testing.T) {
-	good := jobs.RunResult{JobID: "good", FinalStatus: "DONE", Accepted: true, Branch: "gary/good", CommitSHA: "abc123"}
+	good := jobs.RunResult{
+		JobID: "good", FinalStatus: "DONE", Accepted: true,
+		Verification: "trusted-independent", QualityReview: "PASS: merge-worthy",
+		Branch: "gary/good", CommitSHA: "abc123",
+	}
 	if err := validateIntegrableMasterResult(good); err != nil {
-		t.Fatalf("accepted pushed result rejected: %v", err)
+		t.Fatalf("fully accepted pushed result rejected: %v", err)
 	}
 
 	cases := []jobs.RunResult{
 		{JobID: "done-unaccepted", FinalStatus: "DONE", Accepted: false, Branch: "gary/x", CommitSHA: "abc123"},
-		{JobID: "accepted-failed", FinalStatus: "FAILED", Accepted: true, Branch: "gary/x", CommitSHA: "abc123"},
-		{JobID: "accepted-no-branch", FinalStatus: "DONE", Accepted: true, CommitSHA: "abc123"},
-		{JobID: "accepted-no-commit", FinalStatus: "DONE", Accepted: true, Branch: "gary/x"},
+		{JobID: "accepted-failed", FinalStatus: "FAILED", Accepted: true, Verification: "trusted-independent", QualityReview: "PASS", Branch: "gary/x", CommitSHA: "abc123"},
+		{JobID: "accepted-no-verification", FinalStatus: "DONE", Accepted: true, QualityReview: "PASS", Branch: "gary/x", CommitSHA: "abc123"},
+		{JobID: "accepted-no-quality", FinalStatus: "DONE", Accepted: true, Verification: "trusted-independent", Branch: "gary/x", CommitSHA: "abc123"},
+		{JobID: "accepted-rejected-quality", FinalStatus: "DONE", Accepted: true, Verification: "trusted-independent", QualityReview: "SMALL_FIX: tidy error path", Branch: "gary/x", CommitSHA: "abc123"},
+		{JobID: "accepted-no-branch", FinalStatus: "DONE", Accepted: true, Verification: "trusted-independent", QualityReview: "PASS", CommitSHA: "abc123"},
+		{JobID: "accepted-no-commit", FinalStatus: "DONE", Accepted: true, Verification: "trusted-independent", QualityReview: "PASS", Branch: "gary/x"},
 	}
 	for _, tc := range cases {
 		if err := validateIntegrableMasterResult(tc); err == nil {
@@ -242,6 +267,24 @@ func TestValidateIntegrableMasterResult(t *testing.T) {
 	for _, status := range []string{"FAILED", "BLOCKED", "REPLAN_REQUIRED", "BUDGET_STOPPED"} {
 		if err := validateIntegrableMasterResult(jobs.RunResult{JobID: status, FinalStatus: status}); err != nil {
 			t.Fatalf("ordinary non-accepted result %s should remain replannable: %v", status, err)
+		}
+	}
+}
+
+func TestChildQualityDisposition(t *testing.T) {
+	cases := []struct {
+		plan *masterPlan
+		want childQualityDisposition
+	}{
+		{&masterPlan{Done: true, Summary: "PASS: sound"}, childQualityPass},
+		{&masterPlan{Done: false, Summary: "SMALL_FIX: one error path"}, childQualitySmallFix},
+		{&masterPlan{Done: false, Summary: "MAJOR_FIX: incomplete semantics"}, childQualityMajorFix},
+		{&masterPlan{Done: false, Summary: "REPLAN: wrong dependency boundary"}, childQualityReplan},
+		{&masterPlan{Done: false, Summary: "unclear rejection"}, childQualityMajorFix},
+	}
+	for _, tc := range cases {
+		if got := classifyChildQuality(tc.plan); got != tc.want {
+			t.Fatalf("classifyChildQuality(%q) = %s, want %s", tc.plan.Summary, got, tc.want)
 		}
 	}
 }
@@ -317,7 +360,7 @@ func TestCompactMasterHistoryOmitsRawCostTelemetry(t *testing.T) {
 	history := compactMasterHistory([]masterWaveRecord{{
 		Wave:        1,
 		PlanSummary: strings.Repeat("x", 1400),
-		Results:     []jobs.RunResult{{JobID: "job-1", FinalStatus: "DONE", Accepted: true, Attempts: 1, CommitSHA: "abc123", TotalCostEstimated: 0.12, EstimatedMinutes: 5, DurationSecs: 312}},
+		Results:     []jobs.RunResult{{JobID: "job-1", FinalStatus: "DONE", Accepted: true, Verification: "trusted-independent", QualityReview: "PASS: merge-worthy", Attempts: 1, CommitSHA: "abc123", TotalCostEstimated: 0.12, EstimatedMinutes: 5, DurationSecs: 312}},
 	}})
 	if len(history) >= 1400 {
 		t.Fatalf("compact history remained too large: %d bytes", len(history))
