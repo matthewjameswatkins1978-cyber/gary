@@ -52,6 +52,7 @@ type Project struct {
 	Repo                 string `json:"repo,omitempty"`
 	BaseBranch           string `json:"base_branch,omitempty"`
 	State                string `json:"state"`
+	Generation           int    `json:"generation,omitempty"`
 	MasterPacketDigest   string `json:"master_packet_digest"`
 	MasterPacketVersion  int    `json:"master_packet_version"`
 	ProjectManualVersion int    `json:"project_manual_version"`
@@ -59,6 +60,8 @@ type Project struct {
 	CreatedAt            string `json:"created_at"`
 	UpdatedAt            string `json:"updated_at"`
 	AcceptedAt           string `json:"accepted_at,omitempty"`
+	CancelledAt          string `json:"cancelled_at,omitempty"`
+	ArchivedAt           string `json:"archived_at,omitempty"`
 }
 
 // ProjectState separates transient progress from the durable project manual.
@@ -66,12 +69,15 @@ type ProjectState struct {
 	Schema                string        `json:"schema"`
 	ProjectID             string        `json:"project_id"`
 	State                 string        `json:"state"`
+	Generation            int           `json:"generation,omitempty"`
+	Activities            []string      `json:"activities,omitempty"`
 	YardmasterState       string        `json:"yardmaster_state,omitempty"`
 	Completion            string        `json:"completion,omitempty"`
 	ParkReason            string        `json:"park_reason,omitempty"`
 	WaitingFor            string        `json:"waiting_for,omitempty"`
 	ExternalDependency    string        `json:"external_dependency,omitempty"`
 	BlockedUntil          string        `json:"blocked_until,omitempty"`
+	Blocker               string        `json:"blocker,omitempty"`
 	CurrentPhase          string        `json:"current_phase,omitempty"`
 	CurrentStrategy       string        `json:"current_strategy,omitempty"`
 	CompletedCapabilities []string      `json:"completed_capabilities,omitempty"`
@@ -79,6 +85,9 @@ type ProjectState struct {
 	OutstandingWork       []string      `json:"outstanding_work,omitempty"`
 	Watchdog              WatchdogState `json:"watchdog,omitempty"`
 	LastEvent             string        `json:"last_event,omitempty"`
+	LastEventID           string        `json:"last_event_id,omitempty"`
+	Reason                string        `json:"reason,omitempty"`
+	UpdatedBy             string        `json:"updated_by,omitempty"`
 	UpdatedAt             string        `json:"updated_at"`
 }
 
@@ -207,16 +216,22 @@ func (s Store) CreateProject(id, name, repo, baseBranch string, packet []byte) (
 	if err := os.MkdirAll(filepath.Join(dir, "feedback"), 0o755); err != nil {
 		return Project{}, err
 	}
+	if err := os.MkdirAll(filepath.Join(dir, "events"), 0o755); err != nil {
+		return Project{}, err
+	}
 	if err := os.WriteFile(filepath.Join(dir, "source", "MASTER_PACKET.md"), packet, 0o644); err != nil {
 		return Project{}, err
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	p := Project{Schema: ProjectSchema, ProjectID: id, ProjectName: name, Repo: repo, BaseBranch: baseBranch, State: "ACTIVE", MasterPacketDigest: Digest(packet), MasterPacketVersion: 1, CreatedAt: now, UpdatedAt: now}
-	state := ProjectState{Schema: StateSchema, ProjectID: id, State: "ACTIVE", CurrentPhase: "intake", UpdatedAt: now}
+	p := Project{Schema: ProjectSchema, ProjectID: id, ProjectName: name, Repo: repo, BaseBranch: baseBranch, State: LifecycleActive, Generation: 1, MasterPacketDigest: Digest(packet), MasterPacketVersion: 1, CreatedAt: now, UpdatedAt: now}
+	state := ProjectState{Schema: StateSchema, ProjectID: id, State: LifecycleActive, Generation: 1, Activities: []string{ActivityPlanning}, CurrentPhase: "intake", Reason: "project created", UpdatedBy: "control-plane", UpdatedAt: now}
 	if err := writeJSON(filepath.Join(dir, "project.json"), p); err != nil {
 		return Project{}, err
 	}
 	if err := writeJSON(filepath.Join(dir, "state.json"), state); err != nil {
+		return Project{}, err
+	}
+	if err := s.initialiseLifecycleEvent(id, now); err != nil {
 		return Project{}, err
 	}
 	if err := s.MarkProjectInProcess(p); err != nil {
@@ -238,6 +253,17 @@ func (s Store) LoadProject(id string) (Project, error) {
 	}
 	if p.Schema != ProjectSchema || p.ProjectID != id || p.MasterPacketVersion != 1 || p.MasterPacketDigest == "" {
 		return Project{}, fmt.Errorf("%w: invalid project metadata", ErrProjectMissing)
+	}
+	lifecycle, _, archived := canonicalLifecycle(p.State)
+	if lifecycle == "" {
+		return Project{}, fmt.Errorf("%w: invalid project lifecycle %q", ErrProjectMissing, p.State)
+	}
+	p.State = lifecycle
+	if p.Generation < 1 {
+		p.Generation = 1
+	}
+	if archived && p.ArchivedAt == "" {
+		p.ArchivedAt = p.UpdatedAt
 	}
 	return p, nil
 }
@@ -305,6 +331,16 @@ func (s Store) LoadContext(id string) (ProjectContext, error) {
 	if state.Schema != StateSchema || state.ProjectID != id {
 		return ProjectContext{}, fmt.Errorf("%w: invalid project state", ErrProjectMissing)
 	}
+	state, archived, err := normalizeProjectedState(state)
+	if err != nil {
+		return ProjectContext{}, err
+	}
+	if state.Generation < 1 {
+		state.Generation = p.Generation
+	}
+	if archived && p.ArchivedAt == "" {
+		p.ArchivedAt = p.UpdatedAt
+	}
 	amendments, err := s.LoadAmendments(id)
 	if err != nil {
 		return ProjectContext{}, err
@@ -327,7 +363,7 @@ func (s Store) SaveManual(id string, manual ProjectManual) error {
 	if err != nil {
 		return err
 	}
-	if p.State == "ACCEPTED" || p.State == "ARCHIVED" {
+	if p.State == LifecycleAccepted || p.State == LifecycleCancelled {
 		return fmt.Errorf("%w: project state is %s", ErrProjectNotAcceptable, p.State)
 	}
 	if manual.ProjectID != id || manual.SourcePacketDigest != p.MasterPacketDigest {
@@ -411,7 +447,7 @@ func (s Store) AddAmendment(id string, contents []byte) (Amendment, error) {
 	if err != nil {
 		return Amendment{}, err
 	}
-	if p.State == "ACCEPTED" || p.State == "ARCHIVED" {
+	if p.State == LifecycleAccepted || p.State == LifecycleCancelled {
 		return Amendment{}, fmt.Errorf("%w: project state is %s", ErrProjectNotAcceptable, p.State)
 	}
 	amendments, err := s.LoadAmendments(id)
@@ -441,33 +477,101 @@ func (s Store) saveStateUnlocked(id string, state ProjectState) error {
 	if err != nil {
 		return err
 	}
-	if state.ProjectID != id || !validProjectState(state.State) {
-		return fmt.Errorf("%w: invalid state", ErrProjectMissing)
+	if state.ProjectID != id {
+		return fmt.Errorf("%w: invalid project id in state", ErrProjectMissing)
 	}
-	if p.State == "ARCHIVED" && state.State != "ARCHIVED" {
-		return fmt.Errorf("%w: terminal project state ARCHIVED cannot transition to %s", ErrProjectNotAcceptable, state.State)
-	}
-	if p.State == "ACCEPTED" && state.State != "ACCEPTED" && state.State != "ARCHIVED" {
-		return fmt.Errorf("%w: terminal project state ACCEPTED cannot transition to %s", ErrProjectNotAcceptable, state.State)
-	}
+
 	var prior ProjectState
-	if err := readJSON(filepath.Join(s.projectDir(id), "state.json"), &prior); err == nil {
-		if state.YardmasterState == "" {
-			state.YardmasterState = prior.YardmasterState
-		}
-		if state.Completion == "" {
-			state.Completion = prior.Completion
-		}
-		if state.ParkReason == "" {
-			state.ParkReason = prior.ParkReason
-		}
-		if state.Watchdog == (WatchdogState{}) {
-			state.Watchdog = prior.Watchdog
+	if err := readJSON(filepath.Join(s.projectDir(id), "state.json"), &prior); err != nil {
+		return fmt.Errorf("%w: state: %v", ErrProjectMissing, err)
+	}
+	prior, _, err = normalizeProjectedState(prior)
+	if err != nil {
+		return err
+	}
+	if prior.Generation < 1 {
+		prior.Generation = p.Generation
+	}
+	if state.Generation != 0 && state.Generation != p.Generation {
+		return fmt.Errorf("%w: got %d, current %d", ErrLifecycleStaleGeneration, state.Generation, p.Generation)
+	}
+
+	state, _, err = normalizeProjectedState(state)
+	if err != nil {
+		return err
+	}
+	if p.State == LifecycleAccepted || p.State == LifecycleCancelled {
+		if state.State != p.State {
+			return fmt.Errorf("%w: terminal project state %s cannot transition to %s", ErrProjectNotAcceptable, p.State, state.State)
 		}
 	}
+
+	if state.YardmasterState == "" {
+		state.YardmasterState = prior.YardmasterState
+	}
+	if state.Completion == "" {
+		state.Completion = prior.Completion
+	}
+	if state.ParkReason == "" {
+		state.ParkReason = prior.ParkReason
+	}
+	if state.Watchdog == (WatchdogState{}) {
+		state.Watchdog = prior.Watchdog
+	}
+	if state.WaitingFor == "" && state.State == LifecycleWaiting {
+		state.WaitingFor = prior.WaitingFor
+	}
+	if state.Blocker == "" && state.State == LifecycleBlocked {
+		state.Blocker = prior.Blocker
+	}
+	if state.UpdatedBy == "" {
+		state.UpdatedBy = "control-plane"
+	}
+	if state.Reason == "" {
+		state.Reason = strings.TrimSpace(state.LastEvent)
+	}
+	if state.Reason == "" {
+		state.Reason = "project state projection updated"
+	}
+
 	state = state.normalized(state.State)
 	state.Schema = StateSchema
-	state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	state.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+
+	if state.State != p.State {
+		if !legalLifecycleTransition(p.State, state.State) {
+			return fmt.Errorf("%w: illegal lifecycle transition %s -> %s", ErrProjectNotAcceptable, p.State, state.State)
+		}
+		if err := s.ensureLifecycleHistoryUnlocked(p); err != nil {
+			return err
+		}
+		nextGeneration := p.Generation + 1
+		eventID := fmt.Sprintf("%s-lifecycle-%06d", id, nextGeneration)
+		event := LifecycleEvent{
+			ProjectID: id, EventID: eventID, Generation: nextGeneration,
+			PreviousState: p.State, NewState: state.State,
+			Actor: state.UpdatedBy, Reason: state.Reason,
+			CreatedAt: state.UpdatedAt,
+		}
+		if err := s.appendLifecycleEventUnlocked(event); err != nil {
+			return err
+		}
+		p.Generation = nextGeneration
+		state.Generation = nextGeneration
+		state.LastEventID = eventID
+		if state.State == LifecycleAccepted && p.AcceptedAt == "" {
+			p.AcceptedAt = state.UpdatedAt
+		}
+		if state.State == LifecycleCancelled && p.CancelledAt == "" {
+			p.CancelledAt = state.UpdatedAt
+		}
+	} else {
+		state.Generation = p.Generation
+		if state.LastEventID == "" {
+			state.LastEventID = prior.LastEventID
+		}
+	}
+
 	if err := writeJSON(filepath.Join(s.projectDir(id), "state.json"), state); err != nil {
 		return err
 	}
@@ -477,65 +581,108 @@ func (s Store) saveStateUnlocked(id string, state ProjectState) error {
 }
 
 func (s Store) AcceptProject(id, summary string) error {
-	p, err := s.LoadProject(id)
+	ctx, err := s.LoadContext(id)
 	if err != nil {
 		return err
 	}
-	if _, err := s.LoadContext(id); err != nil {
-		return err
+	if ctx.Project.State != LifecycleActive {
+		return fmt.Errorf("%w: lifecycle state is %s", ErrProjectNotAcceptable, ctx.Project.State)
 	}
-	if p.State != "VERIFYING" {
-		return fmt.Errorf("%w: state is %s", ErrProjectNotAcceptable, p.State)
+	if !ctx.State.HasActivity(ActivityVerifying) && strings.ToLower(ctx.State.CurrentPhase) != "verification" {
+		return fmt.Errorf("%w: project is not in verification activity", ErrProjectNotAcceptable)
 	}
-	state := ProjectState{Schema: StateSchema, ProjectID: id, State: "ACCEPTED", CurrentPhase: "accepted", LastEvent: summary}
+	state := ctx.State
+	state.State = LifecycleAccepted
+	state.Activities = nil
+	state.CurrentPhase = "accepted"
+	state.LastEvent = summary
+	state.Reason = summary
+	state.UpdatedBy = "Yardmaster"
 	if err := s.SaveState(id, state); err != nil {
 		return err
 	}
-	p, _ = s.LoadProject(id)
-	p.AcceptedAt = time.Now().UTC().Format(time.RFC3339)
-	if err := writeJSON(filepath.Join(s.projectDir(id), "project.json"), p); err != nil {
+	p, err := s.LoadProject(id)
+	if err != nil {
 		return err
 	}
 	return s.MarkProjectCompleted(p)
 }
 
-// ResumeProject performs a fresh validated context load and moves a retained
-// non-terminal project back to planning. It does not launch workers by itself.
+// ResumeProject performs a fresh validated context load and returns a
+// resumable non-terminal project to ACTIVE planning. It does not launch workers.
 func (s Store) ResumeProject(id string) (ProjectContext, error) {
 	ctx, err := s.LoadContext(id)
 	if err != nil {
 		return ProjectContext{}, err
 	}
-	if ctx.Project.State == "ARCHIVED" || ctx.Project.State == "ACCEPTED" {
+	if ctx.Project.State == LifecycleAccepted || ctx.Project.State == LifecycleCancelled {
 		return ProjectContext{}, fmt.Errorf("%w: project state is %s", ErrProjectNotAcceptable, ctx.Project.State)
 	}
 	state := ctx.State
-	state.State = "PLANNING"
+	state.State = LifecycleActive
+	state.Activities = []string{ActivityPlanning}
 	state.CurrentPhase = "planning"
+	state.YardmasterState = YardmasterRunning
 	state.LastEvent = "project resumed"
+	state.Reason = "project resumed"
+	state.UpdatedBy = "Yardmaster"
 	if err := s.SaveState(id, state); err != nil {
 		return ProjectContext{}, err
 	}
-	if err := s.MarkProjectInProcess(ctx.Project); err != nil {
+	p, _ := s.LoadProject(id)
+	if err := s.MarkProjectInProcess(p); err != nil {
 		return ProjectContext{}, err
 	}
 	return s.LoadContext(id)
 }
 
+// CancelProject explicitly closes an unfinished project without acceptance.
+func (s Store) CancelProject(id, reason string) error {
+	ctx, err := s.LoadContext(id)
+	if err != nil {
+		return err
+	}
+	if ctx.Project.State == LifecycleAccepted || ctx.Project.State == LifecycleCancelled {
+		return fmt.Errorf("%w: project state is %s", ErrProjectNotAcceptable, ctx.Project.State)
+	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "project cancelled by authorised control action"
+	}
+	state := ctx.State
+	state.State = LifecycleCancelled
+	state.Activities = nil
+	state.CurrentPhase = "cancelled"
+	state.LastEvent = reason
+	state.Reason = reason
+	state.UpdatedBy = "control-plane"
+	if err := s.SaveState(id, state); err != nil {
+		return err
+	}
+	p, err := s.LoadProject(id)
+	if err != nil {
+		return err
+	}
+	return s.MarkProjectCancelled(p)
+}
+
+// ArchiveProject is storage metadata only. It does not change lifecycle.
 func (s Store) ArchiveProject(id string) error {
 	p, err := s.LoadProject(id)
 	if err != nil {
 		return err
 	}
-	if p.State != "ACCEPTED" {
+	if p.State != LifecycleAccepted && p.State != LifecycleCancelled {
 		return fmt.Errorf("%w: project state is %s", ErrProjectNotAcceptable, p.State)
 	}
-	state := ProjectState{Schema: StateSchema, ProjectID: id, State: "ARCHIVED", CurrentPhase: "archived", LastEvent: "project archived"}
-	if err := s.SaveState(id, state); err != nil {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	p.ArchivedAt = now
+	p.UpdatedAt = now
+	if err := writeJSON(filepath.Join(s.projectDir(id), "project.json"), p); err != nil {
 		return err
 	}
 	archive := filepath.Join(s.projectDir(id), "archive", "archive.json")
-	return writeJSON(archive, map[string]string{"project_id": id, "archived_at": time.Now().UTC().Format(time.RFC3339)})
+	return writeJSON(archive, map[string]string{"project_id": id, "lifecycle_state": p.State, "archived_at": now})
 }
 
 func ValidateManual(m ProjectManual, id, packetDigest string, version int) error {
@@ -617,12 +764,8 @@ func ManualDigest(m ProjectManual) string {
 }
 
 func validProjectState(state string) bool {
-	switch state {
-	case "ACTIVE", "PLANNING", "EXECUTING", "VERIFYING", "ACCEPTED", "ARCHIVED", "FAILED", "PAUSED":
-		return true
-	default:
-		return false
-	}
+	lifecycle, _, _ := canonicalLifecycle(state)
+	return lifecycle != ""
 }
 
 func writeJSON(path string, value any) error {
