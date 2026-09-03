@@ -13,6 +13,7 @@ const (
 	BoardSchema      = "gary.project-board.v1"
 	BoardInProcess   = "IN_PROCESS"
 	BoardCompleted   = "COMPLETED"
+	BoardCancelled   = "CANCELLED"
 	boardLockTimeout = 5 * time.Second
 )
 
@@ -25,6 +26,7 @@ type BoardEntry struct {
 	Status               string `json:"status"`
 	StartedAt            string `json:"started_at"`
 	CompletedAt          string `json:"completed_at,omitempty"`
+	CancelledAt          string `json:"cancelled_at,omitempty"`
 	MasterPacketDigest   string `json:"master_packet_digest"`
 	ProjectManualVersion int    `json:"project_manual_version"`
 	LastEvent            string `json:"last_event,omitempty"`
@@ -40,27 +42,35 @@ type ProjectBoard struct {
 // BoardPolicy is part of every newly generated project manual. It makes the
 // board lifecycle explicit without turning the board into a second planner.
 type BoardPolicy struct {
-	InProcessStatus     string `json:"in_process_status"`
-	CompletionStatus    string `json:"completion_status"`
-	CompletionAuthority string `json:"completion_authority"`
-	CompletionCondition string `json:"completion_condition"`
+	InProcessStatus      string `json:"in_process_status"`
+	CompletionStatus     string `json:"completion_status"`
+	CancellationStatus   string `json:"cancellation_status,omitempty"`
+	CompletionAuthority  string `json:"completion_authority"`
+	CompletionCondition  string `json:"completion_condition"`
+	CancellationCondition string `json:"cancellation_condition,omitempty"`
 }
 
 func DefaultBoardPolicy() BoardPolicy {
 	return BoardPolicy{
-		InProcessStatus: BoardInProcess, CompletionStatus: BoardCompleted,
+		InProcessStatus: BoardInProcess, CompletionStatus: BoardCompleted, CancellationStatus: BoardCancelled,
 		CompletionAuthority: "Yardmaster",
 		CompletionCondition: "Set COMPLETED only after the Yardmaster accepts the finished project.",
+		CancellationCondition: "Set CANCELLED only after an explicit authorised project cancellation.",
 	}
 }
 
 func (p BoardPolicy) isZero() bool {
-	return p.InProcessStatus == "" && p.CompletionStatus == "" && p.CompletionAuthority == "" && p.CompletionCondition == ""
+	return p.InProcessStatus == "" && p.CompletionStatus == "" && p.CancellationStatus == "" && p.CompletionAuthority == "" && p.CompletionCondition == "" && p.CancellationCondition == ""
 }
 
 func (p BoardPolicy) valid() bool {
-	return p.InProcessStatus == BoardInProcess && p.CompletionStatus == BoardCompleted &&
-		p.CompletionAuthority == "Yardmaster" && p.CompletionCondition != ""
+	if p.InProcessStatus != BoardInProcess || p.CompletionStatus != BoardCompleted || p.CompletionAuthority != "Yardmaster" || p.CompletionCondition == "" {
+		return false
+	}
+	if p.CancellationStatus != "" && p.CancellationStatus != BoardCancelled {
+		return false
+	}
+	return true
 }
 
 // NormalizeBoardPolicy makes the lifecycle invariant owned by GARY rather
@@ -70,6 +80,12 @@ func (p BoardPolicy) valid() bool {
 func NormalizeBoardPolicy(p BoardPolicy) BoardPolicy {
 	if !p.valid() {
 		return DefaultBoardPolicy()
+	}
+	if p.CancellationStatus == "" {
+		p.CancellationStatus = BoardCancelled
+	}
+	if p.CancellationCondition == "" {
+		p.CancellationCondition = "Set CANCELLED only after an explicit authorised project cancellation."
 	}
 	return p
 }
@@ -98,7 +114,7 @@ func (s Store) MarkProjectInProcess(p Project) error {
 			}
 			// A completed board entry is monotonic and must not be resurrected by
 			// a stale create/retry path.
-			if board.Projects[i].Status == BoardCompleted {
+			if board.Projects[i].Status == BoardCompleted || board.Projects[i].Status == BoardCancelled {
 				return nil
 			}
 			board.Projects[i].ProjectName = p.ProjectName
@@ -136,6 +152,30 @@ func (s Store) MarkProjectCompleted(p Project) error {
 			board.Projects[i].MasterPacketDigest = p.MasterPacketDigest
 			board.Projects[i].ProjectManualVersion = p.ProjectManualVersion
 			board.Projects[i].LastEvent = "Yardmaster accepted project"
+			return nil
+		}
+		return fmt.Errorf("project %q is missing from board", p.ProjectID)
+	})
+}
+
+// MarkProjectCancelled projects an explicit non-successful closure.
+func (s Store) MarkProjectCancelled(p Project) error {
+	if p.State != LifecycleCancelled {
+		return fmt.Errorf("project board cancellation requires CANCELLED project state, got %s", p.State)
+	}
+	return s.updateBoard(func(board *ProjectBoard, now string) error {
+		for i := range board.Projects {
+			if board.Projects[i].ProjectID != p.ProjectID {
+				continue
+			}
+			if board.Projects[i].Status == BoardCompleted || board.Projects[i].Status == BoardCancelled {
+				return nil
+			}
+			board.Projects[i].Status = BoardCancelled
+			board.Projects[i].CancelledAt = now
+			board.Projects[i].MasterPacketDigest = p.MasterPacketDigest
+			board.Projects[i].ProjectManualVersion = p.ProjectManualVersion
+			board.Projects[i].LastEvent = "project explicitly cancelled"
 			return nil
 		}
 		return fmt.Errorf("project %q is missing from board", p.ProjectID)
