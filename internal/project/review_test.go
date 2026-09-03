@@ -82,6 +82,21 @@ func TestReviewFeedbackScopesAndPlannerVisibility(t *testing.T) {
 	}
 }
 
+func TestReviewFeedbackInitialisesMissingDirectory(t *testing.T) {
+	store, _ := newReviewProject(t)
+	feedbackDir := filepath.Join(store.Root(), "review", "feedback")
+	if err := os.RemoveAll(feedbackDir); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.AppendFeedback("review", "matthew", FeedbackScopeNote, "wave-1", "job-1", "legacy project review"); err != nil {
+		t.Fatalf("append feedback for legacy project: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(feedbackDir, "events.jsonl")); err != nil {
+		t.Fatalf("feedback stream was not created: %v", err)
+	}
+}
+
 func TestReviewApplicationIsAppendOnlyAndDoesNotMutateWorkerContext(t *testing.T) {
 	store, ctx := newReviewProject(t)
 	childBefore := ctx.ChildTaskForID("Implement ISBN scanning persistence", "job-1")
