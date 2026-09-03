@@ -219,6 +219,14 @@ func cmdMaster() {
 		if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "PLANNING", CurrentPhase: "planning", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: fmt.Sprintf("planning wave %d", wave)}); err != nil {
 			failMaster(status, fmt.Errorf("project state before wave %d: %w", wave, err))
 		}
+		if _, err := project.DefaultStore().ApplyPendingFeedback(projectID, "master-planning-boundary"); err != nil {
+			failMaster(status, fmt.Errorf("apply project review feedback before wave %d: %w", wave, err))
+		}
+		projectCtx, err = project.DefaultStore().LoadContext(projectID)
+		if err != nil {
+			failMaster(status, fmt.Errorf("project context after review boundary wave %d: %w", wave, err))
+		}
+		brief = projectCtx.PlannerInputWithSource()
 		status.State = "planning"
 		status.Wave = wave
 		_ = saveMasterStatus(status)

@@ -10,10 +10,11 @@ import (
 // PlannerInput is the normal compact context for a Yardmaster decision.
 func (c ProjectContext) PlannerInput() string {
 	b, _ := json.MarshalIndent(struct {
-		Project Project       `json:"project"`
-		State   ProjectState  `json:"state"`
-		Manual  ProjectManual `json:"manual"`
-	}{c.Project, c.State, c.Manual}, "", "  ")
+		Project         Project          `json:"project"`
+		State           ProjectState     `json:"state"`
+		Manual          ProjectManual    `json:"manual"`
+		AppliedFeedback []FeedbackRecord `json:"applied_feedback,omitempty"`
+	}{c.Project, c.State, c.Manual, c.AppliedFeedback}, "", "  ")
 	return "DURABLE GARY PROJECT CONTEXT\n=============================\n" + string(b)
 }
 

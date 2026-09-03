@@ -87,9 +87,23 @@ go run ./cmd/gary project status book-burner
 go run ./cmd/gary project resume book-burner
 go run ./cmd/gary project amend book-burner AMENDMENT.md
 go run ./cmd/gary project inspect book-burner --json
+go run ./cmd/gary project explain book-burner --master-id book-burner-launch
+go run ./cmd/gary project feedback book-burner --scope project_preference --text "Prefer smaller worker packets."
 ```
 
 Project-backed master work rehydrates validated project context before planning and child execution. Missing or tampered provenance is an integrity problem, not something an agent is allowed to reason around.
+
+Conduct Review is a low-friction side channel for supervision. `project explain`
+is read-only and reconstructs recorded state, packet/manual provenance, master
+wave plans, worker results, branches/commits, and cost telemetry; it does not
+ask the model to reveal hidden reasoning. `project feedback` records explicit
+append-only review events. Notes and doctrine proposals remain observational;
+project preferences and corrections become visible to the Yardmaster only at
+the next safe `PLANNING` boundary. No feedback changes the packet, manual,
+in-flight worker packet, acceptance gate, or global doctrine automatically.
+
+Do not put credentials in this repository; copy `.env.example` to `.env`
+for local development.
 
 ## Worker model
 

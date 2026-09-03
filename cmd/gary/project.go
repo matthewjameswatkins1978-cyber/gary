@@ -34,6 +34,10 @@ func cmdProject() {
 		cmdProjectRead(os.Args[2])
 	case "amend":
 		cmdProjectAmend()
+	case "explain":
+		cmdProjectExplain()
+	case "feedback":
+		cmdProjectFeedback()
 	default:
 		printProjectUsage()
 		os.Exit(1)
@@ -41,12 +45,15 @@ func cmdProject() {
 }
 
 func printProjectUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: gary project <start|status|resume|amend|inspect>")
+	fmt.Fprintln(os.Stderr, "Usage: gary project <start|status|resume|amend|inspect|explain|feedback>")
 	fmt.Fprintln(os.Stderr, "  gary project start [--id PROJECT-ID] [--repo URL] [--base-branch BRANCH] PACKET")
 	fmt.Fprintln(os.Stderr, "  gary project status PROJECT-ID")
 	fmt.Fprintln(os.Stderr, "  gary project resume PROJECT-ID")
 	fmt.Fprintln(os.Stderr, "  gary project amend PROJECT-ID AMENDMENT")
 	fmt.Fprintln(os.Stderr, "  gary project inspect PROJECT-ID")
+	fmt.Fprintln(os.Stderr, "  gary project explain PROJECT-ID [--master-id ID] [--child-task-id ID] [--wave N]")
+	fmt.Fprintln(os.Stderr, "  gary project feedback PROJECT-ID --scope SCOPE --text TEXT [--actor ACTOR]")
+	fmt.Fprintln(os.Stderr, "    scopes: note, project_preference, project_correction, propose_doctrine")
 }
 
 func cmdProjectStart() {
@@ -149,14 +156,24 @@ func cmdProjectAmend() {
 func printProjectContext(ctx project.ProjectContext, jsonOutput bool) {
 	if jsonOutput {
 		_ = json.NewEncoder(os.Stdout).Encode(struct {
-			Project project.Project       `json:"project"`
-			State   project.ProjectState  `json:"state"`
-			Manual  project.ProjectManual `json:"manual"`
-		}{ctx.Project, ctx.State, ctx.Manual})
+			Project  project.Project          `json:"project"`
+			State    project.ProjectState     `json:"state"`
+			Manual   project.ProjectManual    `json:"manual"`
+			Feedback []project.FeedbackRecord `json:"feedback,omitempty"`
+		}{ctx.Project, ctx.State, ctx.Manual, ctx.Feedback})
 		return
 	}
 	fmt.Printf("Project: %s\nState: %s\nMaster packet: %s\nManual: v%d\nPhase: %s\n", ctx.Project.ProjectID, ctx.Project.State, ctx.Project.MasterPacketDigest, ctx.Project.ProjectManualVersion, ctx.State.CurrentPhase)
 	fmt.Printf("Objective: %s\n", ctx.Manual.Objective)
+	if len(ctx.Feedback) > 0 {
+		pending := 0
+		for _, feedback := range ctx.Feedback {
+			if feedback.Status == project.FeedbackPending {
+				pending++
+			}
+		}
+		fmt.Printf("Conduct review: %d record(s), %d pending safe-boundary application(s)\n", len(ctx.Feedback), pending)
+	}
 	fmt.Printf("Source: %s\n", filepath.Join(project.DefaultStore().Root(), ctx.Project.ProjectID, "source", "MASTER_PACKET.md"))
 }
 
