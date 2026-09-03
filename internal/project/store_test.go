@@ -69,7 +69,7 @@ func TestCreateAndIngestPersistsBeforeGeneratorAndRecovers(t *testing.T) {
 		t.Fatalf("project board after start = %+v err=%v", board, err)
 	}
 	resumed, err := store.ResumeProject("book-burner")
-	if err != nil || resumed.Project.State != "PLANNING" || resumed.State.State != "PLANNING" {
+	if err != nil || resumed.Project.State != LifecycleActive || resumed.State.State != LifecycleActive || !resumed.State.HasActivity(ActivityPlanning) {
 		t.Fatalf("resume context = %+v err=%v", resumed, err)
 	}
 }
@@ -86,7 +86,7 @@ func TestProjectBoardCompletesOnlyAfterProjectAcceptance(t *testing.T) {
 	if err != nil || board.Projects[0].Status != BoardInProcess {
 		t.Fatalf("board changed after rejected completion: %+v err=%v", board, err)
 	}
-	if err := store.SaveState("board-project", ProjectState{ProjectID: "board-project", State: "VERIFYING", CurrentPhase: "verification"}); err != nil {
+	if err := store.SaveState("board-project", ProjectState{ProjectID: "board-project", State: LifecycleActive, Activities: []string{ActivityVerifying}, CurrentPhase: "verification"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.AcceptProject("board-project", "accepted"); err != nil {
@@ -141,7 +141,7 @@ func TestPendingIngestionCanBeRetriedAndNormalizesBoardPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ctx.Project.ProjectManualVersion != 1 || ctx.State.State != "PLANNING" || ctx.Manual.BoardPolicy != DefaultBoardPolicy() {
+	if ctx.Project.ProjectManualVersion != 1 || ctx.State.State != LifecycleActive || !ctx.State.HasActivity(ActivityPlanning) || ctx.Manual.BoardPolicy != DefaultBoardPolicy() {
 		t.Fatalf("retried intake = %+v", ctx)
 	}
 	if got, err := store.LoadMasterPacket("retryable"); err != nil || string(got) != string(packet) {
@@ -264,21 +264,21 @@ func TestAmendmentVersionsAndArchiveLifecycle(t *testing.T) {
 	if err := store.AcceptProject("amend", "too early"); !strings.Contains(err.Error(), ErrProjectNotAcceptable.Error()) {
 		t.Fatalf("project accepted before verification: %v", err)
 	}
-	if err := store.SaveState("amend", ProjectState{ProjectID: "amend", State: "VERIFYING", CurrentPhase: "verification"}); err != nil {
+	if err := store.SaveState("amend", ProjectState{ProjectID: "amend", State: LifecycleActive, Activities: []string{ActivityVerifying}, CurrentPhase: "verification"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.AcceptProject("amend", "final acceptance passed"); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveState("amend", ProjectState{ProjectID: "amend", State: "PLANNING", CurrentPhase: "planning"}); !strings.Contains(err.Error(), ErrProjectNotAcceptable.Error()) {
+	if err := store.SaveState("amend", ProjectState{ProjectID: "amend", State: LifecycleActive, Activities: []string{ActivityPlanning}, CurrentPhase: "planning"}); !strings.Contains(err.Error(), ErrProjectNotAcceptable.Error()) {
 		t.Fatalf("accepted project was resurrected to planning: %v", err)
 	}
 	if err := store.ArchiveProject("amend"); err != nil {
 		t.Fatal(err)
 	}
 	final, err := store.LoadProject("amend")
-	if err != nil || final.State != "ARCHIVED" {
-		t.Fatalf("archive state = %+v err=%v", final, err)
+	if err != nil || final.State != LifecycleAccepted || final.ArchivedAt == "" {
+		t.Fatalf("archive metadata = %+v err=%v", final, err)
 	}
 	if final.MasterPacketDigest == "" || final.ProjectManualVersion != 2 || final.ManualDigest == "" {
 		t.Fatalf("final project lost acceptance provenance: %+v", final)
@@ -286,8 +286,8 @@ func TestAmendmentVersionsAndArchiveLifecycle(t *testing.T) {
 	if _, err := store.AddAmendment("amend", []byte("post-acceptance change")); !strings.Contains(err.Error(), ErrProjectNotAcceptable.Error()) {
 		t.Fatalf("archived project accepted amendment: %v", err)
 	}
-	if err := store.SaveState("amend", ProjectState{ProjectID: "amend", State: "FAILED", CurrentPhase: "failed"}); !strings.Contains(err.Error(), ErrProjectNotAcceptable.Error()) {
-		t.Fatalf("archived project was resurrected to failed: %v", err)
+	if err := store.SaveState("amend", ProjectState{ProjectID: "amend", State: LifecycleParked, CurrentPhase: "parked"}); !strings.Contains(err.Error(), ErrProjectNotAcceptable.Error()) {
+		t.Fatalf("accepted archived project was resurrected to parked: %v", err)
 	}
 }
 
@@ -310,5 +310,34 @@ func TestChildContextIsNarrowAndProvenanceBound(t *testing.T) {
 	childTask := ctx.ChildTaskForID("Implement ISBN scanning persistence", "job-001")
 	if strings.Contains(childTask, "Normal capture requires no typing") == false || !strings.Contains(childTask, `"child_task_id": "job-001"`) {
 		t.Fatal("hard constraint was not preserved in child context")
+	}
+}
+
+
+func TestProjectCancellationIsTerminalAndNotCompletion(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if _, err := store.CreateAndIngest(context.Background(), "cancelled-project", "Cancelled project", "", "", []byte("packet"), testManual); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CancelProject("cancelled-project", "operator deliberately closed unfinished work"); err != nil {
+		t.Fatal(err)
+	}
+	p, err := store.LoadProject("cancelled-project")
+	if err != nil || p.State != LifecycleCancelled || p.CancelledAt == "" {
+		t.Fatalf("cancelled project = %+v err=%v", p, err)
+	}
+	board, err := store.LoadBoard()
+	if err != nil || len(board.Projects) != 1 || board.Projects[0].Status != BoardCancelled || board.Projects[0].CompletedAt != "" {
+		t.Fatalf("cancelled board projection = %+v err=%v", board, err)
+	}
+	if err := store.SaveState("cancelled-project", ProjectState{ProjectID: "cancelled-project", State: LifecycleActive, Activities: []string{ActivityPlanning}}); !strings.Contains(err.Error(), ErrProjectNotAcceptable.Error()) {
+		t.Fatalf("cancelled project was resurrected: %v", err)
+	}
+	if err := store.ArchiveProject("cancelled-project"); err != nil {
+		t.Fatal(err)
+	}
+	p, err = store.LoadProject("cancelled-project")
+	if err != nil || p.State != LifecycleCancelled || p.ArchivedAt == "" {
+		t.Fatalf("archiving changed cancelled outcome: %+v err=%v", p, err)
 	}
 }
