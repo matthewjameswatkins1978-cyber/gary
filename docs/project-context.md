@@ -1,39 +1,63 @@
 # Durable project context
 
-GARY stores project context under `gary/projects/<project-id>/` by default:
+GARY stores durable project truth under `gary/projects/<project-id>/` by default.
+
+A typical project contains:
 
 ```text
 project.json
 state.json
+events/lifecycle.jsonl
 source/MASTER_PACKET.md
 manuals/project-manual-v001.json
-amendments/amendment-001.md
+amendments/
 jobs/
 evidence/
 feedback/events.jsonl
 archive/
 ```
 
-The source packet is written before the Yardmaster ingestion call. Its SHA-256
-is checked on every context load. Manuals are immutable versioned snapshots and
-must carry source packet provenance for their requirements and conflicts.
+The immutable Project Packet is written before Yardmaster intake and identified by SHA-256. Versioned manuals and amendments retain provenance rather than replacing the source packet.
 
-`gary project resume <project-id>` performs a fresh validated rehydration and
-returns the project to planning without launching a worker. A project-backed
-`gary master` run rehydrates before every Yardmaster wave and rebuilds the
-narrow child execution context from the current manual before each worker
-submission.
+## Canonical lifecycle and projections
 
-## Yardmaster project board
+The canonical lifecycle is defined in `docs/GARY_STATE_MACHINE.md`.
 
-GARY also keeps a durable project board at
-`gary/projects/board/projects.json`. It is an aggregate lifecycle list, not a
-replacement for project state or worker evidence. A project is written to the
-board as `IN_PROCESS` when its durable project record is created. The only
-transition to `COMPLETED` is the Yardmaster's project-level acceptance path;
-worker success, a paused bounded slice, a retry, or a recoverable failure never
-completes the board entry. The transition is monotonic, so stale start or retry
-paths cannot resurrect a completed project.
+Lifecycle states are:
+
+```text
+ACTIVE | PARKED | WAITING | BLOCKED | ACCEPTED | CANCELLED
+```
+
+While `ACTIVE`, the project may have one or more activities such as `PLANNING`, `EXECUTING`, `VERIFYING`, and `INTEGRATING`.
+
+`events/lifecycle.jsonl` is the append-only lifecycle history. Each transition advances a project generation and is digest-linked to the previous event. `project.json`, `state.json`, and the project board are current projections of that history.
+
+Older durable projects using `PLANNING`, `EXECUTING`, `VERIFYING`, `PAUSED`, `FAILED`, or `ARCHIVED` as project states are read through a compatibility migration:
+
+- planning/executing/verifying/integrating become activities under `ACTIVE`;
+- paused/failed become `PARKED`;
+- legacy archived projects retain the successful `ACCEPTED` outcome and expose archive status as metadata.
+
+New writes use only the canonical lifecycle.
+
+## Project board
+
+The durable board lives at:
+
+```text
+gary/projects/board/projects.json
+```
+
+It is a human-facing projection:
+
+```text
+ACTIVE / PARKED / WAITING / BLOCKED -> IN_PROCESS
+ACCEPTED                            -> COMPLETED
+CANCELLED                           -> CANCELLED
+```
+
+Worker success, retries, pauses, infrastructure failures, and child acceptance never complete a board entry.
 
 The board is visible with:
 
@@ -42,65 +66,64 @@ go run ./cmd/gary project board
 go run ./cmd/gary project board --json
 ```
 
-The generated project manual carries the same `board_policy` invariant. This
-keeps the lifecycle rule in the Yardmaster's working context while leaving the
-immutable packet unchanged.
+## Rehydration
 
-The lifecycle invariant is enforced by GARY at persistence time rather than
-trusted to model formatting. Omitted or partial model output is repaired to
-the canonical Yardmaster-owned policy before the manual digest is written. If
-the first intake attempt fails after the packet is stored, the next master run
-reuses that immutable packet and completes the missing manual instead of
-creating a second project or failing with `PROJECT_MANUAL_MISSING`. Intake
-failures also produce a retryable master status and an explanatory project
-state event; the board remains `IN_PROCESS`.
+`gary project resume <project-id>` performs a fresh validated rehydration and returns a resumable non-terminal project to `ACTIVE` with `PLANNING` activity. It does not launch a Worker itself.
 
-## Parked project auto-wake
+Project-backed master work rehydrates durable context before every planning wave and rebuilds narrow child context from the current manual before Worker submission.
 
-`gary project tick <project-id>` is a thin deterministic watchdog operation.
-It performs no model call while the Yardmaster is `RUNNING`, the project is
-finished, work is absent, or the project is legitimately waiting/blocked. For
-an unfinished parked project with explicit executable work it atomically claims
-one generation, records requested/started/completed or failed timestamps, and
-launches the existing master manifest path. It never edits an in-flight worker
-packet. No-progress wakes use bounded backoff and a small circuit breaker; a
-human can inspect the recorded state before deciding how to clear or repair it.
+Missing or tampered packet/manual provenance is an integrity fault, not something an agent may reason around.
 
-Project context is deliberately separate from execution history:
+## Parked auto-wake
 
-- the master packet and manual describe what the project is and what must be
-  true;
-- `state.json` describes current phase and progress;
-- master status and worker results describe what GARY tried and observed.
-- review events record explicit human observations and scoped interventions;
-  they are separate from the packet/manual and are append-only.
+`gary project tick <project-id>` is a deterministic watchdog.
 
-Project context is treated as untrusted input. It cannot override GARY's
-authority, sandbox, provider, acceptance-command, or deterministic routing
-controls.
+It may claim a wake only when:
+
+- lifecycle is `PARKED`;
+- explicit executable work exists;
+- no Yardmaster is active;
+- no equivalent wake is active;
+- the project is not actually waiting or blocked.
+
+A valid wake returns the project to `ACTIVE` planning and invokes the ordinary Yardmaster path. It never wakes a Worker independently or mutates an in-flight packet.
+
+Wake claims are atomic. Repeated no-progress wakes back off and eventually trip a circuit breaker.
+
+## Cancellation and archive
+
+`CANCELLED` is an explicit terminal non-successful closure.
+
+```powershell
+go run ./cmd/gary project cancel <project-id> --reason "..."
+```
+
+Archiving is storage metadata only. It does not turn a cancelled project into a completed project and does not change an accepted project into a different outcome.
 
 ## Conduct Review
 
-Questions and interventions are separate operations:
+Questions and interventions remain separate operations:
 
 ```powershell
 go run ./cmd/gary project explain <project-id> --master-id <master-id> --json
 go run ./cmd/gary project feedback <project-id> --scope note --text "..."
 ```
 
-`explain` performs no writes and reports only observable evidence. Feedback
-scope is one of `note`, `project_preference`, `project_correction`, or
-`propose_doctrine`. Notes and doctrine proposals are recorded only. Preferences
-and corrections are initially `PENDING_SAFE_BOUNDARY`; the master applies them
-as immutable application events only after setting project state to `PLANNING`,
-then reloads the context before calling the Yardmaster. The worker packet is
-constructed from the context captured for its wave and is never edited by a
-review event. Doctrine proposals are never promoted automatically.
+`explain` is read-only and reconstructs observable evidence rather than hidden reasoning.
 
-The design follows a small set of external principles: define human and AI
-oversight responsibilities and monitor outcomes over the lifecycle (the
-[NIST AI RMF](https://www.nist.gov/itl/ai-risk-management-framework)); use an
-append-only event trail when auditability and historical reconstruction justify
-it (the [event-sourcing pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing));
-and keep the human's review context and intervention authority explicit rather
-than treating a nominal human-in-the-loop as sufficient.
+Feedback scopes are `note`, `project_preference`, `project_correction`, and `propose_doctrine`.
+
+Preferences and corrections become execution-visible only while lifecycle is `ACTIVE` at a safe `PLANNING` activity boundary. They never rewrite an in-flight Worker packet, the immutable Project Packet, or global doctrine automatically.
+
+## Separation of durable truth
+
+Keep these concepts distinct:
+
+- Project Packet/manual: what the project is and what must be true.
+- Lifecycle event stream: whether the project may continue and how it reached the current lifecycle state.
+- State projection: current activities, progress, waiting/blocking detail, and watchdog state.
+- Master/Worker records: what GARY attempted and observed.
+- Acceptance/integration evidence: what was verified, judged, accepted, and integrated.
+- Feedback events: explicit human observations and scoped interventions.
+
+Project context is treated as untrusted input with respect to GARY authority. It cannot override sandbox, provider, credential, acceptance-command, or deterministic routing controls.
