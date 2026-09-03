@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-09-03T05:41:18Z",
+  "updated_at": "2026-09-03T05:41:52Z",
   "yard_state": "running",
   "active_jobs": [
     {
@@ -93,6 +93,17 @@
       "result_branch": "gary/telltail-v03-gar-w1-j1-18982f3b",
       "started_at": "2026-09-02T18:28:15Z",
       "attempts": 1
+    },
+    {
+      "id": "telltail-v03-fre-w2-j1",
+      "project_id": "telltail-v03-fresh-r2",
+      "master_packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+      "project_manual_version": 1,
+      "state": "running",
+      "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
+      "base_branch": "gary/master-telltail-v03-fre-f75d44",
+      "result_branch": "gary/telltail-v03-fre-w2-j1-41b94270",
+      "started_at": "2026-09-03T05:41:52Z"
     }
   ],
   "recent_jobs": [
@@ -981,73 +992,6 @@
         ],
         "unmetered_components": [
           "Gemini CLI provider telemetry unavailable: Gemini CLI JSONL has no result stats; Batch compute is estimated from observed runtime; invoice data was not queried"
-        ]
-      },
-      "summary": "DONE"
-    },
-    {
-      "id": "telltail-v03-fre-w2-j1",
-      "project_id": "telltail-v03-fresh",
-      "master_packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
-      "project_manual_version": 1,
-      "batch_job_id": "gary-run-telltail-v03-fre-w2-j1-1-20260903-000236",
-      "state": "accepted",
-      "result_branch": "gary/telltail-v03-fre-w2-j1-ed6f89fe",
-      "result_commit": "899242c",
-      "finished_at": "2026-09-03T01:06:26Z",
-      "attempts": 1,
-      "est_cost": 0.22849260053647874,
-      "cost": {
-        "pricing_status": "MIXED",
-        "currency": "USD",
-        "pricing_version": "2026-08-30",
-        "yardmaster_model_cost_usd": 0.02390325,
-        "worker_model_cost_usd": 0.18279882,
-        "model_cost_usd": 0.20670207000000002,
-        "compute_cost_usd": 0.02179053053647875,
-        "total_cost_usd": 0.22849260053647874,
-        "components": [
-          {
-            "kind": "worker",
-            "model_requested": "gemini-3.5-flash-lite",
-            "usage_source": "PROVIDER_REPORTED",
-            "input_tokens": 1362999,
-            "cached_input_tokens": 962494,
-            "fresh_input_tokens": 400505,
-            "output_tokens": 13509,
-            "total_tokens": 1376508,
-            "model_cost_usd": 0.18279882,
-            "compute_cost_usd": 0.02179053053647875,
-            "total_cost_usd": 0.20458935053647875,
-            "runtime_seconds": 3789.657484605,
-            "machine_type": "e2-small",
-            "provisioning_model": "STANDARD",
-            "pricing_version": "2026-08-30",
-            "pricing_effective_date": "2026-08-30",
-            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
-            "unmetered_reason": "Batch compute is estimated from observed runtime; invoice data was not queried"
-          },
-          {
-            "kind": "yardmaster",
-            "model_requested": "gemini-3.7-flash",
-            "model_version": "gemini-3.7-flash",
-            "usage_source": "PROVIDER_REPORTED",
-            "input_tokens": 31291,
-            "fresh_input_tokens": 31291,
-            "output_tokens": 116,
-            "thinking_tokens": 655,
-            "total_tokens": 32062,
-            "model_cost_usd": 0.02390325,
-            "compute_cost_usd": 0,
-            "total_cost_usd": 0.02390325,
-            "pricing_version": "2026-08-30",
-            "pricing_effective_date": "2026-08-30",
-            "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
-            "provider_response_id": "CciYatLGB4qLq8YP06vLoA0"
-          }
-        ],
-        "unmetered_components": [
-          "Batch compute is estimated from observed runtime; invoice data was not queried"
         ]
       },
       "summary": "DONE"
