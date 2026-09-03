@@ -1,0 +1,8 @@
+{
+  "schema": "gary.project-state.v1",
+  "project_id": "telltail-v03-fresh",
+  "state": "ACCEPTED",
+  "current_phase": "accepted",
+  "last_event": "project-level mechanical and independent semantic acceptance passed",
+  "updated_at": "2026-09-03T01:07:01Z"
+}
