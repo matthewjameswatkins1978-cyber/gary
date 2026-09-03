@@ -46,6 +46,26 @@ type LifecycleEvent struct {
 	CreatedAt           string   `json:"created_at"`
 }
 
+func legalLifecycleTransition(from, to string) bool {
+	if from == to {
+		return true
+	}
+	switch from {
+	case LifecycleActive:
+		return to == LifecycleParked || to == LifecycleWaiting || to == LifecycleBlocked || to == LifecycleAccepted || to == LifecycleCancelled
+	case LifecycleParked:
+		return to == LifecycleActive || to == LifecycleWaiting || to == LifecycleBlocked || to == LifecycleCancelled
+	case LifecycleWaiting:
+		return to == LifecycleActive || to == LifecycleBlocked || to == LifecycleCancelled
+	case LifecycleBlocked:
+		return to == LifecycleActive || to == LifecycleCancelled
+	case LifecycleAccepted, LifecycleCancelled:
+		return false
+	default:
+		return false
+	}
+}
+
 func validLifecycleState(state string) bool {
 	switch state {
 	case LifecycleActive, LifecycleParked, LifecycleWaiting, LifecycleBlocked, LifecycleAccepted, LifecycleCancelled:
@@ -273,5 +293,32 @@ func (s Store) initialiseLifecycleEvent(id string, createdAt string) error {
 	return s.appendLifecycleEventUnlocked(LifecycleEvent{
 		ProjectID: id, Generation: 1, PreviousState: "", NewState: LifecycleActive,
 		Actor: "control-plane", Reason: "project created", CreatedAt: createdAt,
+	})
+}
+
+// ensureLifecycleHistoryUnlocked bootstraps pre-v3 durable projects into the
+// append-only lifecycle stream without changing their projected outcome.
+func (s Store) ensureLifecycleHistoryUnlocked(p Project) error {
+	events, err := s.LoadLifecycleEvents(p.ProjectID)
+	if err != nil {
+		return err
+	}
+	if len(events) > 0 {
+		return nil
+	}
+	generation := p.Generation
+	if generation < 1 {
+		generation = 1
+	}
+	if generation != 1 {
+		return fmt.Errorf("%w: cannot bootstrap generation %d without history", ErrLifecycleStaleGeneration, generation)
+	}
+	createdAt := p.CreatedAt
+	if createdAt == "" {
+		createdAt = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	return s.appendLifecycleEventUnlocked(LifecycleEvent{
+		ProjectID: p.ProjectID, Generation: 1, PreviousState: "", NewState: p.State,
+		Actor: "migration", Reason: "bootstrap existing project lifecycle history", CreatedAt: createdAt,
 	})
 }
