@@ -34,6 +34,8 @@ func cmdProject() {
 		cmdProjectRead(os.Args[2])
 	case "board":
 		cmdProjectBoard()
+	case "cancel":
+		cmdProjectCancel()
 	case "tick":
 		cmdProjectTick()
 	case "amend":
@@ -49,11 +51,12 @@ func cmdProject() {
 }
 
 func printProjectUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: gary project <start|status|resume|amend|board|inspect|explain|feedback>")
+	fmt.Fprintln(os.Stderr, "Usage: gary project <start|status|resume|amend|board|cancel|inspect|explain|feedback>")
 	fmt.Fprintln(os.Stderr, "  gary project start [--id PROJECT-ID] [--repo URL] [--base-branch BRANCH] PACKET")
 	fmt.Fprintln(os.Stderr, "  gary project status PROJECT-ID")
 	fmt.Fprintln(os.Stderr, "  gary project resume PROJECT-ID")
 	fmt.Fprintln(os.Stderr, "  gary project board [--json]")
+	fmt.Fprintln(os.Stderr, "  gary project cancel PROJECT-ID [--reason TEXT]")
 	fmt.Fprintln(os.Stderr, "  gary project tick PROJECT-ID [--manifest PATH] [--json]")
 	fmt.Fprintln(os.Stderr, "  gary project amend PROJECT-ID AMENDMENT")
 	fmt.Fprintln(os.Stderr, "  gary project inspect PROJECT-ID")
@@ -193,6 +196,27 @@ func printProjectContext(ctx project.ProjectContext, jsonOutput bool) {
 		fmt.Printf("Conduct review: %d record(s), %d pending safe-boundary application(s)\n", len(ctx.Feedback), pending)
 	}
 	fmt.Printf("Source: %s\n", filepath.Join(project.DefaultStore().Root(), ctx.Project.ProjectID, "source", "MASTER_PACKET.md"))
+}
+
+func cmdProjectCancel() {
+	fs := flag.NewFlagSet("project cancel", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	reason := fs.String("reason", "", "reason for explicit non-successful closure")
+	jsonOutput := fs.Bool("json", false, "machine-readable output")
+	if err := fs.Parse(os.Args[3:]); err != nil || fs.NArg() != 1 {
+		printProjectUsage()
+		os.Exit(1)
+	}
+	if err := project.DefaultStore().CancelProject(fs.Arg(0), *reason); err != nil {
+		fmt.Fprintf(os.Stderr, "project cancel: %v\n", err)
+		os.Exit(1)
+	}
+	ctx, err := project.DefaultStore().LoadContext(fs.Arg(0))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "project cancel: %v\n", err)
+		os.Exit(1)
+	}
+	printProjectContext(ctx, *jsonOutput)
 }
 
 func cmdProjectBoard() {
