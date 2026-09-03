@@ -141,8 +141,12 @@ func TestIllegalLifecycleTransitionsFailClosed(t *testing.T) {
 	if _, err := store.CreateAndIngest(context.Background(), "illegal-transition", "Illegal Transition", "", "", []byte("packet"), testManual); err != nil {
 		t.Fatal(err)
 	}
+	ctx, err := store.LoadContext("illegal-transition")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := store.SaveState("illegal-transition", ProjectState{
-		ProjectID: "illegal-transition", State: LifecycleParked, Reason: "park",
+		ProjectID: "illegal-transition", State: LifecycleParked, Generation: ctx.Project.Generation, Reason: "park",
 	}); err != nil {
 		t.Fatal(err)
 	}
