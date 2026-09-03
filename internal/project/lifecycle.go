@@ -168,6 +168,20 @@ func normalizeProjectedState(state ProjectState) (ProjectState, bool, error) {
 	return state, archived, nil
 }
 
+func validateLifecycleConditions(state ProjectState) error {
+	switch state.State {
+	case LifecycleWaiting:
+		if strings.TrimSpace(state.WaitingFor) == "" {
+			return fmt.Errorf("%w: WAITING requires waiting_for", ErrProjectNotAcceptable)
+		}
+	case LifecycleBlocked:
+		if strings.TrimSpace(state.Blocker) == "" {
+			return fmt.Errorf("%w: BLOCKED requires blocker", ErrProjectNotAcceptable)
+		}
+	}
+	return nil
+}
+
 func (s ProjectState) HasActivity(activity string) bool {
 	for _, value := range s.Activities {
 		if strings.EqualFold(value, activity) {

@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -102,6 +103,89 @@ func TestProjectBoardCompletesOnlyAfterProjectAcceptance(t *testing.T) {
 	board, err = store.LoadBoard()
 	if err != nil || board.Projects[0].Status != BoardCompleted {
 		t.Fatalf("completed board entry was resurrected: %+v err=%v", board, err)
+	}
+}
+
+func TestProjectBoardDoesNotResurrectCancelledEntry(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if _, err := store.CreateAndIngest(context.Background(), "cancelled-board", "Cancelled board", "", "", []byte("packet"), testManual); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CancelProject("cancelled-board", "explicit cancellation"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkProjectCompleted(Project{ProjectID: "cancelled-board", State: LifecycleAccepted}); err != nil {
+		t.Fatal(err)
+	}
+	board, err := store.LoadBoard()
+	if err != nil || board.Projects[0].Status != BoardCancelled {
+		t.Fatalf("cancelled board entry was resurrected: %+v err=%v", board, err)
+	}
+}
+
+func TestLoadContextRejectsInvalidLifecycleProjection(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		state string
+	}{
+		{name: "waiting", state: LifecycleWaiting},
+		{name: "blocked", state: LifecycleBlocked},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewStore(t.TempDir())
+			if _, err := store.CreateAndIngest(context.Background(), tc.name, tc.name, "", "", []byte("packet"), testManual); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(store.Root(), tc.name, "state.json")
+			var raw map[string]any
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(data, &raw); err != nil {
+				t.Fatal(err)
+			}
+			raw["state"] = tc.state
+			delete(raw, "waiting_for")
+			delete(raw, "blocker")
+			data, err = json.Marshal(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.LoadContext(tc.name); !errors.Is(err, ErrProjectNotAcceptable) {
+				t.Fatalf("invalid %s projection loaded: %v", tc.state, err)
+			}
+		})
+	}
+}
+
+func TestLoadContextRejectsStateProjectGenerationMismatch(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if _, err := store.CreateAndIngest(context.Background(), "generation-mismatch", "Generation mismatch", "", "", []byte("packet"), testManual); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(store.Root(), "generation-mismatch", "state.json")
+	var raw map[string]any
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	raw["generation"] = float64(99)
+	data, err = json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LoadContext("generation-mismatch"); !errors.Is(err, ErrLifecycleStaleGeneration) {
+		t.Fatalf("generation mismatch was accepted: %v", err)
 	}
 }
 
@@ -312,7 +396,6 @@ func TestChildContextIsNarrowAndProvenanceBound(t *testing.T) {
 		t.Fatal("hard constraint was not preserved in child context")
 	}
 }
-
 
 func TestProjectCancellationIsTerminalAndNotCompletion(t *testing.T) {
 	store := NewStore(t.TempDir())

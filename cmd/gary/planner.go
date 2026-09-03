@@ -161,7 +161,6 @@ func callYardmasterAPI(ctx context.Context, cfg *config.Config, prompt string, m
 	return enforceEconomicPlan(&plan), component, nil
 }
 
-
 func runWorkerSupervision(cfg *config.Config, task, acceptance, projectContext string, telemetry supervisor.Telemetry, generation int) (supervisor.Decision, cost.Component, error) {
 	component := estimatedComponent("yardmaster-supervision", cfg.MasterModel, "live worker supervision did not return provider usage")
 	if err := telemetry.Validate(); err != nil {
@@ -230,9 +229,9 @@ func callWorkerSupervisorAPI(ctx context.Context, cfg *config.Config, prompt str
 	payload, err := json.Marshal(map[string]interface{}{
 		"contents": []map[string]interface{}{{"role": "user", "parts": []map[string]string{{"text": prompt}}}},
 		"generationConfig": map[string]interface{}{
-			"thinkingConfig": map[string]interface{}{"thinkingLevel": "LOW"},
+			"thinkingConfig":   map[string]interface{}{"thinkingLevel": "LOW"},
 			"responseMimeType": "application/json",
-			"maxOutputTokens": 2048,
+			"maxOutputTokens":  2048,
 		},
 	})
 	if err != nil {
@@ -726,7 +725,6 @@ func compactPlannerError(s string, max int) string {
 	return "[truncated] " + s[len(s)-max:]
 }
 
-
 type yardmasterSmallRepairResult struct {
 	Summary string `json:"summary"`
 	Patch   string `json:"patch"`
@@ -751,6 +749,14 @@ func runYardmasterSmallRepair(cfg *config.Config, job *jobs.Job, workDir string,
 		return component, fmt.Errorf("yardmaster small repair context: %w", err)
 	}
 	diffText, _ := plannerCommandOutput(workDir, "git", "diff", "--find-renames", job.BaseBranch+"...HEAD")
+	allowedFilesText, err := plannerCommandOutput(workDir, "git", "diff", "--name-only", job.BaseBranch+"...HEAD")
+	if err != nil {
+		return component, fmt.Errorf("yardmaster small repair candidate scope: %w", err)
+	}
+	allowedFiles := splitNonEmptyLines(allowedFilesText)
+	if len(allowedFiles) == 0 {
+		return component, fmt.Errorf("yardmaster small repair candidate has no changed files")
+	}
 	if len(diffText) > 60000 {
 		diffText = diffText[:60000] + "\n[diff truncated]\n"
 	}
@@ -832,10 +838,44 @@ REPOSITORY SNAPSHOT
 	if out, err := apply.CombinedOutput(); err != nil {
 		return component, fmt.Errorf("yardmaster small repair patch apply: %w: %s", err, compactPlannerError(string(out), 1600))
 	}
+	afterFilesText, err := plannerCommandOutput(workDir, "git", "diff", "--name-only", job.BaseBranch+"...HEAD")
+	if err != nil {
+		return component, fmt.Errorf("yardmaster small repair post-patch scope: %w", err)
+	}
+	if err := validateSmallRepairScope(allowedFiles, splitNonEmptyLines(afterFilesText)); err != nil {
+		return component, err
+	}
 	if err := gitops.CommitAll(workDir, "GARY: Yardmaster small repair "+job.ID); err != nil {
 		return component, fmt.Errorf("yardmaster small repair commit: %w", err)
 	}
 	return component, nil
+}
+
+func splitNonEmptyLines(text string) []string {
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func validateSmallRepairScope(before, after []string) error {
+	allowed := make(map[string]bool, len(before))
+	for _, file := range before {
+		file = strings.TrimSpace(file)
+		if file != "" {
+			allowed[file] = true
+		}
+	}
+	for _, file := range after {
+		file = strings.TrimSpace(file)
+		if file != "" && !allowed[file] {
+			return fmt.Errorf("yardmaster small repair expanded candidate scope to %q", file)
+		}
+	}
+	return nil
 }
 
 func callYardmasterSmallRepairAPI(ctx context.Context, cfg *config.Config, prompt string) (*yardmasterSmallRepairResult, cost.Component, error) {
@@ -847,9 +887,9 @@ func callYardmasterSmallRepairAPI(ctx context.Context, cfg *config.Config, promp
 	payload, err := json.Marshal(map[string]interface{}{
 		"contents": []map[string]interface{}{{"role": "user", "parts": []map[string]string{{"text": prompt}}}},
 		"generationConfig": map[string]interface{}{
-			"thinkingConfig": map[string]interface{}{"thinkingLevel": "MEDIUM"},
+			"thinkingConfig":   map[string]interface{}{"thinkingLevel": "MEDIUM"},
 			"responseMimeType": "application/json",
-			"maxOutputTokens": 8192,
+			"maxOutputTokens":  8192,
 		},
 	})
 	if err != nil {

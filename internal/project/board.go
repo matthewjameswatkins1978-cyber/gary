@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	BoardSchema      = "gary.project-board.v2"
+	BoardSchema       = "gary.project-board.v2"
 	LegacyBoardSchema = "gary.project-board.v1"
-	BoardInProcess   = "IN_PROCESS"
-	BoardCompleted   = "COMPLETED"
-	BoardCancelled   = "CANCELLED"
-	boardLockTimeout = 5 * time.Second
+	BoardInProcess    = "IN_PROCESS"
+	BoardCompleted    = "COMPLETED"
+	BoardCancelled    = "CANCELLED"
+	boardLockTimeout  = 5 * time.Second
 )
 
 // BoardEntry is the small, human-readable project lifecycle record. It is a
@@ -43,19 +43,19 @@ type ProjectBoard struct {
 // BoardPolicy is part of every newly generated project manual. It makes the
 // board lifecycle explicit without turning the board into a second planner.
 type BoardPolicy struct {
-	InProcessStatus      string `json:"in_process_status"`
-	CompletionStatus     string `json:"completion_status"`
-	CancellationStatus   string `json:"cancellation_status,omitempty"`
-	CompletionAuthority  string `json:"completion_authority"`
-	CompletionCondition  string `json:"completion_condition"`
+	InProcessStatus       string `json:"in_process_status"`
+	CompletionStatus      string `json:"completion_status"`
+	CancellationStatus    string `json:"cancellation_status,omitempty"`
+	CompletionAuthority   string `json:"completion_authority"`
+	CompletionCondition   string `json:"completion_condition"`
 	CancellationCondition string `json:"cancellation_condition,omitempty"`
 }
 
 func DefaultBoardPolicy() BoardPolicy {
 	return BoardPolicy{
 		InProcessStatus: BoardInProcess, CompletionStatus: BoardCompleted, CancellationStatus: BoardCancelled,
-		CompletionAuthority: "Yardmaster",
-		CompletionCondition: "Set COMPLETED only after the Yardmaster accepts the finished project.",
+		CompletionAuthority:   "Yardmaster",
+		CompletionCondition:   "Set COMPLETED only after the Yardmaster accepts the finished project.",
 		CancellationCondition: "Set CANCELLED only after an explicit authorised project cancellation.",
 	}
 }
@@ -147,6 +147,11 @@ func (s Store) MarkProjectCompleted(p Project) error {
 				continue
 			}
 			if board.Projects[i].Status == BoardCompleted {
+				return nil
+			}
+			// A stale acceptance projection must not resurrect an explicitly
+			// cancelled board entry. Terminal board states are monotonic.
+			if board.Projects[i].Status == BoardCancelled {
 				return nil
 			}
 			board.Projects[i].Status = BoardCompleted

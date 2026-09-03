@@ -342,6 +342,22 @@ func (s Store) LoadContext(id string) (ProjectContext, error) {
 	if state.Generation < 1 {
 		state.Generation = p.Generation
 	}
+	if state.Generation != p.Generation {
+		return ProjectContext{}, fmt.Errorf("%w: state generation %d, project generation %d", ErrLifecycleStaleGeneration, state.Generation, p.Generation)
+	}
+	if err := validateLifecycleConditions(state); err != nil {
+		return ProjectContext{}, err
+	}
+	events, err := s.LoadLifecycleEvents(id)
+	if err != nil {
+		return ProjectContext{}, err
+	}
+	if len(events) > 0 {
+		last := events[len(events)-1]
+		if last.Generation != p.Generation || last.NewState != p.State {
+			return ProjectContext{}, fmt.Errorf("%w: lifecycle history ends at generation %d/%s, project is %d/%s", ErrLifecycleStaleGeneration, last.Generation, last.NewState, p.Generation, p.State)
+		}
+	}
 	if archived && p.ArchivedAt == "" {
 		p.ArchivedAt = p.UpdatedAt
 	}
@@ -532,11 +548,8 @@ func (s Store) saveStateUnlocked(id string, state ProjectState) error {
 	if state.Blocker == "" && state.State == LifecycleBlocked {
 		state.Blocker = prior.Blocker
 	}
-	if state.State == LifecycleWaiting && strings.TrimSpace(state.WaitingFor) == "" {
-		return fmt.Errorf("%w: WAITING requires waiting_for", ErrProjectNotAcceptable)
-	}
-	if state.State == LifecycleBlocked && strings.TrimSpace(state.Blocker) == "" {
-		return fmt.Errorf("%w: BLOCKED requires blocker", ErrProjectNotAcceptable)
+	if err := validateLifecycleConditions(state); err != nil {
+		return err
 	}
 	if state.UpdatedBy == "" {
 		state.UpdatedBy = "control-plane"

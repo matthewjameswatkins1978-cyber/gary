@@ -88,7 +88,6 @@ func TestWorkerSupervisorPromptContainsLiveControlDoctrine(t *testing.T) {
 	}
 }
 
-
 func TestSmallFixDoctrineHasBoundedYardmasterRepairAndReverification(t *testing.T) {
 	plannerData, err := os.ReadFile("planner.go")
 	if err != nil {
@@ -121,5 +120,14 @@ func TestSmallFixDoctrineHasBoundedYardmasterRepairAndReverification(t *testing.
 		if !strings.Contains(runSource, marker) {
 			t.Fatalf("Yardmaster SMALL_FIX acceptance path missing %q", marker)
 		}
+	}
+}
+
+func TestYardmasterSmallRepairCannotExpandCandidateScope(t *testing.T) {
+	if err := validateSmallRepairScope([]string{"src/lib.rs"}, []string{"src/lib.rs"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateSmallRepairScope([]string{"src/lib.rs"}, []string{"src/lib.rs", "README.md"}); err == nil {
+		t.Fatal("small repair scope expansion was accepted")
 	}
 }
