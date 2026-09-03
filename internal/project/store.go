@@ -226,7 +226,7 @@ func (s Store) CreateProject(id, name, repo, baseBranch string, packet []byte) (
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	p := Project{Schema: ProjectSchema, ProjectID: id, ProjectName: name, Repo: repo, BaseBranch: baseBranch, State: LifecycleActive, Generation: 1, MasterPacketDigest: Digest(packet), MasterPacketVersion: 1, CreatedAt: now, UpdatedAt: now}
-	state := ProjectState{Schema: StateSchema, ProjectID: id, State: LifecycleActive, Generation: 1, Activities: []string{ActivityPlanning}, CurrentPhase: "intake", Reason: "project created", UpdatedBy: "control-plane", UpdatedAt: now}
+	state := ProjectState{Schema: StateSchema, ProjectID: id, State: LifecycleActive, Generation: 1, Activities: []string{ActivityPlanning}, CurrentPhase: "intake", LastEvent: "project created", LastEventID: fmt.Sprintf("%s-lifecycle-%06d", id, 1), Reason: "project created", UpdatedBy: "control-plane", UpdatedAt: now}
 	if err := writeJSON(filepath.Join(dir, "project.json"), p); err != nil {
 		return Project{}, err
 	}
@@ -527,6 +527,12 @@ func (s Store) saveStateUnlocked(id string, state ProjectState) error {
 	}
 	if state.Blocker == "" && state.State == LifecycleBlocked {
 		state.Blocker = prior.Blocker
+	}
+	if state.State == LifecycleWaiting && strings.TrimSpace(state.WaitingFor) == "" {
+		return fmt.Errorf("%w: WAITING requires waiting_for", ErrProjectNotAcceptable)
+	}
+	if state.State == LifecycleBlocked && strings.TrimSpace(state.Blocker) == "" {
+		return fmt.Errorf("%w: BLOCKED requires blocker", ErrProjectNotAcceptable)
 	}
 	if state.UpdatedBy == "" {
 		state.UpdatedBy = "control-plane"
