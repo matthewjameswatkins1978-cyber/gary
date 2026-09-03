@@ -359,7 +359,7 @@ PASS only when the actual implementation:
 Do not demand optional polish, personal stylistic preferences, broad redesign, speculative future-proofing, or unrelated cleanup. This is a bounded merge review, not a search for perfection.
 
 If it is not merge-worthy, classify the problem:
-- SMALL_FIX: the approach is sound and the candidate should be preserved; give the worker a short, exact list of small corrections. The next attempt should keep everything else.
+- SMALL_FIX: the approach is sound and only narrow obvious corrections remain. Describe the exact small corrections and what must be preserved. The control plane will first let the Yardmaster attempt one bounded direct repair; if that is unsafe or unsuccessful, the same guidance goes to a Worker repair attempt.
 - MAJOR_FIX: substantial correction is needed but the core route/useful work should be preserved; explain what is materially wrong, what is worth keeping, and give concrete hints for the repair attempt.
 - REPLAN: the implementation route, job boundary, dependency assumption, or authority situation is fundamentally wrong enough that simply sending the same worker back with repair notes is the wrong control action.
 
@@ -724,4 +724,190 @@ func compactPlannerError(s string, max int) string {
 		return s
 	}
 	return "[truncated] " + s[len(s)-max:]
+}
+
+
+type yardmasterSmallRepairResult struct {
+	Summary string `json:"summary"`
+	Patch   string `json:"patch"`
+}
+
+// runYardmasterSmallRepair gives the Yardmaster one tightly bounded chance to
+// repair a mechanically green candidate after a SMALL_FIX quality verdict.
+// The generated patch is applied and committed locally, but is not accepted
+// here. The caller must rerun trusted mechanical verification and quality
+// inspection on the new exact candidate.
+func runYardmasterSmallRepair(cfg *config.Config, job *jobs.Job, workDir string, quality *masterPlan) (cost.Component, error) {
+	component := estimatedComponent("yardmaster-small-repair", cfg.MasterModel, "small repair request did not return provider usage")
+	if cfg.GCPProject == "" {
+		return component, fmt.Errorf("yardmaster small repair: GARY_GCP_PROJECT is required")
+	}
+	if quality == nil || classifyChildQuality(quality) != childQualitySmallFix {
+		return component, fmt.Errorf("yardmaster small repair requires SMALL_FIX quality verdict")
+	}
+
+	repoContext, err := buildYardmasterRepoContext(workDir, 140000)
+	if err != nil {
+		return component, fmt.Errorf("yardmaster small repair context: %w", err)
+	}
+	diffText, _ := plannerCommandOutput(workDir, "git", "diff", "--find-renames", job.BaseBranch+"...HEAD")
+	if len(diffText) > 60000 {
+		diffText = diffText[:60000] + "\n[diff truncated]\n"
+	}
+
+	prompt := fmt.Sprintf(`You are GARY Yardmaster performing one bounded SMALL_FIX repair on an already mechanically verified child candidate.
+
+This is the narrow exception that lets the Yardmaster fix trivial validation defects without paying for another Worker round-trip.
+
+You may only make a small, obvious, local correction whose intended semantics are already clear from the child objective, candidate, and quality verdict.
+
+Allowed examples include a missing import, trivial compile/lint/format issue, obvious naming mistake, tiny configuration correction, narrowly obvious test correction consistent with intended behaviour, or minor integration adjustment.
+
+Do NOT:
+- add substantial implementation;
+- redesign architecture;
+- change the product behaviour or job approach;
+- weaken or bypass tests or acceptance;
+- expand scope;
+- make speculative cleanup;
+- edit unrelated files.
+
+If the requested repair cannot safely be expressed as one small patch, return an empty patch and explain why so GARY can use the normal Worker repair path.
+
+Return JSON only:
+{
+  "summary": "short description of the bounded repair, or why direct repair is unsafe",
+  "patch": "a git-apply compatible unified diff beginning with diff --git, or empty string"
+}
+
+CHILD OBJECTIVE
+===============
+%s
+
+MECHANICAL CHECKS
+=================
+%s
+
+YARDMASTER SMALL_FIX VERDICT
+============================
+%s
+
+YARDMASTER REPAIR GUIDANCE
+==========================
+%s
+
+CURRENT CANDIDATE DIFF
+======================
+%s
+
+REPOSITORY SNAPSHOT
+===================
+%s
+`, job.Task, strings.Join(job.Acceptance, "\n"), quality.Summary, quality.Memory, diffText, repoContext)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	repair, component, err := callYardmasterSmallRepairAPI(ctx, cfg, prompt)
+	if err != nil {
+		return component, err
+	}
+	patch := strings.TrimSpace(repair.Patch)
+	if patch == "" {
+		return component, fmt.Errorf("yardmaster declined direct small repair: %s", strings.TrimSpace(repair.Summary))
+	}
+	if len(patch) > 24000 {
+		return component, fmt.Errorf("yardmaster small repair patch too large: %d bytes", len(patch))
+	}
+	if !strings.HasPrefix(patch, "diff --git ") {
+		return component, fmt.Errorf("yardmaster small repair did not return git diff")
+	}
+
+	check := exec.CommandContext(ctx, "git", "-C", workDir, "apply", "--check", "--whitespace=fix", "-")
+	check.Stdin = strings.NewReader(patch)
+	if out, err := check.CombinedOutput(); err != nil {
+		return component, fmt.Errorf("yardmaster small repair patch check: %w: %s", err, compactPlannerError(string(out), 1600))
+	}
+	apply := exec.CommandContext(ctx, "git", "-C", workDir, "apply", "--whitespace=fix", "-")
+	apply.Stdin = strings.NewReader(patch)
+	if out, err := apply.CombinedOutput(); err != nil {
+		return component, fmt.Errorf("yardmaster small repair patch apply: %w: %s", err, compactPlannerError(string(out), 1600))
+	}
+	if err := gitops.CommitAll(workDir, "GARY: Yardmaster small repair "+job.ID); err != nil {
+		return component, fmt.Errorf("yardmaster small repair commit: %w", err)
+	}
+	return component, nil
+}
+
+func callYardmasterSmallRepairAPI(ctx context.Context, cfg *config.Config, prompt string) (*yardmasterSmallRepairResult, cost.Component, error) {
+	component := estimatedComponent("yardmaster-small-repair", cfg.MasterModel, "small repair request did not return provider usage")
+	token, err := vertexAccessToken(ctx)
+	if err != nil {
+		return nil, component, fmt.Errorf("yardmaster small repair Vertex auth: %w", err)
+	}
+	payload, err := json.Marshal(map[string]interface{}{
+		"contents": []map[string]interface{}{{"role": "user", "parts": []map[string]string{{"text": prompt}}}},
+		"generationConfig": map[string]interface{}{
+			"thinkingConfig": map[string]interface{}{"thinkingLevel": "MEDIUM"},
+			"responseMimeType": "application/json",
+			"maxOutputTokens": 8192,
+		},
+	})
+	if err != nil {
+		return nil, component, fmt.Errorf("yardmaster small repair request encode: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, yardmasterVertexEndpoint(cfg.GCPProject, cfg.MasterModel), bytes.NewReader(payload))
+	if err != nil {
+		return nil, component, fmt.Errorf("yardmaster small repair request build: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, component, fmt.Errorf("yardmaster small repair transport: %w", err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, component, fmt.Errorf("yardmaster small repair response read: %w", err)
+	}
+	requestID := resp.Header.Get("x-goog-request-id")
+	component.ProviderRequestID = requestID
+	if resp.StatusCode != http.StatusOK {
+		component.UnmeteredReason = fmt.Sprintf("yardmaster small repair HTTP %d returned no usable usage record", resp.StatusCode)
+		return nil, component, fmt.Errorf("yardmaster small repair API %d: %s", resp.StatusCode, compactPlannerError(string(data), 1600))
+	}
+	if usage, usageErr := cost.ParseVertexUsage(json.RawMessage(data), cfg.MasterModel, "", requestID); usageErr == nil {
+		component = componentFromUsage("yardmaster-small-repair", usage)
+		component.ProviderRequestID = requestID
+	} else {
+		component.UnmeteredReason = "yardmaster small repair response lacked complete usageMetadata: " + usageErr.Error()
+	}
+
+	var apiResp struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					Text string `json:"text"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+	}
+	if err := json.Unmarshal(data, &apiResp); err != nil {
+		return nil, component, fmt.Errorf("yardmaster small repair response parse: %w", err)
+	}
+	if len(apiResp.Candidates) == 0 {
+		return nil, component, fmt.Errorf("yardmaster small repair returned no candidates")
+	}
+	var raw strings.Builder
+	for _, part := range apiResp.Candidates[0].Content.Parts {
+		raw.WriteString(part.Text)
+	}
+	text := stripJSONFence(strings.TrimSpace(raw.String()))
+	var repair yardmasterSmallRepairResult
+	dec := json.NewDecoder(strings.NewReader(text))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&repair); err != nil {
+		return nil, component, fmt.Errorf("yardmaster small repair JSON: %w; output=%s", err, compactPlannerError(text, 1600))
+	}
+	return &repair, component, nil
 }
