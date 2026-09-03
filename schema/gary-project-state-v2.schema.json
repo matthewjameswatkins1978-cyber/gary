@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gary.project-state.v2",
+  "type": "object",
+  "required": ["schema","project_id","state","generation","updated_at"],
+  "properties": {
+    "schema": {"const":"gary.project-state.v2"},
+    "project_id": {"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,59}$"},
+    "state": {"enum":["ACTIVE","PARKED","WAITING","BLOCKED","ACCEPTED","CANCELLED"]},
+    "generation": {"type":"integer","minimum":1},
+    "activities": {
+      "type":"array",
+      "items":{"enum":["PLANNING","EXECUTING","VERIFYING","INTEGRATING"]},
+      "uniqueItems":true
+    },
+    "yardmaster_state": {"type":"string"},
+    "completion": {"type":"string"},
+    "park_reason": {"type":"string"},
+    "waiting_for": {"type":"string"},
+    "external_dependency": {"type":"string"},
+    "blocked_until": {"type":"string"},
+    "blocker": {"type":"string"},
+    "current_phase": {"type":"string"},
+    "current_strategy": {"type":"string"},
+    "completed_capabilities": {"type":"array","items":{"type":"string"}},
+    "remaining_capabilities": {"type":"array","items":{"type":"string"}},
+    "outstanding_work": {"type":"array","items":{"type":"string"}},
+    "watchdog": {"type":"object"},
+    "last_event": {"type":"string"},
+    "last_event_id": {"type":"string"},
+    "reason": {"type":"string"},
+    "updated_by": {"type":"string"},
+    "updated_at": {"type":"string","minLength":1}
+  },
+  "allOf": [
+    {
+      "if": {"properties":{"state":{"const":"WAITING"}}},
+      "then": {"required":["waiting_for"]}
+    },
+    {
+      "if": {"properties":{"state":{"const":"BLOCKED"}}},
+      "then": {"required":["blocker"]}
+    },
+    {
+      "if": {"properties":{"state":{"not":{"const":"ACTIVE"}}}},
+      "then": {"properties":{"activities":{"maxItems":0}}}
+    }
+  ],
+  "additionalProperties": false
+}
