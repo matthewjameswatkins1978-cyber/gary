@@ -414,7 +414,7 @@ func ensureMasterProject(cfg *config.Config, manifest *masterManifest, brief str
 	}
 	projectID := manifest.ID
 	if existing, err := store.LoadProject(projectID); err == nil {
-		if existing.State == "ACCEPTED" || existing.State == "ARCHIVED" {
+		if existing.State == project.LifecycleAccepted || existing.State == project.LifecycleCancelled {
 			return project.ProjectContext{}, projectID, fmt.Errorf("project %s is terminal (%s)", projectID, existing.State)
 		}
 		if existing.Repo != "" && existing.Repo != manifest.Repo {
