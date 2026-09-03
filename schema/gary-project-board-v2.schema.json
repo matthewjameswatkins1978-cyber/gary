@@ -1,0 +1,30 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"gary.project-board.v2",
+  "type":"object",
+  "required":["schema","updated_at","projects"],
+  "properties":{
+    "schema":{"const":"gary.project-board.v2"},
+    "updated_at":{"type":"string"},
+    "projects":{
+      "type":"array",
+      "items":{
+        "type":"object",
+        "required":["project_id","status","started_at","master_packet_digest","project_manual_version"],
+        "properties":{
+          "project_id":{"type":"string"},
+          "project_name":{"type":"string"},
+          "status":{"enum":["IN_PROCESS","COMPLETED","CANCELLED"]},
+          "started_at":{"type":"string"},
+          "completed_at":{"type":"string"},
+          "cancelled_at":{"type":"string"},
+          "master_packet_digest":{"type":"string"},
+          "project_manual_version":{"type":"integer","minimum":0},
+          "last_event":{"type":"string"}
+        },
+        "additionalProperties":false
+      }
+    }
+  },
+  "additionalProperties":false
+}
