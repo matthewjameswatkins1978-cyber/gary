@@ -170,8 +170,10 @@ func TestMasterWorkflowAutoContinuesPausedRunsAndPersistsProjectContext(t *testi
 		"Continuing paused master",
 		"Project terminality is monotonic",
 		"Preserving terminal/newer remote project state",
-		`remote_state == "ARCHIVED"`,
-		`remote_state == "ACCEPTED"`,
+		`{"ACCEPTED", "CANCELLED", "ARCHIVED"}`,
+		"remote_generation",
+		"lifecycle.jsonl",
+		"divergent lifecycle event histories",
 	} {
 		if !strings.Contains(workflow, required) {
 			t.Fatalf("master workflow missing long-project continuity marker %q", required)
@@ -490,17 +492,43 @@ func TestCompactPlannerMemoryIsBoundedAndFallsBack(t *testing.T) {
 	}
 }
 
-func TestEconomicPlanDefersAdditionalJobs(t *testing.T) {
-	plan := enforceEconomicPlan(&masterPlan{Summary: "next slice", Jobs: []masterPlanJob{
+func TestEconomicPlanDoesNotSilentlySerializeSafeWork(t *testing.T) {
+	plan := enforceEconomicPlan(&masterPlan{Summary: "safe parallel slice", Jobs: []masterPlanJob{
 		{ID: "one", Task: "first", EstimatedMinutes: 6}, {ID: "two", Task: "second", EstimatedMinutes: 4},
 	}})
-	if len(plan.Jobs) != 1 || plan.Jobs[0].ID != "one" {
-		t.Fatalf("economic plan jobs = %+v, want only first job", plan.Jobs)
+	if len(plan.Jobs) != 2 || plan.Jobs[0].ID != "one" || plan.Jobs[1].ID != "two" {
+		t.Fatalf("economic plan silently serialized jobs: %+v", plan.Jobs)
 	}
-	if plan.Jobs[0].EstimatedMinutes != 6 {
-		t.Fatalf("economic gate changed estimate to %d, want 6", plan.Jobs[0].EstimatedMinutes)
+	if plan.Summary != "safe parallel slice" {
+		t.Fatalf("economic compatibility hook rewrote summary: %q", plan.Summary)
 	}
-	if !strings.Contains(plan.Summary, "deferred to later waves") {
-		t.Fatalf("economic plan did not record deferral: %q", plan.Summary)
+}
+
+
+func TestLoadMasterManifestClampsRequestedWorkersToAvailableCapacity(t *testing.T) {
+	t.Setenv("GARY_MAX_WORKERS", "2")
+	dir := t.TempDir()
+	brief := filepath.Join(dir, "brief.md")
+	if err := os.WriteFile(brief, []byte("finish the project"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	manifest := filepath.Join(dir, "master.json")
+	briefJSON, _ := json.Marshal(brief)
+	data := strings.ReplaceAll(`{
+  "id":"capacity-job",
+  "repo":"https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
+  "base_branch":"main",
+  "brief_path":BRIEF,
+  "max_workers":8
+}`, "BRIEF", string(briefJSON))
+	if err := os.WriteFile(manifest, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := loadMasterManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MaxWorkers != 2 {
+		t.Fatalf("requested worker count was not adapted to available capacity: got %d want 2", got.MaxWorkers)
 	}
 }
