@@ -226,8 +226,9 @@ jobs:
               test -f "$local_file" || continue
 
               # Project terminality is monotonic. Old master runs may finish late,
-              # but they must never resurrect ACCEPTED/ARCHIVED project state or
-              # overwrite a newer project/state snapshot with older active state.
+              # but they must never resurrect ACCEPTED/CANCELLED project state.
+              # Legacy ARCHIVED snapshots are treated as accepted+archived during
+              # migration. Lifecycle generation outranks wall-clock timestamps.
               case "$path" in
                 */project.json|*/state.json)
                   if [ -f "$path" ]; then
@@ -247,13 +248,25 @@ jobs:
 
           remote_state = str(remote.get("state", ""))
           local_state = str(local.get("state", ""))
+          remote_generation = int(remote.get("generation", 0) or 0)
+          local_generation = int(local.get("generation", 0) or 0)
           remote_updated = str(remote.get("updated_at", ""))
           local_updated = str(local.get("updated_at", ""))
 
-          if remote_state == "ARCHIVED" and local_state != "ARCHIVED":
+          # Legacy ARCHIVED represented an already accepted project with archive
+          # storage applied, so it remains terminal during migration.
+          remote_terminal = remote_state in {"ACCEPTED", "CANCELLED", "ARCHIVED"}
+          local_terminal = local_state in {"ACCEPTED", "CANCELLED", "ARCHIVED"}
+          if remote_terminal and not local_terminal:
               raise SystemExit(1)
-          if remote_state == "ACCEPTED" and local_state not in {"ACCEPTED", "ARCHIVED"}:
-              raise SystemExit(1)
+
+          # Generation is the lifecycle CAS token. Prefer it over clock order.
+          if remote_generation and local_generation:
+              if remote_generation > local_generation:
+                  raise SystemExit(1)
+              if remote_generation < local_generation:
+                  raise SystemExit(0)
+
           if remote_updated and local_updated and remote_updated >= local_updated:
               raise SystemExit(1)
           PY
@@ -261,6 +274,44 @@ jobs:
                       echo "Preserving terminal/newer remote project state $path"
                       continue
                     fi
+                  fi
+                  ;;
+              esac
+
+              case "$path" in
+                */events/lifecycle.jsonl)
+                  if [ -f "$path" ]; then
+                    set +e
+                    python3 - "$path" "$local_file" <<'PY'
+          import pathlib
+          import sys
+
+          remote = pathlib.Path(sys.argv[1]).read_bytes()
+          local = pathlib.Path(sys.argv[2]).read_bytes()
+
+          if local == remote:
+              raise SystemExit(1)
+          if local.startswith(remote):
+              raise SystemExit(0)
+          if remote.startswith(local):
+              # Local run is stale; preserve the longer canonical remote stream.
+              raise SystemExit(1)
+          print("divergent lifecycle event histories", file=sys.stderr)
+          raise SystemExit(2)
+          PY
+                    lifecycle_rc=$?
+                    set -e
+                    case "$lifecycle_rc" in
+                      0) ;;
+                      1)
+                        echo "Preserving equal/newer remote lifecycle history $path"
+                        continue
+                        ;;
+                      *)
+                        echo "Refusing divergent lifecycle history $path" >&2
+                        exit 1
+                        ;;
+                    esac
                   fi
                   ;;
               esac
