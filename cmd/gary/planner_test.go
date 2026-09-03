@@ -87,3 +87,23 @@ func TestWorkerSupervisorPromptContainsLiveControlDoctrine(t *testing.T) {
 		}
 	}
 }
+
+
+func TestSmallFixDoctrineHasBoundedYardmasterRepairAndReverification(t *testing.T) {
+	data, err := os.ReadFile("planner.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	for _, marker := range []string{
+		"runYardmasterSmallRepair",
+		"one bounded direct repair",
+		"git apply",
+		"caller must rerun trusted mechanical verification",
+		"substantial implementation",
+	} {
+		if !strings.Contains(source, marker) {
+			t.Fatalf("Yardmaster SMALL_FIX path missing %q", marker)
+		}
+	}
+}
