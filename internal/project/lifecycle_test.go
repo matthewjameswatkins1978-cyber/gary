@@ -84,10 +84,10 @@ func TestLifecycleTransitionsAppendEventsAndRejectStaleGeneration(t *testing.T) 
 
 func TestLegacyLifecycleProjectionCompatibility(t *testing.T) {
 	for _, tc := range []struct {
-		legacy     string
-		lifecycle  string
-		activity   string
-		archived   bool
+		legacy    string
+		lifecycle string
+		activity  string
+		archived  bool
 	}{
 		{"PLANNING", LifecycleActive, ActivityPlanning, false},
 		{"EXECUTING", LifecycleActive, ActivityExecuting, false},
@@ -159,5 +159,12 @@ func TestIllegalLifecycleTransitionsFailClosed(t *testing.T) {
 		Activities: []string{ActivityVerifying}, Reason: "illegal shortcut",
 	}); !errors.Is(err, ErrProjectNotAcceptable) {
 		t.Fatalf("PARKED -> ACCEPTED shortcut err=%v", err)
+	}
+	if err := store.appendLifecycleEventUnlocked(LifecycleEvent{
+		ProjectID: "illegal-transition", Generation: parked.Project.Generation + 1,
+		PreviousState: LifecycleParked, NewState: LifecycleAccepted,
+		Actor: "test", Reason: "illegal direct append",
+	}); !errors.Is(err, ErrProjectNotAcceptable) {
+		t.Fatalf("direct PARKED -> ACCEPTED append err=%v", err)
 	}
 }

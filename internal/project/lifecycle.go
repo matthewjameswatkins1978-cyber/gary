@@ -241,6 +241,9 @@ func (s Store) LoadLifecycleEvents(id string) ([]LifecycleEvent, error) {
 		if !validLifecycleState(event.NewState) {
 			return nil, fmt.Errorf("invalid lifecycle target %q", event.NewState)
 		}
+		if previousGeneration > 0 && !legalLifecycleTransition(previousState, event.NewState) {
+			return nil, fmt.Errorf("illegal lifecycle transition %s -> %s at %q", previousState, event.NewState, event.EventID)
+		}
 		events = append(events, event)
 		previousDigest = event.EventDigest
 		previousGeneration = event.Generation
@@ -274,6 +277,9 @@ func (s Store) appendLifecycleEventUnlocked(event LifecycleEvent) error {
 	}
 	if event.Generation != previousGeneration+1 || event.PreviousState != previousState {
 		return fmt.Errorf("%w: expected generation %d from %s", ErrLifecycleStaleGeneration, previousGeneration+1, previousState)
+	}
+	if !validLifecycleState(event.NewState) || (previousGeneration > 0 && !legalLifecycleTransition(previousState, event.NewState)) {
+		return fmt.Errorf("%w: illegal lifecycle transition %s -> %s", ErrProjectNotAcceptable, previousState, event.NewState)
 	}
 	event.Schema = LifecycleEventSchema
 	event.PreviousEventDigest = previousDigest

@@ -72,6 +72,10 @@ func feedbackPath(s Store, id string) string {
 	return filepath.Join(s.projectDir(id), "feedback", "events.jsonl")
 }
 
+func feedbackLockPath(s Store, id string) string {
+	return filepath.Join(s.projectDir(id), "feedback", ".events.lock")
+}
+
 // AppendFeedback records explicit human feedback without changing the packet,
 // manual, state, worker packets, or doctrine.
 func (s Store) AppendFeedback(id, actor, scope, decisionReference, childTaskID, text string) (FeedbackRecord, error) {
@@ -100,25 +104,28 @@ func (s Store) AppendFeedback(id, actor, scope, decisionReference, childTaskID, 
 		ChildTaskID: strings.TrimSpace(childTaskID), Text: strings.TrimSpace(text),
 		Status: feedbackInitialStatus(scope),
 	}
-	events, err := s.LoadFeedbackEvents(id)
-	if err != nil {
-		return FeedbackRecord{}, err
-	}
-	feedbackID := fmt.Sprintf("feedback-%d-%s", now.UnixNano(), strings.TrimPrefix(Digest([]byte(fmt.Sprintf("%s\x00%s\x00%s", scope, base.Text, base.Actor))), "sha256:")[:12])
-	for _, event := range events {
-		if event.FeedbackID == feedbackID {
-			return FeedbackRecord{}, fmt.Errorf("%w: generated feedback id collision", ErrFeedbackInvalid)
+	err = withProjectFileLock(feedbackLockPath(s, id), boardLockTimeout, func() error {
+		events, err := s.LoadFeedbackEvents(id)
+		if err != nil {
+			return err
 		}
-	}
-	base.FeedbackID = feedbackID
-	event := FeedbackEvent{
-		Schema: FeedbackSchema, EventID: feedbackID + "-submitted", EventType: FeedbackEventSubmitted,
-		PreviousEventDigest: previousFeedbackDigest(events),
-		FeedbackID:          feedbackID, ProjectID: id, Actor: base.Actor, CreatedAt: createdAt,
-		Scope: base.Scope, DecisionReference: base.DecisionReference, ChildTaskID: base.ChildTaskID,
-		Text: base.Text, Status: base.Status,
-	}
-	if err := s.appendFeedbackEvent(event); err != nil {
+		feedbackID := fmt.Sprintf("feedback-%d-%s", now.UnixNano(), strings.TrimPrefix(Digest([]byte(fmt.Sprintf("%s\x00%s\x00%s", scope, base.Text, base.Actor))), "sha256:")[:12])
+		for _, event := range events {
+			if event.FeedbackID == feedbackID {
+				return fmt.Errorf("%w: generated feedback id collision", ErrFeedbackInvalid)
+			}
+		}
+		base.FeedbackID = feedbackID
+		event := FeedbackEvent{
+			Schema: FeedbackSchema, EventID: feedbackID + "-submitted", EventType: FeedbackEventSubmitted,
+			PreviousEventDigest: previousFeedbackDigest(events),
+			FeedbackID:          feedbackID, ProjectID: id, Actor: base.Actor, CreatedAt: createdAt,
+			Scope: base.Scope, DecisionReference: base.DecisionReference, ChildTaskID: base.ChildTaskID,
+			Text: base.Text, Status: base.Status,
+		}
+		return s.appendFeedbackEvent(event)
+	})
+	if err != nil {
 		return FeedbackRecord{}, err
 	}
 	return base, nil
@@ -226,33 +233,39 @@ func (s Store) ApplyPendingFeedback(id, boundary string) ([]FeedbackRecord, erro
 	if strings.TrimSpace(boundary) == "" {
 		return nil, fmt.Errorf("%w: boundary is required", ErrReviewUnsafeBoundary)
 	}
-	events, err := s.LoadFeedbackEvents(id)
+	err = withProjectFileLock(feedbackLockPath(s, id), boardLockTimeout, func() error {
+		events, err := s.LoadFeedbackEvents(id)
+		if err != nil {
+			return err
+		}
+		records, err := s.LoadFeedback(id)
+		if err != nil {
+			return err
+		}
+		previousDigest := previousFeedbackDigest(events)
+		for _, record := range records {
+			if record.Status != FeedbackPending {
+				continue
+			}
+			now := time.Now().UTC().Format(time.RFC3339Nano)
+			event := FeedbackEvent{
+				Schema: FeedbackSchema, EventID: record.FeedbackID + "-applied-" + strings.TrimPrefix(Digest([]byte(now)), "sha256:")[:12],
+				EventType: FeedbackEventApplied, FeedbackID: record.FeedbackID, ProjectID: id,
+				PreviousEventDigest: previousDigest,
+				Actor:               record.Actor, CreatedAt: record.CreatedAt, Scope: record.Scope,
+				DecisionReference: record.DecisionReference, ChildTaskID: record.ChildTaskID,
+				Text: record.Text, Status: FeedbackApplied, AppliedAt: now, AppliedBoundary: boundary,
+			}
+			event.EventDigest = FeedbackEventDigest(event)
+			if err := s.appendFeedbackEvent(event); err != nil {
+				return err
+			}
+			previousDigest = event.EventDigest
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
-	}
-	records, err := s.LoadFeedback(id)
-	if err != nil {
-		return nil, err
-	}
-	previousDigest := previousFeedbackDigest(events)
-	for _, record := range records {
-		if record.Status != FeedbackPending {
-			continue
-		}
-		now := time.Now().UTC().Format(time.RFC3339Nano)
-		event := FeedbackEvent{
-			Schema: FeedbackSchema, EventID: record.FeedbackID + "-applied-" + strings.TrimPrefix(Digest([]byte(now)), "sha256:")[:12],
-			EventType: FeedbackEventApplied, FeedbackID: record.FeedbackID, ProjectID: id,
-			PreviousEventDigest: previousDigest,
-			Actor:               record.Actor, CreatedAt: record.CreatedAt, Scope: record.Scope,
-			DecisionReference: record.DecisionReference, ChildTaskID: record.ChildTaskID,
-			Text: record.Text, Status: FeedbackApplied, AppliedAt: now, AppliedBoundary: boundary,
-		}
-		event.EventDigest = FeedbackEventDigest(event)
-		if err := s.appendFeedbackEvent(event); err != nil {
-			return nil, err
-		}
-		previousDigest = event.EventDigest
 	}
 	return s.LoadFeedback(id)
 }
