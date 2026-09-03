@@ -68,9 +68,10 @@ func (s Store) IngestPending(ctx context.Context, id string, generate ManualGene
 	if err := readJSON(filepath.Join(s.projectDir(id), "state.json"), &state); err != nil {
 		return ProjectContext{}, fmt.Errorf("%w: state: %v", ErrProjectMissing, err)
 	}
-	if state.Schema != StateSchema || state.ProjectID != id {
+	if (state.Schema != StateSchema && state.Schema != LegacyStateSchema) || state.ProjectID != id {
 		return ProjectContext{}, fmt.Errorf("%w: invalid project state", ErrProjectMissing)
 	}
+	state.Schema = StateSchema
 	amendments, err := s.LoadAmendments(id)
 	if err != nil {
 		return ProjectContext{}, err
