@@ -213,6 +213,21 @@ func TestValidateMasterPlan(t *testing.T) {
 		t.Fatalf("valid plan rejected: %v", err)
 	}
 
+	withinBound := &masterPlan{Jobs: []masterPlanJob{{
+		ID: "detailed", Task: strings.Repeat("x", maxPlannerTaskBytes),
+		Acceptance: []string{"go test ./..."}, EstimatedMinutes: 5,
+	}}}
+	if err := validateMasterPlan(withinBound, 4); err != nil {
+		t.Fatalf("maximum bounded task rejected: %v", err)
+	}
+	tooLarge := &masterPlan{Jobs: []masterPlanJob{{
+		ID: "too-large", Task: strings.Repeat("x", maxPlannerTaskBytes+1),
+		Acceptance: []string{"go test ./..."}, EstimatedMinutes: 5,
+	}}}
+	if err := validateMasterPlan(tooLarge, 4); err == nil {
+		t.Fatal("oversized worker task should be rejected")
+	}
+
 	bad := &masterPlan{Jobs: []masterPlanJob{{
 		ID:               "bad",
 		Task:             "Do something.",
@@ -503,7 +518,6 @@ func TestEconomicPlanDoesNotSilentlySerializeSafeWork(t *testing.T) {
 		t.Fatalf("economic compatibility hook rewrote summary: %q", plan.Summary)
 	}
 }
-
 
 func TestLoadMasterManifestClampsRequestedWorkersToAvailableCapacity(t *testing.T) {
 	t.Setenv("GARY_MAX_WORKERS", "2")

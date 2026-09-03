@@ -49,7 +49,11 @@ type masterPlanJob struct {
 }
 
 const (
-	maxPlannerTaskBytes   = 1600
+	// A worker task must stay bounded, but 1600 bytes is too restrictive for a
+	// coherent foundational slice with explicit scope, constraints, and checks.
+	// Keep the ceiling small enough for reliable handover while allowing the
+	// Yardmaster to preserve the details that make the instruction executable.
+	maxPlannerTaskBytes   = 3200
 	maxPlannerMemoryBytes = 1600
 )
 
@@ -577,7 +581,7 @@ PLANNER-SPECIFIC RULES
 - Do not create a setup job whose uncommitted/ephemeral state is required by another parallel job. Each child must be independently runnable from the current staging branch.
 - Respect dependency and priority ordering in the master brief. If P0/blocker verification is still unresolved, do not schedule P1/P2 or cosmetic work in the same wave unless it is truly independent and cannot mask or complicate P0.
 - Each job must be bounded and have one or more direct executable acceptance commands.
-- Keep each job task concise and under 1600 characters. It must describe one outcome, a small file scope, and one or two direct acceptance commands.
+- Keep each job task concise and under 3200 characters. It must describe one outcome, a small file scope, and one or two direct acceptance commands.
 - Give each job one or two simple direct acceptance checks that can be rerun mechanically in a fresh clone. Ordinary verifier shell composition such as pipes, &&, quoting, environment prefixes, temporary directories and command substitution is allowed when it genuinely expresses the check. Do not put network access, repository pushes, privilege changes, destructive administration or unrelated work in acceptance. Put setup or exploration in the child task instead.
 - Jobs may inspect or modify the repository as needed, but keep scopes non-overlapping where practical.
 - If prior workers failed, replan around the evidence rather than repeating them blindly.
