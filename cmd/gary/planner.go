@@ -749,11 +749,10 @@ func runYardmasterSmallRepair(cfg *config.Config, job *jobs.Job, workDir string,
 		return component, fmt.Errorf("yardmaster small repair context: %w", err)
 	}
 	diffText, _ := plannerCommandOutput(workDir, "git", "diff", "--find-renames", job.BaseBranch+"...HEAD")
-	allowedFilesText, err := plannerCommandOutput(workDir, "git", "diff", "--name-only", job.BaseBranch+"...HEAD")
+	allowedFiles, err := changedWorkingTreeFiles(workDir, job.BaseBranch)
 	if err != nil {
 		return component, fmt.Errorf("yardmaster small repair candidate scope: %w", err)
 	}
-	allowedFiles := splitNonEmptyLines(allowedFilesText)
 	if len(allowedFiles) == 0 {
 		return component, fmt.Errorf("yardmaster small repair candidate has no changed files")
 	}
@@ -838,11 +837,11 @@ REPOSITORY SNAPSHOT
 	if out, err := apply.CombinedOutput(); err != nil {
 		return component, fmt.Errorf("yardmaster small repair patch apply: %w: %s", err, compactPlannerError(string(out), 1600))
 	}
-	afterFilesText, err := plannerCommandOutput(workDir, "git", "diff", "--name-only", job.BaseBranch+"...HEAD")
+	afterFiles, err := changedWorkingTreeFiles(workDir, job.BaseBranch)
 	if err != nil {
 		return component, fmt.Errorf("yardmaster small repair post-patch scope: %w", err)
 	}
-	if err := validateSmallRepairScope(allowedFiles, splitNonEmptyLines(afterFilesText)); err != nil {
+	if err := validateSmallRepairScope(allowedFiles, afterFiles); err != nil {
 		return component, err
 	}
 	if err := gitops.CommitAll(workDir, "GARY: Yardmaster small repair "+job.ID); err != nil {
@@ -859,6 +858,21 @@ func splitNonEmptyLines(text string) []string {
 		}
 	}
 	return lines
+}
+
+// changedWorkingTreeFiles includes committed changes relative to the base,
+// unstaged changes, and untracked files. A Yardmaster patch is applied before
+// this is checked, so comparing only base...HEAD would miss a newly added file.
+func changedWorkingTreeFiles(workDir, baseBranch string) ([]string, error) {
+	committed, err := plannerCommandOutput(workDir, "git", "diff", "--name-only", baseBranch)
+	if err != nil {
+		return nil, err
+	}
+	untracked, err := plannerCommandOutput(workDir, "git", "ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, err
+	}
+	return append(splitNonEmptyLines(committed), splitNonEmptyLines(untracked)...), nil
 }
 
 func validateSmallRepairScope(before, after []string) error {
