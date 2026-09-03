@@ -64,9 +64,44 @@ func TestCreateAndIngestPersistsBeforeGeneratorAndRecovers(t *testing.T) {
 	if string(recovered.Packet) != string(packet) || recovered.Manual.Objective != "Build the book burner" {
 		t.Fatalf("recovered context lost data: %+v", recovered)
 	}
+	board, err := store.LoadBoard()
+	if err != nil || len(board.Projects) != 1 || board.Projects[0].Status != BoardInProcess || board.Projects[0].ProjectManualVersion != 1 {
+		t.Fatalf("project board after start = %+v err=%v", board, err)
+	}
 	resumed, err := store.ResumeProject("book-burner")
 	if err != nil || resumed.Project.State != "PLANNING" || resumed.State.State != "PLANNING" {
 		t.Fatalf("resume context = %+v err=%v", resumed, err)
+	}
+}
+
+func TestProjectBoardCompletesOnlyAfterProjectAcceptance(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if _, err := store.CreateAndIngest(context.Background(), "board-project", "Board project", "", "", []byte("packet"), testManual); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.MarkProjectCompleted(Project{ProjectID: "board-project", State: "PAUSED"}); err == nil {
+		t.Fatal("paused project was marked completed")
+	}
+	board, err := store.LoadBoard()
+	if err != nil || board.Projects[0].Status != BoardInProcess {
+		t.Fatalf("board changed after rejected completion: %+v err=%v", board, err)
+	}
+	if err := store.SaveState("board-project", ProjectState{ProjectID: "board-project", State: "VERIFYING", CurrentPhase: "verification"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AcceptProject("board-project", "accepted"); err != nil {
+		t.Fatal(err)
+	}
+	board, err = store.LoadBoard()
+	if err != nil || len(board.Projects) != 1 || board.Projects[0].Status != BoardCompleted || board.Projects[0].CompletedAt == "" {
+		t.Fatalf("board after acceptance = %+v err=%v", board, err)
+	}
+	if err := store.MarkProjectInProcess(Project{ProjectID: "board-project", ProjectName: "stale", State: "ACCEPTED", MasterPacketDigest: "stale"}); err != nil {
+		t.Fatal(err)
+	}
+	board, err = store.LoadBoard()
+	if err != nil || board.Projects[0].Status != BoardCompleted {
+		t.Fatalf("completed board entry was resurrected: %+v err=%v", board, err)
 	}
 }
 

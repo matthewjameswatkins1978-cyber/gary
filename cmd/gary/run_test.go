@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -29,6 +30,25 @@ func TestExtractMarkerFromBatchLogsFiltersUIDAndRestoresOrder(t *testing.T) {
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Timestamp < entries[j].Timestamp })
 	if got := extractMarkerFromBatchLogs(entries, jobUID, "GARY_PATCH_B64"); got != "patch-data" {
 		t.Fatalf("extracted marker = %q, want patch-data", got)
+	}
+}
+
+func TestParseGCSObjectListSortsAndFiltersOutput(t *testing.T) {
+	got := parseGCSObjectList("warning\ngs://bucket/run/telemetry/0002.json\n gs://bucket/run/telemetry/0001.json \n")
+	want := []string{
+		"gs://bucket/run/telemetry/0001.json",
+		"gs://bucket/run/telemetry/0002.json",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("parsed objects = %#v, want %#v", got, want)
+	}
+}
+
+func TestControlObjectPathIsAppendOnlyAndGenerationOrdered(t *testing.T) {
+	got := controlObjectPath("gs://bucket/run/control/", 3, "abc12345")
+	want := "gs://bucket/run/control/control-00000003-abc12345.json"
+	if got != want {
+		t.Fatalf("control object path = %q, want %q", got, want)
 	}
 }
 

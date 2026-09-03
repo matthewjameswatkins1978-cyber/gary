@@ -31,6 +31,9 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --role="roles/logging.viewer"
 gcloud storage buckets add-iam-policy-binding gs://gary-batch-results-418146339023 \
   --member="serviceAccount:$DISPATCHER@$PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/storage.objectCreator"
+gcloud storage buckets add-iam-policy-binding gs://gary-batch-results-418146339023 \
+  --member="serviceAccount:$DISPATCHER@$PROJECT_ID.iam.gserviceaccount.com" \
   --role="roles/storage.objectViewer"
 gcloud iam service-accounts add-iam-policy-binding \
   gary-batch-worker@$PROJECT_ID.iam.gserviceaccount.com \

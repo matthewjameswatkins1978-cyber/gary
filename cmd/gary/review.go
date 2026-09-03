@@ -20,6 +20,7 @@ type projectExplanation struct {
 	GeneratedAt     string                   `json:"generated_at"`
 	Project         project.Project          `json:"project"`
 	State           project.ProjectState     `json:"state"`
+	Board           *project.BoardEntry      `json:"board,omitempty"`
 	Packet          reviewPacketEvidence     `json:"packet"`
 	Manual          reviewManualEvidence     `json:"manual"`
 	Amendments      []project.Amendment      `json:"amendments,omitempty"`
@@ -139,11 +140,20 @@ func buildProjectExplanation(projectID, masterID, childTaskID string, wave int) 
 		Packet:     reviewPacketEvidence{Version: ctx.Project.MasterPacketVersion, Digest: ctx.Project.MasterPacketDigest, Source: filepath.Join(project.DefaultStore().Root(), projectID, "source", "MASTER_PACKET.md")},
 		Manual:     reviewManualEvidence{Version: ctx.Project.ProjectManualVersion, Digest: ctx.Project.ManualDigest, Objective: ctx.Manual.Objective, DefinitionDone: ctx.Manual.DefinitionOfDone, Source: filepath.Join(project.DefaultStore().Root(), projectID, "manuals", fmt.Sprintf("project-manual-v%03d.json", ctx.Project.ProjectManualVersion))},
 		Amendments: ctx.Amendments, Feedback: ctx.Feedback,
-		Basis: []string{"durable project.json and state.json", "immutable master packet digest", "current versioned manual digest", "append-only review events", "recorded master wave plans and worker results", "GARY rulebook and project-context operating boundary"},
+		Basis: []string{"durable project.json and state.json", "Yardmaster project board", "immutable master packet digest", "current versioned manual digest", "append-only review events", "recorded master wave plans and worker results", "GARY rulebook and project-context operating boundary"},
+	}
+	if board, boardErr := project.DefaultStore().LoadBoard(); boardErr == nil {
+		for i := range board.Projects {
+			if board.Projects[i].ProjectID == projectID {
+				explanation.Board = &board.Projects[i]
+				break
+			}
+		}
 	}
 	explanation.EvidenceSources = append(explanation.EvidenceSources,
 		filepath.Join(project.DefaultStore().Root(), projectID, "project.json"),
 		filepath.Join(project.DefaultStore().Root(), projectID, "state.json"),
+		filepath.Join(project.DefaultStore().Root(), "board", "projects.json"),
 		explanation.Packet.Source, explanation.Manual.Source,
 		filepath.Join(project.DefaultStore().Root(), projectID, "feedback", "events.jsonl"),
 		"GARY_RULEBOOK.md", "docs/project-context.md")

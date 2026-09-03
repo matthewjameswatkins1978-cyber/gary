@@ -136,6 +136,17 @@ func TestLoadImplementerModelFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoadMasterModelDefault(t *testing.T) {
+	os.Unsetenv("GARY_MASTER_MODEL")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.MasterModel != "gemini-3.8-flash" {
+		t.Errorf("MasterModel = %q, want gemini-3.8-flash", cfg.MasterModel)
+	}
+}
+
 func TestLoadGeminiAPIKey(t *testing.T) {
 	os.Setenv("GEMINI_API_KEY", "test-key-123")
 	defer os.Unsetenv("GEMINI_API_KEY")

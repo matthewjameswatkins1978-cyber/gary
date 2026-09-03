@@ -860,7 +860,7 @@ func waitForSupervisedWorker(cfg *config.Config, job *jobs.Job, task, acceptance
 						logPrint(prefix, "  YARDMASTER GUIDANCE: %s", decision.Guidance)
 					}
 				}
-				if err := writeWorkerControl(gcsPath+"/control.json", decision); err != nil {
+				if err := writeWorkerControl(gcsPath+"/control", decision); err != nil {
 					return nil, time.Time{}, components, fmt.Errorf("publish Yardmaster control: %w", err)
 				}
 				lastReviewID = telemetry.ReviewID
@@ -885,6 +885,24 @@ func fallbackSupervisionDecision(telemetry supervisor.Telemetry, generation int,
 }
 
 func readWorkerTelemetry(path string) (supervisor.Telemetry, bool) {
+	// Worker telemetry is append-only because the Batch service account has
+	// objectCreator, not objectUser. Read the newest immutable snapshot first.
+	if objects, err := listGCSObjects(path + "/telemetry/*.json"); err == nil {
+		for i := len(objects) - 1; i >= 0; i-- {
+			if telemetry, ok := decodeWorkerTelemetryObject(objects[i]); ok {
+				return telemetry, true
+			}
+		}
+	}
+
+	// Backward compatibility for runs created before append-only telemetry.
+	if telemetry, ok := decodeWorkerTelemetryObject(path + "/telemetry.json"); ok {
+		return telemetry, true
+	}
+	return supervisor.Telemetry{}, false
+}
+
+func decodeWorkerTelemetryObject(path string) (supervisor.Telemetry, bool) {
 	data, err := readGCSObject(path)
 	if err != nil || len(data) == 0 {
 		return supervisor.Telemetry{}, false
@@ -899,12 +917,53 @@ func readWorkerTelemetry(path string) (supervisor.Telemetry, bool) {
 	return telemetry, true
 }
 
+func listGCSObjects(pattern string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), cloudCommandTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "gcloud", "storage", "ls", pattern)
+	cmd.WaitDelay = 2 * time.Second
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		ctx2, cancel2 := context.WithTimeout(context.Background(), cloudCommandTimeout)
+		defer cancel2()
+		fallback := exec.CommandContext(ctx2, "python3", "-m", "gsutil", "ls", pattern)
+		fallback.WaitDelay = 2 * time.Second
+		out, err = fallback.CombinedOutput()
+		if err != nil {
+			return nil, fmt.Errorf("list %s: %w", pattern, err)
+		}
+	}
+
+	objects := parseGCSObjectList(string(out))
+	if len(objects) == 0 {
+		return nil, fmt.Errorf("no objects found for %s", pattern)
+	}
+	return objects, nil
+}
+
+func parseGCSObjectList(output string) []string {
+	objects := make([]string, 0)
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "gs://") {
+			objects = append(objects, line)
+		}
+	}
+	sort.Strings(objects)
+	return objects
+}
+
 func writeWorkerControl(path string, decision supervisor.Decision) error {
 	data, err := json.Marshal(decision)
 	if err != nil {
 		return err
 	}
-	return writeGCSObject(path, data)
+	controlPath := controlObjectPath(path, decision.Generation, randomSuffix(8))
+	return writeGCSObject(controlPath, data)
+}
+
+func controlObjectPath(path string, generation int, suffix string) string {
+	return fmt.Sprintf("%s/control-%08d-%s.json", strings.TrimSuffix(path, "/"), generation, suffix)
 }
 
 func readGCSObject(path string) ([]byte, error) {

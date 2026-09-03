@@ -4,7 +4,8 @@ import "strings"
 
 // supervisedCodingWorkerScript keeps the Batch VM disposable while making the
 // Gemini process inside it observable and steerable. The control plane writes
-// control.json into the run's GCS prefix; this wrapper emits telemetry.json and
+// immutable control snapshots into the run's GCS prefix; this wrapper emits
+// immutable telemetry snapshots and
 // reacts to CONTINUE, GUIDE, STOP_AND_REPLAN, and READY_FOR_INSPECTION.
 func supervisedCodingWorkerScript(cfg CodingJobConfig) string {
 	r := strings.NewReplacer(
@@ -149,13 +150,33 @@ PY
 emit_telemetry() {
   export GARY_TELEMETRY_PHASE="$1"
   python3 /workspace/write_telemetry.py
-  gcloud storage cp /workspace/telemetry.json "$GARY_GCS_PATH/telemetry.json" >/dev/null 2>&1 ||
-    python3 -m gsutil cp /workspace/telemetry.json "$GARY_GCS_PATH/telemetry.json" >/dev/null 2>&1 ||
-    true
+  # The worker service account intentionally has objectCreator rather than
+  # objectUser on the results bucket.  Keep telemetry append-only so later
+  # heartbeats and candidate_ready events do not fail when replacing the first
+  # object.  The control plane reads the newest object under telemetry/.
+  local telemetry_name
+  telemetry_name="$(date -u +%Y%m%dT%H%M%S.%NZ)-turn-${GARY_TURN:-0}-${GARY_TELEMETRY_PHASE}-$$.json"
+  if ! gcloud storage cp /workspace/telemetry.json "$GARY_GCS_PATH/telemetry/$telemetry_name" >/dev/null 2>&1 &&
+     ! python3 -m gsutil cp /workspace/telemetry.json "$GARY_GCS_PATH/telemetry/$telemetry_name" >/dev/null 2>&1; then
+    echo "Telemetry upload failed for $telemetry_name" >&2
+  fi
 }
 
 read_control() {
   rm -f /workspace/control.new.json
+  local listing
+  if ! listing="$(gcloud storage ls "$GARY_GCS_PATH/control/*.json" 2>/dev/null)"; then
+    listing="$(python3 -m gsutil ls "$GARY_GCS_PATH/control/*.json" 2>/dev/null)" || listing=""
+  fi
+  local latest
+  latest="$(printf '%s\n' "$listing" | awk '/^gs:\/\// {print}' | sort | tail -n1)"
+  if [ -n "$latest" ]; then
+    gcloud storage cp "$latest" /workspace/control.new.json >/dev/null 2>&1 ||
+      python3 -m gsutil cp "$latest" /workspace/control.new.json >/dev/null 2>&1 ||
+      return 1
+    return 0
+  fi
+  # Backward compatibility for a control file produced by an older dispatcher.
   gcloud storage cp "$GARY_GCS_PATH/control.json" /workspace/control.new.json >/dev/null 2>&1 ||
     python3 -m gsutil cp "$GARY_GCS_PATH/control.json" /workspace/control.new.json >/dev/null 2>&1 ||
     return 1
