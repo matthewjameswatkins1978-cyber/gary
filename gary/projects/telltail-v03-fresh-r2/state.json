@@ -1,0 +1,8 @@
+{
+  "schema": "gary.project-state.v1",
+  "project_id": "telltail-v03-fresh-r2",
+  "state": "ACTIVE",
+  "current_phase": "intake",
+  "watchdog": {},
+  "updated_at": "2026-09-03T04:18:56Z"
+}
