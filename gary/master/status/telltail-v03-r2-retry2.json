@@ -1,0 +1,18 @@
+{
+  "id": "telltail-v03-r2-retry2",
+  "project_id": "telltail-v03-fresh-r2",
+  "master_packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+  "project_manual_version": 1,
+  "state": "failed",
+  "updated_at": "2026-09-03T08:04:20Z",
+  "staging_branch": "gary/master-telltail-v03-r2--f6cecc",
+  "error": "apply project review feedback before wave 1: project state busy: mkdir gary/projects/telltail-v03-fresh-r2/feedback/.events.lock: no such file or directory",
+  "cost": {
+    "pricing_status": "ESTIMATED",
+    "currency": "USD",
+    "pricing_version": "2026-08-30",
+    "model_cost_usd": 0,
+    "compute_cost_usd": 0,
+    "total_cost_usd": 0
+  }
+}
