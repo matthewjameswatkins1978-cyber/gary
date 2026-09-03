@@ -1,0 +1,47 @@
+{
+  "id": "telltail-v03-r2-retry5",
+  "project_id": "telltail-v03-fresh-r2",
+  "master_packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+  "project_manual_version": 1,
+  "state": "failed",
+  "updated_at": "2026-09-03T09:31:42Z",
+  "staging_branch": "gary/master-telltail-v03-r2--ab17d7",
+  "wave": 1,
+  "error": "planner failed in wave 1 after 40.5s: job 1 task is empty or too large",
+  "waves": [
+    {
+      "wave": 1,
+      "planner_mode": "control-direct",
+      "planner_duration_secs": 40.464546547
+    }
+  ],
+  "cost": {
+    "pricing_status": "PROVIDER_REPORTED",
+    "currency": "USD",
+    "pricing_version": "2026-08-30",
+    "yardmaster_model_cost_usd": 0.01589625,
+    "model_cost_usd": 0.01589625,
+    "compute_cost_usd": 0,
+    "total_cost_usd": 0.01589625,
+    "components": [
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.8-flash",
+        "model_version": "gemini-3.8-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 17845,
+        "fresh_input_tokens": 17845,
+        "output_tokens": 670,
+        "thinking_tokens": 2584,
+        "total_tokens": 21099,
+        "model_cost_usd": 0.01589625,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.01589625,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "Vj6ZauLHLv7osbwP2ISyqA8"
+      }
+    ]
+  }
+}
