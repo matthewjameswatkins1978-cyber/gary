@@ -1,0 +1,23 @@
+{
+  "id": "telltail-v03-r2-retry2",
+  "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
+  "base_branch": "telltail-canonical-seed",
+  "brief_path": "gary/master/pending/telltail-v0-3-mirror-gary-os-20260902.md",
+  "project_id": "telltail-v03-fresh-r2",
+  "max_waves": 4,
+  "max_workers": 2,
+  "max_jobs_per_wave": 2,
+  "acceptance": [
+    "test -f go.mod",
+    "test -f cmd/telltail/main.go",
+    "go test ./...",
+    "go vet ./...",
+    "go run ./cmd/telltail version | grep -Eiq 'telltail.*0\\.3'",
+    "go build -o /tmp/telltail ./cmd/telltail",
+    "GOOS=windows GOARCH=amd64 go build -o /tmp/telltail.exe ./cmd/telltail",
+    "tmpd=\"$(mktemp -d)\"; go run ./cmd/telltail local run --dir \"$tmpd\" --worker telltail-smoke --command \"printf TELLTAIL_LOCAL_OK\" --trace \"$tmpd/shift.jsonl\" && go run ./cmd/telltail trace verify \"$tmpd/shift.jsonl\"",
+    "tmpm=\"$(mktemp -d)\"; go run ./cmd/telltail mirror init --dir \"$tmpm\" && test -f \"$tmpm/JOB.md\"",
+    "tmpc=\"$(mktemp -d)\"; go run ./cmd/telltail cloud gcp spec --project gary-agent-yard --region europe-west2 --image example.invalid/telltail-worker:0.3 --command \"echo ok\" --service-account gary-batch-worker@gary-agent-yard.iam.gserviceaccount.com --out \"$tmpc/job.json\" && grep -q 'gary-batch-worker@gary-agent-yard.iam.gserviceaccount.com' \"$tmpc/job.json\"",
+    "test -f docs/GARY-FIRST-SHIFT.md"
+  ]
+}
