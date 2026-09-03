@@ -1,0 +1,41 @@
+{
+  "id": "telltail-v03-r2-retry3",
+  "project_id": "telltail-v03-fresh-r2",
+  "master_packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+  "project_manual_version": 1,
+  "state": "running",
+  "updated_at": "2026-09-03T08:10:09Z",
+  "staging_branch": "gary/master-telltail-v03-r2--db1f4e",
+  "wave": 1,
+  "summary": "Starting Wave 1 on base seed: replacing sacrificial clamp code with canonical Telltail 0.3.0 core packages, CLI, and full test suite.",
+  "planner_memory": "Wave 1 starting from telltail-canonical-seed (f4b92cb). Sacrificial Clamp code to be replaced with Go implementation of Telltail 0.3.0 covering trajectory (SHA-256 chained JSONL), scenario, deterministic detectors, profiler, dossier, local runner, cloud batch spec/client, mirror challenge engine, and CLI cmd/telltail. Master AC-01 through AC-07 will be targeted.",
+  "cost": {
+    "pricing_status": "PROVIDER_REPORTED",
+    "currency": "USD",
+    "pricing_version": "2026-08-30",
+    "yardmaster_model_cost_usd": 0.01580625,
+    "model_cost_usd": 0.01580625,
+    "compute_cost_usd": 0,
+    "total_cost_usd": 0.01580625,
+    "components": [
+      {
+        "kind": "yardmaster",
+        "model_requested": "gemini-3.8-flash",
+        "model_version": "gemini-3.8-flash",
+        "usage_source": "PROVIDER_REPORTED",
+        "input_tokens": 17845,
+        "fresh_input_tokens": 17845,
+        "output_tokens": 646,
+        "thinking_tokens": 1483,
+        "total_tokens": 19974,
+        "model_cost_usd": 0.01580625,
+        "compute_cost_usd": 0,
+        "total_cost_usd": 0.01580625,
+        "pricing_version": "2026-08-30",
+        "pricing_effective_date": "2026-08-30",
+        "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "provider_response_id": "RyuZatTSGL6UncEP-7HioQg"
+      }
+    ]
+  }
+}
