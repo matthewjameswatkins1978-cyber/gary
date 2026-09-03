@@ -282,6 +282,8 @@ func TestCodingWorkerIsSteerableAndResumable(t *testing.T) {
 	})
 	for _, required := range []string{
 		"emit_telemetry running",
+		"$GARY_GCS_PATH/telemetry/",
+		"Telemetry upload failed",
 		"sleep 60",
 		"apply_running_control",
 		"STOP_AND_REPLAN",
@@ -295,6 +297,9 @@ func TestCodingWorkerIsSteerableAndResumable(t *testing.T) {
 	}
 	if strings.Contains(script, "480s gemini") || strings.Contains(script, "SOFT DEADLINE") {
 		t.Fatal("ordinary worker execution must not be killed by the old fixed deadline")
+	}
+	if strings.Contains(script, "$GARY_GCS_PATH/telemetry.json") {
+		t.Fatal("worker telemetry must not overwrite a shared object")
 	}
 }
 
@@ -573,7 +578,7 @@ func TestCodingWorkerPromptOnlyIncludesValidYardmasterEstimate(t *testing.T) {
 
 func TestCodingWorkerScriptCleansDisposableArtifacts(t *testing.T) {
 	script := generateCodingWorkerScript(CodingJobConfig{RepoURL: "https://example.com/repo.git", BaseBranch: "main", GaryBranch: "gary/job", Task: "task", Acceptance: "echo ok"})
-	for _, marker := range []string{"-name .venv", "-name __pycache__", "-name .build", "-name target", "telemetry.json", "control.json", "--resume", "Yardmaster supervision: CONTINUE", "git add -A"} {
+	for _, marker := range []string{"-name .venv", "-name __pycache__", "-name .build", "-name target", "telemetry.json", "control/*.json", "control.json", "--resume", "Yardmaster supervision: CONTINUE", "git add -A"} {
 		if !strings.Contains(script, marker) {
 			t.Fatalf("worker script missing artifact hygiene marker %q", marker)
 		}

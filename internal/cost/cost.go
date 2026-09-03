@@ -164,7 +164,7 @@ func (s *Summary) recomputeStatus() {
 func PriceForModel(model string) PriceTable {
 	pt := PriceTable{ModelName: model, Version: PricingVersion, EffectiveDate: PricingEffectiveDate, Source: PricingSource, Known: true}
 	switch model {
-	case "gemini-3.7-flash", "gemini-3.6-flash":
+	case "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash":
 		pt.InputPrice, pt.OutputPrice, pt.CachedPrice = 0.00000075, 0.00000375, 0.000000075
 	case "gemini-3.5-flash-lite", "gemini-2.5-flash":
 		pt.InputPrice, pt.OutputPrice, pt.CachedPrice = 0.00000030, 0.00000250, 0.00000003

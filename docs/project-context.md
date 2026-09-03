@@ -24,6 +24,39 @@ returns the project to planning without launching a worker. A project-backed
 narrow child execution context from the current manual before each worker
 submission.
 
+## Yardmaster project board
+
+GARY also keeps a durable project board at
+`gary/projects/board/projects.json`. It is an aggregate lifecycle list, not a
+replacement for project state or worker evidence. A project is written to the
+board as `IN_PROCESS` when its durable project record is created. The only
+transition to `COMPLETED` is the Yardmaster's project-level acceptance path;
+worker success, a paused bounded slice, a retry, or a recoverable failure never
+completes the board entry. The transition is monotonic, so stale start or retry
+paths cannot resurrect a completed project.
+
+The board is visible with:
+
+```powershell
+go run ./cmd/gary project board
+go run ./cmd/gary project board --json
+```
+
+The generated project manual carries the same `board_policy` invariant. This
+keeps the lifecycle rule in the Yardmaster's working context while leaving the
+immutable packet unchanged.
+
+## Parked project auto-wake
+
+`gary project tick <project-id>` is a thin deterministic watchdog operation.
+It performs no model call while the Yardmaster is `RUNNING`, the project is
+finished, work is absent, or the project is legitimately waiting/blocked. For
+an unfinished parked project with explicit executable work it atomically claims
+one generation, records requested/started/completed or failed timestamps, and
+launches the existing master manifest path. It never edits an in-flight worker
+packet. No-progress wakes use bounded backoff and a small circuit breaker; a
+human can inspect the recorded state before deciding how to clear or repair it.
+
 Project context is deliberately separate from execution history:
 
 - the master packet and manual describe what the project is and what must be

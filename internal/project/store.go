@@ -63,16 +63,23 @@ type Project struct {
 
 // ProjectState separates transient progress from the durable project manual.
 type ProjectState struct {
-	Schema                string   `json:"schema"`
-	ProjectID             string   `json:"project_id"`
-	State                 string   `json:"state"`
-	CurrentPhase          string   `json:"current_phase,omitempty"`
-	CurrentStrategy       string   `json:"current_strategy,omitempty"`
-	CompletedCapabilities []string `json:"completed_capabilities,omitempty"`
-	RemainingCapabilities []string `json:"remaining_capabilities,omitempty"`
-	OutstandingWork       []string `json:"outstanding_work,omitempty"`
-	LastEvent             string   `json:"last_event,omitempty"`
-	UpdatedAt             string   `json:"updated_at"`
+	Schema                string        `json:"schema"`
+	ProjectID             string        `json:"project_id"`
+	State                 string        `json:"state"`
+	YardmasterState       string        `json:"yardmaster_state,omitempty"`
+	Completion            string        `json:"completion,omitempty"`
+	ParkReason            string        `json:"park_reason,omitempty"`
+	WaitingFor            string        `json:"waiting_for,omitempty"`
+	ExternalDependency    string        `json:"external_dependency,omitempty"`
+	BlockedUntil          string        `json:"blocked_until,omitempty"`
+	CurrentPhase          string        `json:"current_phase,omitempty"`
+	CurrentStrategy       string        `json:"current_strategy,omitempty"`
+	CompletedCapabilities []string      `json:"completed_capabilities,omitempty"`
+	RemainingCapabilities []string      `json:"remaining_capabilities,omitempty"`
+	OutstandingWork       []string      `json:"outstanding_work,omitempty"`
+	Watchdog              WatchdogState `json:"watchdog,omitempty"`
+	LastEvent             string        `json:"last_event,omitempty"`
+	UpdatedAt             string        `json:"updated_at"`
 }
 
 type SourceRef struct {
@@ -129,6 +136,7 @@ type ProjectManual struct {
 	RemainingCapabilities     []string      `json:"remaining_capabilities,omitempty"`
 	ActiveDecisions           []Requirement `json:"active_decisions,omitempty"`
 	SupersededDecisions       []Requirement `json:"superseded_decisions,omitempty"`
+	BoardPolicy               BoardPolicy   `json:"board_policy"`
 	SourcePacketDigest        string        `json:"source_packet_digest"`
 	ManualVersion             int           `json:"manual_version"`
 	ManualDigest              string        `json:"manual_digest"`
@@ -210,6 +218,9 @@ func (s Store) CreateProject(id, name, repo, baseBranch string, packet []byte) (
 	}
 	if err := writeJSON(filepath.Join(dir, "state.json"), state); err != nil {
 		return Project{}, err
+	}
+	if err := s.MarkProjectInProcess(p); err != nil {
+		return Project{}, fmt.Errorf("project persisted but board update failed: %w", err)
 	}
 	return p, nil
 }
@@ -322,6 +333,9 @@ func (s Store) SaveManual(id string, manual ProjectManual) error {
 	if manual.ProjectID != id || manual.SourcePacketDigest != p.MasterPacketDigest {
 		return fmt.Errorf("%w: manual source or project mismatch", ErrProjectIDMismatch)
 	}
+	if manual.BoardPolicy.isZero() {
+		manual.BoardPolicy = DefaultBoardPolicy()
+	}
 	wantVersion := p.ProjectManualVersion + 1
 	if manual.ManualVersion != wantVersion {
 		return fmt.Errorf("%w: got %d, want %d", ErrManualVersionInvalid, manual.ManualVersion, wantVersion)
@@ -341,7 +355,10 @@ func (s Store) SaveManual(id string, manual ProjectManual) error {
 	p.ProjectManualVersion = wantVersion
 	p.ManualDigest = manual.ManualDigest
 	p.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	return writeJSON(filepath.Join(s.projectDir(id), "project.json"), p)
+	if err := writeJSON(filepath.Join(s.projectDir(id), "project.json"), p); err != nil {
+		return err
+	}
+	return s.MarkProjectInProcess(p)
 }
 
 func (s Store) LoadAmendments(id string) ([]Amendment, error) {
@@ -413,6 +430,12 @@ func (s Store) AddAmendment(id string, contents []byte) (Amendment, error) {
 }
 
 func (s Store) SaveState(id string, state ProjectState) error {
+	return s.withProjectStateLock(id, func() error {
+		return s.saveStateUnlocked(id, state)
+	})
+}
+
+func (s Store) saveStateUnlocked(id string, state ProjectState) error {
 	p, err := s.LoadProject(id)
 	if err != nil {
 		return err
@@ -426,6 +449,22 @@ func (s Store) SaveState(id string, state ProjectState) error {
 	if p.State == "ACCEPTED" && state.State != "ACCEPTED" && state.State != "ARCHIVED" {
 		return fmt.Errorf("%w: terminal project state ACCEPTED cannot transition to %s", ErrProjectNotAcceptable, state.State)
 	}
+	var prior ProjectState
+	if err := readJSON(filepath.Join(s.projectDir(id), "state.json"), &prior); err == nil {
+		if state.YardmasterState == "" {
+			state.YardmasterState = prior.YardmasterState
+		}
+		if state.Completion == "" {
+			state.Completion = prior.Completion
+		}
+		if state.ParkReason == "" {
+			state.ParkReason = prior.ParkReason
+		}
+		if state.Watchdog == (WatchdogState{}) {
+			state.Watchdog = prior.Watchdog
+		}
+	}
+	state = state.normalized(state.State)
 	state.Schema = StateSchema
 	state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	if err := writeJSON(filepath.Join(s.projectDir(id), "state.json"), state); err != nil {
@@ -453,7 +492,10 @@ func (s Store) AcceptProject(id, summary string) error {
 	}
 	p, _ = s.LoadProject(id)
 	p.AcceptedAt = time.Now().UTC().Format(time.RFC3339)
-	return writeJSON(filepath.Join(s.projectDir(id), "project.json"), p)
+	if err := writeJSON(filepath.Join(s.projectDir(id), "project.json"), p); err != nil {
+		return err
+	}
+	return s.MarkProjectCompleted(p)
 }
 
 // ResumeProject performs a fresh validated context load and moves a retained
@@ -471,6 +513,9 @@ func (s Store) ResumeProject(id string) (ProjectContext, error) {
 	state.CurrentPhase = "planning"
 	state.LastEvent = "project resumed"
 	if err := s.SaveState(id, state); err != nil {
+		return ProjectContext{}, err
+	}
+	if err := s.MarkProjectInProcess(ctx.Project); err != nil {
 		return ProjectContext{}, err
 	}
 	return s.LoadContext(id)
@@ -498,6 +543,9 @@ func ValidateManual(m ProjectManual, id, packetDigest string, version int) error
 	}
 	if strings.TrimSpace(m.Objective) == "" || strings.TrimSpace(m.DefinitionOfDone) == "" {
 		return errors.New("objective and definition_of_done are required")
+	}
+	if !m.BoardPolicy.isZero() && !m.BoardPolicy.valid() {
+		return errors.New("board_policy must define Yardmaster-owned IN_PROCESS to COMPLETED lifecycle")
 	}
 	for _, r := range allRequirements(m) {
 		if strings.TrimSpace(r.ID) == "" || strings.TrimSpace(r.Text) == "" {

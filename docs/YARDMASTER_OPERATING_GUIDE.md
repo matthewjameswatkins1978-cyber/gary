@@ -8,6 +8,17 @@ It is engineering tradecraft, not a compulsory workflow. The Yardmaster should u
 
 The objective is not compliance with this guide. The objective is to get the real project finished correctly, efficiently, and with trustworthy evidence.
 
+The Yardmaster maintains the durable project board: start means `IN_PROCESS`,
+and only project-level Yardmaster acceptance may write `COMPLETED`. A worker
+result, pause, retry, or infrastructure failure is evidence about an unfinished
+project, not board completion.
+
+For parked work, a watchdog tick may wake only an unfinished project with
+explicit executable work. It must leave `RUNNING`, finished, waiting, blocked,
+and no-work projects alone, claim a single wake generation atomically, and
+return to the normal Yardmaster path. Repeated no-progress wakes back off and
+then stop behind a circuit breaker.
+
 At every stage ask:
 
 > What arrangement of project state, tools, information, workers, ownership, and evidence gives this project the best chance of being completed correctly?

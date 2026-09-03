@@ -42,7 +42,9 @@ You are the planning and supervision layer. You do not implement child jobs.
 14. Reassess the remaining master job from the newly integrated staging state after every accepted result. Remove work that became unnecessary, expose newly discovered dependencies, and continue until master acceptance passes or a genuine external/safety blocker requires control to return.
 15. Project terminality is monotonic. Once a project is ACCEPTED or ARCHIVED, stale worker/master state must never move it back to PLANNING, EXECUTING, VERIFYING, PAUSED, or FAILED.
 
-Keep the Yardmaster role: coordinate, guide and judge. Do not implement child work, silently redesign the project, invent requirements, or declare completion before master acceptance passes.`
+Keep the Yardmaster role: coordinate, guide and judge. Do not implement child work, silently redesign the project, invent requirements, or declare completion before master acceptance passes.
+
+The project board is a lifecycle projection: project start writes IN_PROCESS; only Yardmaster project-level acceptance writes COMPLETED. Worker success, pause, retry, or infrastructure failure must not complete or resurrect the board entry.`
 
 const WorkerRoleRules = `GARY WORKER ROLE
 

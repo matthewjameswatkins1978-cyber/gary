@@ -32,6 +32,10 @@ func cmdProject() {
 		cmdProjectStart()
 	case "status", "resume", "inspect":
 		cmdProjectRead(os.Args[2])
+	case "board":
+		cmdProjectBoard()
+	case "tick":
+		cmdProjectTick()
 	case "amend":
 		cmdProjectAmend()
 	case "explain":
@@ -45,10 +49,12 @@ func cmdProject() {
 }
 
 func printProjectUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: gary project <start|status|resume|amend|inspect|explain|feedback>")
+	fmt.Fprintln(os.Stderr, "Usage: gary project <start|status|resume|amend|board|inspect|explain|feedback>")
 	fmt.Fprintln(os.Stderr, "  gary project start [--id PROJECT-ID] [--repo URL] [--base-branch BRANCH] PACKET")
 	fmt.Fprintln(os.Stderr, "  gary project status PROJECT-ID")
 	fmt.Fprintln(os.Stderr, "  gary project resume PROJECT-ID")
+	fmt.Fprintln(os.Stderr, "  gary project board [--json]")
+	fmt.Fprintln(os.Stderr, "  gary project tick PROJECT-ID [--manifest PATH] [--json]")
 	fmt.Fprintln(os.Stderr, "  gary project amend PROJECT-ID AMENDMENT")
 	fmt.Fprintln(os.Stderr, "  gary project inspect PROJECT-ID")
 	fmt.Fprintln(os.Stderr, "  gary project explain PROJECT-ID [--master-id ID] [--child-task-id ID] [--wave N]")
@@ -154,16 +160,28 @@ func cmdProjectAmend() {
 }
 
 func printProjectContext(ctx project.ProjectContext, jsonOutput bool) {
+	board, _ := project.DefaultStore().LoadBoard()
+	var boardEntry *project.BoardEntry
+	for i := range board.Projects {
+		if board.Projects[i].ProjectID == ctx.Project.ProjectID {
+			boardEntry = &board.Projects[i]
+			break
+		}
+	}
 	if jsonOutput {
 		_ = json.NewEncoder(os.Stdout).Encode(struct {
 			Project  project.Project          `json:"project"`
 			State    project.ProjectState     `json:"state"`
 			Manual   project.ProjectManual    `json:"manual"`
 			Feedback []project.FeedbackRecord `json:"feedback,omitempty"`
-		}{ctx.Project, ctx.State, ctx.Manual, ctx.Feedback})
+			Board    *project.BoardEntry      `json:"board,omitempty"`
+		}{ctx.Project, ctx.State, ctx.Manual, ctx.Feedback, boardEntry})
 		return
 	}
 	fmt.Printf("Project: %s\nState: %s\nMaster packet: %s\nManual: v%d\nPhase: %s\n", ctx.Project.ProjectID, ctx.Project.State, ctx.Project.MasterPacketDigest, ctx.Project.ProjectManualVersion, ctx.State.CurrentPhase)
+	if boardEntry != nil {
+		fmt.Printf("Board: %s\n", boardEntry.Status)
+	}
 	fmt.Printf("Objective: %s\n", ctx.Manual.Objective)
 	if len(ctx.Feedback) > 0 {
 		pending := 0
@@ -175,6 +193,29 @@ func printProjectContext(ctx project.ProjectContext, jsonOutput bool) {
 		fmt.Printf("Conduct review: %d record(s), %d pending safe-boundary application(s)\n", len(ctx.Feedback), pending)
 	}
 	fmt.Printf("Source: %s\n", filepath.Join(project.DefaultStore().Root(), ctx.Project.ProjectID, "source", "MASTER_PACKET.md"))
+}
+
+func cmdProjectBoard() {
+	fs := flag.NewFlagSet("project board", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	jsonOutput := fs.Bool("json", false, "machine-readable output")
+	if err := fs.Parse(os.Args[3:]); err != nil || fs.NArg() != 0 {
+		printProjectUsage()
+		os.Exit(1)
+	}
+	board, err := project.DefaultStore().LoadBoard()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "project board: %v\n", err)
+		os.Exit(1)
+	}
+	if *jsonOutput {
+		_ = json.NewEncoder(os.Stdout).Encode(board)
+		return
+	}
+	fmt.Printf("GARY // PROJECT BOARD\nUpdated: %s\n", board.UpdatedAt)
+	for _, entry := range board.Projects {
+		fmt.Printf("%-20s %-12s %s\n", entry.ProjectID, entry.Status, entry.ProjectName)
+	}
 }
 
 func projectIDFromPath(path string) string {
@@ -561,6 +602,10 @@ important_rationale, known_dependencies, known_external_services, known_risks,
 open_questions, conflicts, current_phase, current_strategy,
 completed_capabilities, remaining_capabilities, active_decisions,
 superseded_decisions, source_packet_digest, manual_version and manual_digest.
+Also emit board_policy with IN_PROCESS, COMPLETED, Yardmaster, and a concise
+completion condition. The Yardmaster alone may move the board entry to
+COMPLETED, and only after project-level acceptance; pauses and worker failures
+remain IN_PROCESS.
 `, doctrine.CompletionPrinciple, input.Project.ProjectID, input.Project.MasterPacketDigest, input.Packet, amendments.String())
 }
 

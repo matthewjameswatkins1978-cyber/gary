@@ -26,15 +26,15 @@ func TestParseGeminiCLIStreamJSONLMissingTelemetryFails(t *testing.T) {
 }
 
 func TestParseVertexUsageDoesNotDoubleCountThoughts(t *testing.T) {
-	raw := json.RawMessage(`{"usageMetadata":{"promptTokenCount":1000,"cachedContentTokenCount":250,"candidatesTokenCount":400,"thoughtsTokenCount":150,"totalTokenCount":1400},"modelVersion":"gemini-3.7-flash-001","responseId":"resp-1"}`)
-	u, err := ParseVertexUsage(raw, "gemini-3.7-flash", "", "req-1")
+	raw := json.RawMessage(`{"usageMetadata":{"promptTokenCount":1000,"cachedContentTokenCount":250,"candidatesTokenCount":400,"thoughtsTokenCount":150,"totalTokenCount":1400},"modelVersion":"gemini-3.8-flash","responseId":"resp-1"}`)
+	u, err := ParseVertexUsage(raw, "gemini-3.8-flash", "", "req-1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if u.FreshInputTokens != 750 || u.OutputTokens != 400 || u.TotalTokens != 1400 || u.ThinkingTokens == nil || *u.ThinkingTokens != 150 {
 		t.Fatalf("unexpected Vertex usage: %#v", u)
 	}
-	pt := PriceForModel("gemini-3.7-flash")
+	pt := PriceForModel("gemini-3.8-flash")
 	if got := ModelCost(pt, u.FreshInputTokens, u.CachedInputTokens, u.OutputTokens); got != 0.00208125 {
 		t.Fatalf("cost = %.7f, want %.7f", got, 0.00208125)
 	}

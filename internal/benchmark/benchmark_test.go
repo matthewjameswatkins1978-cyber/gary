@@ -52,10 +52,10 @@ func TestDefaultPriceTable(t *testing.T) {
 	}
 }
 
-func TestPriceTableForGemini37Flash(t *testing.T) {
-	pt := PriceTableForModel("gemini-3.7-flash")
-	if pt.ModelName != "gemini-3.7-flash" {
-		t.Fatalf("ModelName = %q, want gemini-3.7-flash", pt.ModelName)
+func TestPriceTableForGemini38Flash(t *testing.T) {
+	pt := PriceTableForModel("gemini-3.8-flash")
+	if pt.ModelName != "gemini-3.8-flash" {
+		t.Fatalf("ModelName = %q, want gemini-3.8-flash", pt.ModelName)
 	}
 	if pt.InputPrice != 0.00000075 {
 		t.Errorf("InputPrice = %f, want 0.00000075", pt.InputPrice)

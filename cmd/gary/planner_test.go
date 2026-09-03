@@ -36,8 +36,8 @@ func TestYardmasterRequestBodyUsesUserRole(t *testing.T) {
 }
 
 func TestYardmasterVertexEndpointUsesGlobalPublisherModel(t *testing.T) {
-	got := yardmasterVertexEndpoint("gary-agent-yard", "gemini-3.7-flash")
-	want := "https://aiplatform.googleapis.com/v1/projects/gary-agent-yard/locations/global/publishers/google/models/gemini-3.7-flash:generateContent"
+	got := yardmasterVertexEndpoint("gary-agent-yard", "gemini-3.8-flash")
+	want := "https://aiplatform.googleapis.com/v1/projects/gary-agent-yard/locations/global/publishers/google/models/gemini-3.8-flash:generateContent"
 	if got != want {
 		t.Fatalf("endpoint = %q, want %q", got, want)
 	}
@@ -68,7 +68,6 @@ func TestPlannerDisposablePathsAreExcludedFromContext(t *testing.T) {
 		}
 	}
 }
-
 
 func TestWorkerSupervisorPromptContainsLiveControlDoctrine(t *testing.T) {
 	data, err := os.ReadFile("planner.go")
