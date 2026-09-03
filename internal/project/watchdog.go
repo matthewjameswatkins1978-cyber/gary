@@ -16,6 +16,7 @@ const (
 	CompletionActive           = "ACTIVE"
 	CompletionApprovalPending  = "APPROVAL_PENDING"
 	CompletionApprovedFinished = "APPROVED_FINISHED"
+	CompletionCancelled        = "CANCELLED"
 
 	ParkReasonWorkExhausted = "WORK_EXHAUSTED"
 	ParkReasonWaiting       = "WAITING"
@@ -92,18 +93,38 @@ func (p WatchdogPolicy) normalized() WatchdogPolicy {
 }
 
 func (s ProjectState) normalized(projectState string) ProjectState {
+	lifecycle, inferred, _ := canonicalLifecycle(projectState)
+	if lifecycle == "" {
+		lifecycle = projectState
+	}
+	if s.State == "" {
+		s.State = lifecycle
+	}
+	if lifecycle == LifecycleActive && len(s.Activities) == 0 {
+		s.Activities = inferred
+		if len(s.Activities) == 0 {
+			if activity := inferActivityFromPhase(s.CurrentPhase); activity != "" {
+				s.Activities = []string{activity}
+			}
+		}
+	}
 	if s.Completion == "" {
-		if projectState == "ACCEPTED" || projectState == "ARCHIVED" {
+		switch lifecycle {
+		case LifecycleAccepted:
 			s.Completion = CompletionApprovedFinished
-		} else if projectState == "VERIFYING" {
-			s.Completion = CompletionApprovalPending
-		} else {
-			s.Completion = CompletionActive
+		case LifecycleCancelled:
+			s.Completion = CompletionCancelled
+		default:
+			if s.HasActivity(ActivityVerifying) {
+				s.Completion = CompletionApprovalPending
+			} else {
+				s.Completion = CompletionActive
+			}
 		}
 	}
 	if s.YardmasterState == "" {
-		switch projectState {
-		case "PAUSED", "FAILED":
+		switch lifecycle {
+		case LifecycleParked, LifecycleWaiting, LifecycleBlocked, LifecycleAccepted, LifecycleCancelled:
 			s.YardmasterState = YardmasterParked
 		default:
 			s.YardmasterState = YardmasterRunning
@@ -129,8 +150,14 @@ func (s Store) ClaimAutoWake(id string, now time.Time, policy WatchdogPolicy) (W
 		state := ctx.State.normalized(ctx.Project.State)
 		decision = WakeDecision{ProjectID: id}
 		switch {
-		case state.Completion == CompletionApprovedFinished || ctx.Project.State == "ACCEPTED" || ctx.Project.State == "ARCHIVED":
+		case ctx.Project.State == LifecycleAccepted || ctx.Project.State == LifecycleCancelled:
 			decision.Action, decision.Reason = "NO_ACTION", NoActionApproved
+		case ctx.Project.State == LifecycleWaiting:
+			decision.Action, decision.Reason = "NO_ACTION", NoActionWaiting
+		case ctx.Project.State == LifecycleBlocked:
+			decision.Action, decision.Reason = "NO_ACTION", NoActionBlocked
+		case ctx.Project.State != LifecycleParked:
+			decision.Action, decision.Reason = "NO_ACTION", NoActionNotParked
 		case state.YardmasterState == YardmasterRunning:
 			decision.Action, decision.Reason = "NO_ACTION", NoActionRunning
 		case state.YardmasterState == YardmasterWaking:
@@ -180,9 +207,12 @@ func (s Store) StartAutoWake(id, wakeID string, now time.Time) error {
 		if state.YardmasterState != YardmasterWaking || state.Watchdog.WakeID != wakeID || state.Watchdog.Status != WakeRequested {
 			return fmt.Errorf("wake %s is not the current requested wake", wakeID)
 		}
-		state.State = "PLANNING"
+		state.State = LifecycleActive
+		state.Activities = []string{ActivityPlanning}
 		state.CurrentPhase = "planning"
 		state.YardmasterState = YardmasterRunning
+		state.Reason = "watchdog resumed parked project"
+		state.UpdatedBy = "watchdog"
 		state.Watchdog.Status = WakeStarted
 		state.Watchdog.StartedAt = now.UTC().Format(time.RFC3339Nano)
 		state.LastEvent = "auto-wake started Yardmaster resume"
@@ -247,8 +277,12 @@ func (s Store) RecordAutoWakeOutcome(id, wakeID string, now time.Time, outcome W
 			}
 			state.Watchdog.NextEligibleWakeAt = now.Add(policy.Backoff[index]).UTC().Format(time.RFC3339Nano)
 		}
-		if ctx.Project.State != "ACCEPTED" && ctx.Project.State != "ARCHIVED" {
+		if ctx.Project.State == LifecycleActive {
+			state.State = LifecycleParked
+			state.Activities = nil
 			state.YardmasterState = YardmasterParked
+			state.Reason = "watchdog run ended; project remains resumable"
+			state.UpdatedBy = "watchdog"
 		}
 		return s.saveStateUnlocked(id, state)
 	})
