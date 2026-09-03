@@ -4,10 +4,11 @@
   "project_name": "telltail-v03-fresh-r2",
   "repo": "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git",
   "base_branch": "telltail-canonical-seed",
-  "state": "ACTIVE",
+  "state": "PLANNING",
   "master_packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
   "master_packet_version": 1,
-  "project_manual_version": 0,
+  "project_manual_version": 1,
+  "manual_digest": "sha256:7ad00243118598fe42988a720bb012524d2f4ac1076fc3308b221d9a1061c052",
   "created_at": "2026-09-03T04:18:56Z",
-  "updated_at": "2026-09-03T04:18:56Z"
+  "updated_at": "2026-09-03T07:51:31Z"
 }

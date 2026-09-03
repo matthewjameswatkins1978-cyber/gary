@@ -1,0 +1,573 @@
+{
+  "schema": "gary.project-manual.v1",
+  "project_id": "telltail-v03-fresh-r2",
+  "objective": "Build and verify canonical Telltail 0.3.0: an idiomatic Go CLI (`telltail`) that executes and evaluates synthetic AI worker shifts locally and in Google Cloud Batch, records SHA-256 hash-chained observable JSONL trajectories, runs deterministic behavioural detectors and profilers, builds Worker Dossiers, runs the recursive Mirror Shift evaluation challenge, and executes a real remote cloud canary.",
+  "definition_of_done": "Complete Go codebase on an isolated staging branch passing go test, go vet, cross-platform build smoke (Linux and Windows amd64), local run trace verification smoke, mirror init smoke, cloud job-spec smoke, live GCP Batch remote execution canary evidence, and diagnostic documentation at docs/GARY-FIRST-SHIFT.md.",
+  "hard_constraints": [
+    {
+      "id": "HC-01",
+      "type": "hard_constraint",
+      "text": "Implementation language must be Go, small, dependency-light, without web UI, database, daemon, or embedded LLM judges.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "HC-02",
+      "type": "hard_constraint",
+      "text": "Do not modify or merge into repository main branch; work on isolated staging/result branches.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "HC-03",
+      "type": "hard_constraint",
+      "text": "Do not change Google Cloud IAM, Workload Identity conditions, service account bindings, secrets, or project policy.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "HC-04",
+      "type": "hard_constraint",
+      "text": "Observable behaviour only; Telltail must not depend on hidden chain-of-thought, and workers must never grade themselves.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "HC-05",
+      "type": "hard_constraint",
+      "text": "Raw source trajectories must be immutable append-only JSONL with SHA-256 hash chains detecting sequence breaks, predecessor changes, and content tampering.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    },
+    {
+      "id": "HC-06",
+      "type": "hard_constraint",
+      "text": "Real remote cloud canary must execute via Google Cloud Batch; cloud certification cannot rely on mock/generated spec alone.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#hard_constraints"
+      }
+    }
+  ],
+  "architecture_decisions": [
+    {
+      "id": "AD-01",
+      "type": "architecture_decision",
+      "text": "Standard library-centric Go package layout",
+      "decision": "Standard library-centric Go package layout",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#architecture_decisions"
+      }
+    },
+    {
+      "id": "AD-02",
+      "type": "architecture_decision",
+      "text": "Unified Shift Trajectory and Event Schema",
+      "decision": "Unified Shift Trajectory and Event Schema",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#architecture_decisions"
+      }
+    },
+    {
+      "id": "AD-03",
+      "type": "architecture_decision",
+      "text": "Deterministic Mechanical Evaluators",
+      "decision": "Deterministic Mechanical Evaluators",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#architecture_decisions"
+      }
+    }
+  ],
+  "technology_choices": [
+    {
+      "id": "TC-01",
+      "type": "technology_choice",
+      "text": "Go (idiomatic standard library)",
+      "choice": "Go (idiomatic standard library)",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#technology_choices"
+      }
+    },
+    {
+      "id": "TC-02",
+      "type": "technology_choice",
+      "text": "Append-only JSONL with SHA-256 hash chain",
+      "choice": "Append-only JSONL with SHA-256 hash chain",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#technology_choices"
+      }
+    },
+    {
+      "id": "TC-03",
+      "type": "technology_choice",
+      "text": "Google Cloud Batch REST/gcloud integration",
+      "choice": "Google Cloud Batch REST/gcloud integration",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#technology_choices"
+      }
+    }
+  ],
+  "forbidden_changes": [
+    {
+      "id": "FC-01",
+      "type": "forbidden_change",
+      "text": "Merging to or rewriting gary-test-clamp main branch.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    },
+    {
+      "id": "FC-02",
+      "type": "forbidden_change",
+      "text": "Modifying GCP IAM permissions, Workload Identity, or service account bindings to pass canary tests.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    },
+    {
+      "id": "FC-03",
+      "type": "forbidden_change",
+      "text": "Embedding API secrets or credentials into traces, specs, or code repository.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    },
+    {
+      "id": "FC-04",
+      "type": "forbidden_change",
+      "text": "Weakening tests, assertions, or acceptance checks to simulate success.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    },
+    {
+      "id": "FC-05",
+      "type": "forbidden_change",
+      "text": "Introducing web servers, databases, daemons, or LLM-as-judge frameworks.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#forbidden_changes"
+      }
+    }
+  ],
+  "functional_requirements": [
+    {
+      "id": "FR-01",
+      "type": "requirement",
+      "text": "CLI interface providing 'version', 'trace verify', 'analyze', 'dossier', 'local run', 'cloud gcp (spec|submit|describe|run)', and 'mirror (init|score)'.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-02",
+      "type": "requirement",
+      "text": "Event trace recording shift lifecycle, model calls, tool calls, command executions, file mutations, acceptance results, worker status claims, and cloud lifecycle.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-03",
+      "type": "requirement",
+      "text": "Deterministic detectors for phantom tools, tool misuse/fixation/blindness/proliferation, repeated equivalent failures, stuck loops, path/boundary violations, and false blockers/successes.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-04",
+      "type": "requirement",
+      "text": "Shift outcome classification into CLEAN_SUCCESS, RECOVERED_SUCCESS, MESSY_SUCCESS, FALSE_SUCCESS, USEFUL_FAILURE, FAILURE, BLOCKED_CORRECTLY, and FALSE_BLOCKED.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-05",
+      "type": "requirement",
+      "text": "Attribution of findings and failures to WORKER, YARDMASTER, WORKPLACE, JOB_SPEC, HARNESS, or EXTERNAL/INFRASTRUCTURE.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-06",
+      "type": "requirement",
+      "text": "Job profiler reporting phase durations (total, model, tool, command, queue, provision, acceptance, teardown, failed/repeated work), token/cost metrics, and bottlenecks.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-07",
+      "type": "requirement",
+      "text": "Worker Dossier aggregation aggregating shifts, mistake rates, repeated errors, violations, durations, and tool metrics by worker identity.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-08",
+      "type": "requirement",
+      "text": "Local runner supporting process isolation, custom shell overrides, and cross-platform compatibility (Unix/Windows).",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-09",
+      "type": "requirement",
+      "text": "Google Cloud Batch lifecycle support: generate spec, submit, describe, and full bounded poll execution with attribution.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    },
+    {
+      "id": "FR-10",
+      "type": "requirement",
+      "text": "Mirror Shift workspace initialization ('mirror init') and deterministic scoring ('mirror score') assessing precision, recall, and integrity against canonical hidden truth.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#functional_requirements"
+      }
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "id": "NFR-01",
+      "type": "non_functional_requirement",
+      "text": "Cross-platform compilation for Linux and Windows (amd64).",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#non_functional_requirements"
+      }
+    },
+    {
+      "id": "NFR-02",
+      "type": "non_functional_requirement",
+      "text": "Fast execution with minimal external dependencies.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#non_functional_requirements"
+      }
+    },
+    {
+      "id": "NFR-03",
+      "type": "non_functional_requirement",
+      "text": "Fail-closed behavior on invalid specs, broken hash chains, tampering, or authentication failures.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#non_functional_requirements"
+      }
+    },
+    {
+      "id": "NFR-04",
+      "type": "non_functional_requirement",
+      "text": "No secret leakage in logs, traces, or generated files.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#non_functional_requirements"
+      }
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-01",
+      "type": "acceptance",
+      "text": "Codebase contains go.mod and cmd/telltail/main.go.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-02",
+      "type": "acceptance",
+      "text": "go test ./... and go vet ./... pass with no errors.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-03",
+      "type": "acceptance",
+      "text": "go run ./cmd/telltail version outputs string matching 'telltail.*0.3'.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-04",
+      "type": "acceptance",
+      "text": "Binary builds successfully for linux and windows/amd64.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-05",
+      "type": "acceptance",
+      "text": "telltail local run executes command and writes JSONL trace validated by telltail trace verify.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-06",
+      "type": "acceptance",
+      "text": "telltail mirror init populates target directory containing JOB.md.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-07",
+      "type": "acceptance",
+      "text": "telltail cloud gcp spec outputs valid job JSON with configured service account.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-08",
+      "type": "acceptance",
+      "text": "Real remote Google Cloud Batch canary executes in gary-agent-yard / europe-west2 with job ID, terminal state, and trace preserved in handback.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    },
+    {
+      "id": "AC-09",
+      "type": "acceptance",
+      "text": "docs/GARY-FIRST-SHIFT.md exists and documents observable Yardmaster waves, attempts, retries, and bottlenecks.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#acceptance_criteria"
+      }
+    }
+  ],
+  "important_context": [
+    {
+      "id": "CTX-01",
+      "type": "context",
+      "text": "Accepted base commit f4b92cb12c5827ec699f1b140a940d1afdc80061 on branch telltail-canonical-seed contains a sacrificial Clamp program that can be completely replaced.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#important_context"
+      }
+    },
+    {
+      "id": "CTX-02",
+      "type": "context",
+      "text": "Authorised GCP environment: project 'gary-agent-yard', region 'europe-west2', service account 'gary-batch-worker@gary-agent-yard.iam.gserviceaccount.com'.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#important_context"
+      }
+    }
+  ],
+  "important_rationale": [
+    {
+      "id": "RAT-01",
+      "type": "rationale",
+      "text": "Telltail 0.3 replaces Telltail 0.2 completely; no backwards compatibility or legacy mode is needed.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#important_rationale"
+      }
+    },
+    {
+      "id": "RAT-02",
+      "type": "rationale",
+      "text": "Separation of hidden scenario truth from worker visibility prevents self-grading and deceptive alignment.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#important_rationale"
+      }
+    }
+  ],
+  "known_dependencies": [
+    {
+      "id": "DEP-01",
+      "type": "dependency",
+      "text": "Go toolchain (1.21+ recommended)",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#known_dependencies"
+      }
+    },
+    {
+      "id": "DEP-02",
+      "type": "dependency",
+      "text": "Google Cloud CLI (gcloud) / Google Cloud Batch API",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#known_dependencies"
+      }
+    }
+  ],
+  "known_external_services": [
+    {
+      "id": "EXT-01",
+      "type": "external_service",
+      "text": "Google Cloud Batch (europe-west2)",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#known_external_services"
+      }
+    },
+    {
+      "id": "EXT-02",
+      "type": "external_service",
+      "text": "Google Cloud Logging",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#known_external_services"
+      }
+    }
+  ],
+  "known_risks": [
+    {
+      "id": "RSK-01",
+      "type": "risk",
+      "text": "Local worker running nested GCP Batch submission might face Workload Identity or network boundary restrictions; fallback is Yardmaster control plane execution.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#known_risks"
+      }
+    },
+    {
+      "id": "RSK-02",
+      "type": "risk",
+      "text": "Batch job queue latency or cold-start timeouts in europe-west2.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#known_risks"
+      }
+    }
+  ],
+  "current_phase": "PROJECT_INTAKE",
+  "current_strategy": "Establish project manual, construct Go domain model and SHA-256 hash-chained JSONL trajectory engine, implement deterministic detectors and profiler, implement local runner, GCP Batch client/lifecycle harness, Mirror Shift challenge evaluator, write comprehensive tests with fault injection, execute local and cloud canaries, and emit GARY shift report.",
+  "remaining_capabilities": [
+    "trajectory-hash-chain-engine",
+    "scenario-model-and-parser",
+    "behavioural-detectors-and-attribution",
+    "job-profiler-and-dossier-builder",
+    "local-lab-runner",
+    "gcp-batch-cloud-shift-client",
+    "mirror-shift-challenge-engine",
+    "cli-commands-and-verification",
+    "test-suite-and-fault-injection",
+    "remote-gcp-batch-canary",
+    "gary-first-shift-documentation"
+  ],
+  "active_decisions": [
+    {
+      "id": "DEC-01",
+      "type": "active_decision",
+      "text": "Construct modular core packages: pkg/trajectory, pkg/scenario, pkg/detector, pkg/profiler, pkg/dossier, pkg/batch, pkg/mirror, and cmd/telltail.",
+      "decision": "Construct modular core packages: pkg/trajectory, pkg/scenario, pkg/detector, pkg/profiler, pkg/dossier, pkg/batch, pkg/mirror, and cmd/telltail.",
+      "status": "KNOWN",
+      "source": {
+        "packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+        "locator": "MASTER_PACKET.md#active_decisions"
+      }
+    }
+  ],
+  "board_policy": {
+    "in_process_status": "IN_PROCESS",
+    "completion_status": "COMPLETED",
+    "completion_authority": "Yardmaster",
+    "completion_condition": "Set COMPLETED only after the Yardmaster accepts the finished project."
+  },
+  "source_packet_digest": "sha256:d2b262fa1c7cf2b0eced0582cee45192cf3c2f41db99ef3ecffc794c9d5a6362",
+  "manual_version": 1,
+  "manual_digest": "sha256:7ad00243118598fe42988a720bb012524d2f4ac1076fc3308b221d9a1061c052"
+}

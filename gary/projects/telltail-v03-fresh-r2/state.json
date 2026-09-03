@@ -1,8 +1,12 @@
 {
   "schema": "gary.project-state.v1",
   "project_id": "telltail-v03-fresh-r2",
-  "state": "ACTIVE",
-  "current_phase": "intake",
+  "state": "PLANNING",
+  "yardmaster_state": "RUNNING",
+  "completion": "ACTIVE",
+  "current_phase": "planning",
+  "current_strategy": "Establish project manual, construct Go domain model and SHA-256 hash-chained JSONL trajectory engine, implement deterministic detectors and profiler, implement local runner, GCP Batch client/lifecycle harness, Mirror Shift challenge evaluator, write comprehensive tests with fault injection, execute local and cloud canaries, and emit GARY shift report.",
   "watchdog": {},
-  "updated_at": "2026-09-03T04:18:56Z"
+  "last_event": "planning wave 4",
+  "updated_at": "2026-09-03T07:51:31Z"
 }
