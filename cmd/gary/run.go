@@ -947,7 +947,10 @@ func waitForSupervisedWorker(cfg *config.Config, job *jobs.Job, task, acceptance
 			return status, time.Now(), components, nil
 		}
 
-		telemetry, ok := readWorkerTelemetry(gcsPath + "/telemetry.json")
+		// The append-only worker protocol stores immutable telemetry snapshots
+		// below the attempt directory. Pass the directory itself so the reader
+		// can find both the current snapshot layout and the legacy single file.
+		telemetry, ok := readWorkerTelemetry(gcsPath)
 		if ok {
 			now := time.Now()
 			due := false
@@ -1001,10 +1004,18 @@ func fallbackSupervisionDecision(telemetry supervisor.Telemetry, generation int,
 	return decision
 }
 
-func readWorkerTelemetry(path string) (supervisor.Telemetry, bool) {
+func workerTelemetryObjectPattern(gcsPath string) string {
+	return strings.TrimSuffix(gcsPath, "/") + "/telemetry/*.json"
+}
+
+func workerTelemetryLegacyPath(gcsPath string) string {
+	return strings.TrimSuffix(gcsPath, "/") + "/telemetry.json"
+}
+
+func readWorkerTelemetry(gcsPath string) (supervisor.Telemetry, bool) {
 	// Worker telemetry is append-only because the Batch service account has
 	// objectCreator, not objectUser. Read the newest immutable snapshot first.
-	if objects, err := listGCSObjects(path + "/telemetry/*.json"); err == nil {
+	if objects, err := listGCSObjects(workerTelemetryObjectPattern(gcsPath)); err == nil {
 		for i := len(objects) - 1; i >= 0; i-- {
 			if telemetry, ok := decodeWorkerTelemetryObject(objects[i]); ok {
 				return telemetry, true
@@ -1013,7 +1024,7 @@ func readWorkerTelemetry(path string) (supervisor.Telemetry, bool) {
 	}
 
 	// Backward compatibility for runs created before append-only telemetry.
-	if telemetry, ok := decodeWorkerTelemetryObject(path + "/telemetry.json"); ok {
+	if telemetry, ok := decodeWorkerTelemetryObject(workerTelemetryLegacyPath(gcsPath)); ok {
 		return telemetry, true
 	}
 	return supervisor.Telemetry{}, false
@@ -1829,7 +1840,6 @@ func writeLedger(cfg *config.Config, result jobs.RunResult, model string) {
 		logPrint("", "  ledger write failed: %v", err)
 	}
 }
-
 
 func verifyExistingCandidate(workDir string, job *jobs.Job) error {
 	for _, command := range job.Acceptance {
