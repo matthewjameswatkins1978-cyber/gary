@@ -63,6 +63,17 @@ func (p BoardPolicy) valid() bool {
 		p.CompletionAuthority == "Yardmaster" && p.CompletionCondition != ""
 }
 
+// NormalizeBoardPolicy makes the lifecycle invariant owned by GARY rather
+// than by the model's formatting. A model may omit the field or return a
+// partial variant, but it cannot redefine who completes a project or what
+// the two durable board states mean.
+func NormalizeBoardPolicy(p BoardPolicy) BoardPolicy {
+	if !p.valid() {
+		return DefaultBoardPolicy()
+	}
+	return p
+}
+
 func (s Store) boardPath() string { return filepath.Join(s.root, "board", "projects.json") }
 
 func (s Store) LoadBoard() (ProjectBoard, error) {

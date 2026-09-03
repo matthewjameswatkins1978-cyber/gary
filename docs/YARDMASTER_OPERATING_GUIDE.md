@@ -13,6 +13,13 @@ and only project-level Yardmaster acceptance may write `COMPLETED`. A worker
 result, pause, retry, or infrastructure failure is evidence about an unfinished
 project, not board completion.
 
+Project intake is also resumable. GARY owns the board policy and repairs an
+omitted or partial model response to the canonical Yardmaster-owned lifecycle
+before persisting the manual. If packet storage succeeds but manual generation
+fails, a later retry resumes intake from the same immutable packet; it does not
+rewrite the packet or create a duplicate project. The master status records the
+intake failure while the board remains `IN_PROCESS`.
+
 For parked work, a watchdog tick may wake only an unfinished project with
 explicit executable work. It must leave `RUNNING`, finished, waiting, blocked,
 and no-work projects alone, claim a single wake generation atomically, and

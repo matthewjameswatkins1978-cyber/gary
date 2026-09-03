@@ -46,6 +46,15 @@ The generated project manual carries the same `board_policy` invariant. This
 keeps the lifecycle rule in the Yardmaster's working context while leaving the
 immutable packet unchanged.
 
+The lifecycle invariant is enforced by GARY at persistence time rather than
+trusted to model formatting. Omitted or partial model output is repaired to
+the canonical Yardmaster-owned policy before the manual digest is written. If
+the first intake attempt fails after the packet is stored, the next master run
+reuses that immutable packet and completes the missing manual instead of
+creating a second project or failing with `PROJECT_MANUAL_MISSING`. Intake
+failures also produce a retryable master status and an explanatory project
+state event; the board remains `IN_PROCESS`.
+
 ## Parked project auto-wake
 
 `gary project tick <project-id>` is a thin deterministic watchdog operation.

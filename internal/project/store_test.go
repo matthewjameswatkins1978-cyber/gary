@@ -121,6 +121,38 @@ func TestIncompleteIngestionRetainsPacketButCannotPlan(t *testing.T) {
 	}
 }
 
+func TestPendingIngestionCanBeRetriedAndNormalizesBoardPolicy(t *testing.T) {
+	store := NewStore(t.TempDir())
+	packet := []byte("# Retryable intake\n")
+	if _, err := store.CreateAndIngest(context.Background(), "retryable", "Retryable", "", "", packet, func(context.Context, ProjectContext) (ProjectManual, error) {
+		return ProjectManual{}, errors.New("temporary Yardmaster output failure")
+	}); err == nil {
+		t.Fatal("initial intake unexpectedly succeeded")
+	}
+
+	ctx, err := store.IngestPending(context.Background(), "retryable", func(_ context.Context, input ProjectContext) (ProjectManual, error) {
+		manual, err := testManual(context.Background(), input)
+		if err != nil {
+			return ProjectManual{}, err
+		}
+		manual.BoardPolicy = BoardPolicy{InProcessStatus: BoardInProcess}
+		return manual, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ctx.Project.ProjectManualVersion != 1 || ctx.State.State != "PLANNING" || ctx.Manual.BoardPolicy != DefaultBoardPolicy() {
+		t.Fatalf("retried intake = %+v", ctx)
+	}
+	if got, err := store.LoadMasterPacket("retryable"); err != nil || string(got) != string(packet) {
+		t.Fatalf("retry changed immutable packet: %q err=%v", got, err)
+	}
+	board, err := store.LoadBoard()
+	if err != nil || len(board.Projects) != 1 || board.Projects[0].Status != BoardInProcess || board.Projects[0].ProjectManualVersion != 1 {
+		t.Fatalf("board after retried intake = %+v err=%v", board, err)
+	}
+}
+
 func TestContradictionsRemainExplicitAndTraceable(t *testing.T) {
 	store := NewStore(t.TempDir())
 	packet := []byte("# Conflicting project\nOption A\nOption B\n")

@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
+
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/project"
 )
 
 func TestDecodeProjectManualNormalizesYardmasterVariants(t *testing.T) {
@@ -36,6 +39,28 @@ func TestDecodeProjectManualNormalizesYardmasterVariants(t *testing.T) {
 	}
 	if manual.AcceptanceCriteria[0].Text != "grep -q marker README.md" || manual.AcceptanceCriteria[0].Source.Locator == "" {
 		t.Fatalf("acceptance normalization = %+v", manual.AcceptanceCriteria[0])
+	}
+}
+
+func TestDecodeProjectManualRepairsPartialBoardPolicy(t *testing.T) {
+	digest := "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	text := `{
+  "schema": "gary.project-manual.v1",
+  "project_id": "demo",
+  "objective": "Test durable intake",
+  "definition_of_done": "Done",
+  "source_packet_digest": "` + digest + `",
+  "board_policy": {"in_process_status":"IN_PROCESS"}
+}`
+	manual, err := decodeProjectManual(text, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manual.BoardPolicy != project.DefaultBoardPolicy() {
+		t.Fatalf("partial board policy was not repaired: %+v", manual.BoardPolicy)
+	}
+	if _, err := json.Marshal(manual); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -102,4 +127,3 @@ func TestDecodeProjectManualNormalizesCapabilityObjects(t *testing.T) {
 		t.Fatalf("capability normalization = %+v", manual.RemainingCapabilities)
 	}
 }
-

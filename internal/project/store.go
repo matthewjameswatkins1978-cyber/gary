@@ -333,9 +333,10 @@ func (s Store) SaveManual(id string, manual ProjectManual) error {
 	if manual.ProjectID != id || manual.SourcePacketDigest != p.MasterPacketDigest {
 		return fmt.Errorf("%w: manual source or project mismatch", ErrProjectIDMismatch)
 	}
-	if manual.BoardPolicy.isZero() {
-		manual.BoardPolicy = DefaultBoardPolicy()
-	}
+	// Board lifecycle is a GARY-owned invariant, not a model-controlled
+	// project choice. Preserve a valid condition, but repair omitted or
+	// partial model output before calculating the durable manual digest.
+	manual.BoardPolicy = NormalizeBoardPolicy(manual.BoardPolicy)
 	wantVersion := p.ProjectManualVersion + 1
 	if manual.ManualVersion != wantVersion {
 		return fmt.Errorf("%w: got %d, want %d", ErrManualVersionInvalid, manual.ManualVersion, wantVersion)

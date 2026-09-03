@@ -378,6 +378,10 @@ func decodeProjectManual(text, packetDigest string) (project.ProjectManual, erro
 	if err := json.Unmarshal(encoded, &manual); err != nil {
 		return project.ProjectManual{}, err
 	}
+	// Board lifecycle is a runtime invariant. Treat model output as a hint for
+	// the optional completion wording, never as authority over the statuses or
+	// the Yardmaster-owned completion boundary.
+	manual.BoardPolicy = project.NormalizeBoardPolicy(manual.BoardPolicy)
 	return manual, nil
 }
 
