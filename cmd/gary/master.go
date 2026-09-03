@@ -167,6 +167,7 @@ func cmdMaster() {
 	}
 	projectCtx, projectID, err := ensureMasterProject(cfg, manifest, brief)
 	if err != nil {
+		recordMasterIntakeFailure(manifest, err)
 		fmt.Fprintf(os.Stderr, "master project context: %v\n", err)
 		os.Exit(1)
 	}
@@ -383,26 +384,42 @@ func pauseMaster(status *masterStatus, projectCtx project.ProjectContext, waveBu
 func ensureMasterProject(cfg *config.Config, manifest *masterManifest, brief string) (project.ProjectContext, string, error) {
 	store := project.DefaultStore()
 	if manifest.ProjectID != "" {
-		ctx, err := store.LoadContext(manifest.ProjectID)
+		existing, err := store.LoadProject(manifest.ProjectID)
 		if err != nil {
 			return project.ProjectContext{}, manifest.ProjectID, err
 		}
-		if ctx.Project.State == "ACCEPTED" || ctx.Project.State == "ARCHIVED" {
-			return project.ProjectContext{}, manifest.ProjectID, fmt.Errorf("project %s is terminal (%s)", manifest.ProjectID, ctx.Project.State)
+		if existing.State == "ACCEPTED" || existing.State == "ARCHIVED" {
+			return project.ProjectContext{}, manifest.ProjectID, fmt.Errorf("project %s is terminal (%s)", manifest.ProjectID, existing.State)
 		}
-		return ctx, manifest.ProjectID, err
+		if existing.Repo != "" && existing.Repo != manifest.Repo {
+			return project.ProjectContext{}, manifest.ProjectID, errors.New("project repository mismatch")
+		}
+		if existing.ProjectManualVersion == 0 {
+			ctx, ingestErr := store.IngestPending(context.Background(), manifest.ProjectID, func(ctx context.Context, input project.ProjectContext) (project.ProjectManual, error) {
+				return generateProjectManual(ctx, cfg, input)
+			})
+			return ctx, manifest.ProjectID, ingestErr
+		}
+		ctx, loadErr := store.LoadContext(manifest.ProjectID)
+		return ctx, manifest.ProjectID, loadErr
 	}
 	projectID := manifest.ID
 	if existing, err := store.LoadProject(projectID); err == nil {
-		ctx, loadErr := store.LoadContext(projectID)
-		if loadErr != nil {
-			return project.ProjectContext{}, projectID, loadErr
-		}
-		if ctx.Project.State == "ACCEPTED" || ctx.Project.State == "ARCHIVED" {
-			return project.ProjectContext{}, projectID, fmt.Errorf("project %s is terminal (%s)", projectID, ctx.Project.State)
+		if existing.State == "ACCEPTED" || existing.State == "ARCHIVED" {
+			return project.ProjectContext{}, projectID, fmt.Errorf("project %s is terminal (%s)", projectID, existing.State)
 		}
 		if existing.Repo != "" && existing.Repo != manifest.Repo {
 			return project.ProjectContext{}, projectID, errors.New("project repository mismatch")
+		}
+		if existing.ProjectManualVersion == 0 {
+			ctx, ingestErr := store.IngestPending(context.Background(), projectID, func(ctx context.Context, input project.ProjectContext) (project.ProjectManual, error) {
+				return generateProjectManual(ctx, cfg, input)
+			})
+			return ctx, projectID, ingestErr
+		}
+		ctx, loadErr := store.LoadContext(projectID)
+		if loadErr != nil {
+			return project.ProjectContext{}, projectID, loadErr
 		}
 		return ctx, projectID, nil
 	}
@@ -410,6 +427,37 @@ func ensureMasterProject(cfg *config.Config, manifest *masterManifest, brief str
 		return generateProjectManual(ctx, cfg, input)
 	})
 	return ctx, projectID, err
+}
+
+// recordMasterIntakeFailure preserves the distinction between a project that
+// is still unfinished and a master invocation that failed before planning.
+// The board remains IN_PROCESS; the master status records the actionable
+// control-plane error and allows a later corrected retry.
+func recordMasterIntakeFailure(manifest *masterManifest, cause error) {
+	projectID := manifest.ProjectID
+	if projectID == "" {
+		projectID = manifest.ID
+	}
+	status := &masterStatus{
+		ID: manifest.ID, ProjectID: projectID, State: "failed",
+		Summary: "Project intake failed before Yardmaster planning",
+		Error:   cause.Error(), Cost: cost.NewSummary(),
+	}
+	if err := saveMasterStatus(status); err != nil {
+		fmt.Fprintf(os.Stderr, "master intake status: %v\n", err)
+	}
+	store := project.DefaultStore()
+	p, err := store.LoadProject(projectID)
+	if err != nil || p.State == "ACCEPTED" || p.State == "ARCHIVED" {
+		return
+	}
+	state := project.ProjectState{
+		ProjectID: projectID, State: p.State, CurrentPhase: "intake",
+		LastEvent: "master intake failed: " + cause.Error(),
+	}
+	if err := store.SaveState(projectID, state); err != nil {
+		fmt.Fprintf(os.Stderr, "master intake project state: %v\n", err)
+	}
 }
 
 func loadMasterManifest(path string) (*masterManifest, string, error) {

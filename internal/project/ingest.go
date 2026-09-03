@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 // ManualGenerator is the Yardmaster boundary. Keeping it injectable makes
@@ -34,6 +35,56 @@ func (s Store) CreateAndIngest(ctx context.Context, id, name, repo, baseBranch s
 	state := input.State
 	state.State = "PLANNING"
 	state.CurrentPhase = "planning"
+	if err := s.SaveState(id, state); err != nil {
+		return ProjectContext{}, err
+	}
+	return s.LoadContext(id)
+}
+
+// IngestPending completes a project whose immutable packet was persisted but
+// whose first manual generation failed. It never rewrites the packet and it
+// refuses to replace an existing manual; this makes retrying an interrupted
+// intake safe and keeps the normal Yardmaster path in charge.
+func (s Store) IngestPending(ctx context.Context, id string, generate ManualGenerator) (ProjectContext, error) {
+	p, err := s.LoadProject(id)
+	if err != nil {
+		return ProjectContext{}, err
+	}
+	if p.ProjectManualVersion != 0 {
+		return s.LoadContext(id)
+	}
+	if generate == nil {
+		return ProjectContext{}, fmt.Errorf("project %s has no manual and no manual generator was supplied", id)
+	}
+	packet, err := s.LoadMasterPacket(id)
+	if err != nil {
+		return ProjectContext{}, err
+	}
+	var state ProjectState
+	if err := readJSON(filepath.Join(s.projectDir(id), "state.json"), &state); err != nil {
+		return ProjectContext{}, fmt.Errorf("%w: state: %v", ErrProjectMissing, err)
+	}
+	if state.Schema != StateSchema || state.ProjectID != id {
+		return ProjectContext{}, fmt.Errorf("%w: invalid project state", ErrProjectMissing)
+	}
+	amendments, err := s.LoadAmendments(id)
+	if err != nil {
+		return ProjectContext{}, err
+	}
+	input := ProjectContext{Project: p, State: state, Amendments: amendments, Packet: append([]byte(nil), packet...)}
+	manual, err := generate(ctx, input)
+	if err != nil {
+		return input, err
+	}
+	manual.ProjectID = id
+	manual.SourcePacketDigest = p.MasterPacketDigest
+	manual.ManualVersion = 1
+	if err := s.SaveManual(id, manual); err != nil {
+		return input, err
+	}
+	state.State = "PLANNING"
+	state.CurrentPhase = "planning"
+	state.LastEvent = "project intake resumed"
 	if err := s.SaveState(id, state); err != nil {
 		return ProjectContext{}, err
 	}

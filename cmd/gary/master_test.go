@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/doctrine"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/project"
 )
 
 func TestFailedMasterStateIsRetryable(t *testing.T) {
@@ -21,6 +23,45 @@ func TestFailedMasterStateIsRetryable(t *testing.T) {
 	}
 	if isFinalMasterState("paused") {
 		t.Fatal("paused master job should be resumable")
+	}
+}
+
+func TestRecordMasterIntakeFailurePersistsRetryableEvidence(t *testing.T) {
+	root := t.TempDir()
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(oldWD)
+	t.Setenv("GARY_PROJECTS_DIR", filepath.Join(root, "projects"))
+
+	store := project.DefaultStore()
+	if _, err := store.CreateProject("intake-failure", "Intake failure", "https://github.com/matthewjameswatkins1978-cyber/gary-test-clamp.git", "main", []byte("packet")); err != nil {
+		t.Fatal(err)
+	}
+	recordMasterIntakeFailure(&masterManifest{ID: "intake-failure"}, errors.New("board policy output was incomplete"))
+
+	status, err := readMasterStatus("intake-failure")
+	if err != nil || status.State != "failed" || status.Summary == "" || status.Error == "" {
+		t.Fatalf("master intake status = %+v err=%v", status, err)
+	}
+	p, err := store.LoadProject("intake-failure")
+	if err != nil || p.State != "ACTIVE" {
+		t.Fatalf("project state = %+v err=%v", p, err)
+	}
+	var state project.ProjectState
+	data, err := os.ReadFile(filepath.Join(store.Root(), "intake-failure", "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &state); err != nil {
+		t.Fatal(err)
+	}
+	if state.CurrentPhase != "intake" || !strings.Contains(state.LastEvent, "board policy output was incomplete") {
+		t.Fatalf("intake state evidence = %+v", state)
 	}
 }
 

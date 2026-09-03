@@ -11,6 +11,18 @@
     "source_packet_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "manual_version": {"type": "integer", "minimum": 1},
     "manual_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "board_policy": {
+      "type": "object",
+      "description": "GARY-owned lifecycle invariant. New persisted manuals always contain the canonical policy.",
+      "required": ["in_process_status", "completion_status", "completion_authority", "completion_condition"],
+      "properties": {
+        "in_process_status": {"const": "IN_PROCESS"},
+        "completion_status": {"const": "COMPLETED"},
+        "completion_authority": {"const": "Yardmaster"},
+        "completion_condition": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
     "conflicts": {"type": "array"},
     "hard_constraints": {"type": "array"},
     "acceptance_criteria": {"type": "array"}
