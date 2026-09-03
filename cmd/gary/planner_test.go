@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -129,5 +131,35 @@ func TestYardmasterSmallRepairCannotExpandCandidateScope(t *testing.T) {
 	}
 	if err := validateSmallRepairScope([]string{"src/lib.rs"}, []string{"src/lib.rs", "README.md"}); err == nil {
 		t.Fatal("small repair scope expansion was accepted")
+	}
+}
+
+func TestChangedWorkingTreeFilesIncludesUntrackedRepairFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("tracked\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	runGit("init", "--quiet")
+	runGit("config", "user.email", "test@example.invalid")
+	runGit("config", "user.name", "GARY test")
+	runGit("add", "tracked.txt")
+	runGit("commit", "--quiet", "-m", "baseline")
+	if err := os.WriteFile(filepath.Join(dir, "repair-added.txt"), []byte("new\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := changedWorkingTreeFiles(dir, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateSmallRepairScope([]string{"tracked.txt"}, files); err == nil {
+		t.Fatal("untracked repair file was not detected as scope expansion")
 	}
 }
