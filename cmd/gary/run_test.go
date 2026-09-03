@@ -44,6 +44,19 @@ func TestParseGCSObjectListSortsAndFiltersOutput(t *testing.T) {
 	}
 }
 
+func TestWorkerTelemetryPathsUseAttemptDirectory(t *testing.T) {
+	base := "gs://bucket/run/attempt-1/"
+	if got, want := workerTelemetryObjectPattern(base), "gs://bucket/run/attempt-1/telemetry/*.json"; got != want {
+		t.Fatalf("telemetry object pattern = %q, want %q", got, want)
+	}
+	if got, want := workerTelemetryLegacyPath(base), "gs://bucket/run/attempt-1/telemetry.json"; got != want {
+		t.Fatalf("legacy telemetry path = %q, want %q", got, want)
+	}
+	if strings.Contains(workerTelemetryObjectPattern(base), "telemetry.json/") {
+		t.Fatal("append-only telemetry path must not treat telemetry.json as a directory")
+	}
+}
+
 func TestControlObjectPathIsAppendOnlyAndGenerationOrdered(t *testing.T) {
 	got := controlObjectPath("gs://bucket/run/control/", 3, "abc12345")
 	want := "gs://bucket/run/control/control-00000003-abc12345.json"
