@@ -144,11 +144,13 @@ type Amendment struct {
 }
 
 type ProjectContext struct {
-	Project    Project
-	State      ProjectState
-	Manual     ProjectManual
-	Amendments []Amendment
-	Packet     []byte
+	Project         Project
+	State           ProjectState
+	Manual          ProjectManual
+	Amendments      []Amendment
+	Feedback        []FeedbackRecord
+	AppliedFeedback []FeedbackRecord
+	Packet          []byte
 }
 
 type Store struct{ root string }
@@ -192,6 +194,9 @@ func (s Store) CreateProject(id, name, repo, baseBranch string, packet []byte) (
 		return Project{}, err
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "evidence"), 0o755); err != nil {
+		return Project{}, err
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "feedback"), 0o755); err != nil {
 		return Project{}, err
 	}
 	if err := os.WriteFile(filepath.Join(dir, "source", "MASTER_PACKET.md"), packet, 0o644); err != nil {
@@ -293,7 +298,17 @@ func (s Store) LoadContext(id string) (ProjectContext, error) {
 	if err != nil {
 		return ProjectContext{}, err
 	}
-	return ProjectContext{Project: p, State: state, Manual: manual, Amendments: amendments, Packet: packet}, nil
+	feedback, err := s.LoadFeedback(id)
+	if err != nil {
+		return ProjectContext{}, err
+	}
+	var applied []FeedbackRecord
+	for _, record := range feedback {
+		if record.Status == FeedbackApplied {
+			applied = append(applied, record)
+		}
+	}
+	return ProjectContext{Project: p, State: state, Manual: manual, Amendments: amendments, Feedback: feedback, AppliedFeedback: applied, Packet: packet}, nil
 }
 
 func (s Store) SaveManual(id string, manual ProjectManual) error {
