@@ -76,6 +76,10 @@ func feedbackLockPath(s Store, id string) string {
 	return filepath.Join(s.projectDir(id), "feedback", ".events.lock")
 }
 
+func ensureFeedbackDir(s Store, id string) error {
+	return os.MkdirAll(filepath.Dir(feedbackPath(s, id)), 0o755)
+}
+
 // AppendFeedback records explicit human feedback without changing the packet,
 // manual, state, worker packets, or doctrine.
 func (s Store) AppendFeedback(id, actor, scope, decisionReference, childTaskID, text string) (FeedbackRecord, error) {
@@ -103,6 +107,12 @@ func (s Store) AppendFeedback(id, actor, scope, decisionReference, childTaskID, 
 		Scope: scope, DecisionReference: strings.TrimSpace(decisionReference),
 		ChildTaskID: strings.TrimSpace(childTaskID), Text: strings.TrimSpace(text),
 		Status: feedbackInitialStatus(scope),
+	}
+	// Projects created before review support may not have a feedback directory.
+	// Create it before taking the directory lock so the first review operation
+	// remains backward-compatible with those durable project records.
+	if err := ensureFeedbackDir(s, id); err != nil {
+		return FeedbackRecord{}, err
 	}
 	err = withProjectFileLock(feedbackLockPath(s, id), boardLockTimeout, func() error {
 		events, err := s.LoadFeedbackEvents(id)
@@ -232,6 +242,9 @@ func (s Store) ApplyPendingFeedback(id, boundary string) ([]FeedbackRecord, erro
 	}
 	if strings.TrimSpace(boundary) == "" {
 		return nil, fmt.Errorf("%w: boundary is required", ErrReviewUnsafeBoundary)
+	}
+	if err := ensureFeedbackDir(s, id); err != nil {
+		return nil, err
 	}
 	err = withProjectFileLock(feedbackLockPath(s, id), boardLockTimeout, func() error {
 		events, err := s.LoadFeedbackEvents(id)
