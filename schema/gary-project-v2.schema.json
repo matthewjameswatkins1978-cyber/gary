@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gary.project.v2",
+  "type": "object",
+  "required": ["schema","project_id","state","generation","master_packet_digest","master_packet_version","project_manual_version","created_at","updated_at"],
+  "properties": {
+    "schema": {"const":"gary.project.v2"},
+    "project_id": {"type":"string","pattern":"^[a-z0-9][a-z0-9-]{0,59}$"},
+    "project_name": {"type":"string"},
+    "repo": {"type":"string"},
+    "base_branch": {"type":"string"},
+    "state": {"enum":["ACTIVE","PARKED","WAITING","BLOCKED","ACCEPTED","CANCELLED"]},
+    "generation": {"type":"integer","minimum":1},
+    "master_packet_digest": {"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+    "master_packet_version": {"const":1},
+    "project_manual_version": {"type":"integer","minimum":0},
+    "manual_digest": {"type":"string"},
+    "created_at": {"type":"string","minLength":1},
+    "updated_at": {"type":"string","minLength":1},
+    "accepted_at": {"type":"string"},
+    "cancelled_at": {"type":"string"},
+    "archived_at": {"type":"string"}
+  },
+  "additionalProperties": false
+}

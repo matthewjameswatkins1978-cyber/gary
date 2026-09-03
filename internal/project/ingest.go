@@ -21,7 +21,7 @@ func (s Store) CreateAndIngest(ctx context.Context, id, name, repo, baseBranch s
 	if generate == nil {
 		return ProjectContext{}, fmt.Errorf("project %s persisted but no manual generator was supplied", id)
 	}
-	input := ProjectContext{Project: p, State: ProjectState{Schema: StateSchema, ProjectID: id, State: "ACTIVE", CurrentPhase: "intake"}, Packet: append([]byte(nil), packet...)}
+	input := ProjectContext{Project: p, State: ProjectState{Schema: StateSchema, ProjectID: id, State: LifecycleActive, Generation: p.Generation, Activities: []string{ActivityPlanning}, CurrentPhase: "intake"}, Packet: append([]byte(nil), packet...)}
 	manual, err := generate(ctx, input)
 	if err != nil {
 		return input, err
@@ -33,8 +33,12 @@ func (s Store) CreateAndIngest(ctx context.Context, id, name, repo, baseBranch s
 		return input, err
 	}
 	state := input.State
-	state.State = "PLANNING"
+	state.State = LifecycleActive
+	state.Activities = []string{ActivityPlanning}
 	state.CurrentPhase = "planning"
+	state.LastEvent = "project intake completed"
+	state.Reason = "durable project manual created; ready for planning"
+	state.UpdatedBy = "Yardmaster"
 	if err := s.SaveState(id, state); err != nil {
 		return ProjectContext{}, err
 	}
@@ -64,9 +68,10 @@ func (s Store) IngestPending(ctx context.Context, id string, generate ManualGene
 	if err := readJSON(filepath.Join(s.projectDir(id), "state.json"), &state); err != nil {
 		return ProjectContext{}, fmt.Errorf("%w: state: %v", ErrProjectMissing, err)
 	}
-	if state.Schema != StateSchema || state.ProjectID != id {
+	if (state.Schema != StateSchema && state.Schema != LegacyStateSchema) || state.ProjectID != id {
 		return ProjectContext{}, fmt.Errorf("%w: invalid project state", ErrProjectMissing)
 	}
+	state.Schema = StateSchema
 	amendments, err := s.LoadAmendments(id)
 	if err != nil {
 		return ProjectContext{}, err
@@ -82,9 +87,12 @@ func (s Store) IngestPending(ctx context.Context, id string, generate ManualGene
 	if err := s.SaveManual(id, manual); err != nil {
 		return input, err
 	}
-	state.State = "PLANNING"
+	state.State = LifecycleActive
+	state.Activities = []string{ActivityPlanning}
 	state.CurrentPhase = "planning"
 	state.LastEvent = "project intake resumed"
+	state.Reason = "pending durable intake completed; ready for planning"
+	state.UpdatedBy = "Yardmaster"
 	if err := s.SaveState(id, state); err != nil {
 		return ProjectContext{}, err
 	}

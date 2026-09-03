@@ -49,7 +49,6 @@ type masterPlanJob struct {
 }
 
 const (
-	maxEconomicWaveJobs   = 1
 	maxPlannerTaskBytes   = 1600
 	maxPlannerMemoryBytes = 1600
 )
@@ -177,7 +176,7 @@ func cmdMaster() {
 		fmt.Printf("GARY // MASTER ALREADY %s\nJob: %s\nBranch: %s\n", strings.ToUpper(prior.State), prior.ID, prior.StagingBranch)
 		return
 	}
-	if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "EXECUTING", CurrentPhase: "planning", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: "master started"}); err != nil {
+	if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: project.LifecycleActive, Activities: []string{project.ActivityPlanning}, CurrentPhase: "planning", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: "master started", Reason: "Yardmaster master run started", UpdatedBy: "Yardmaster"}); err != nil {
 		fmt.Fprintf(os.Stderr, "master project state: %v\n", err)
 		os.Exit(1)
 	}
@@ -217,7 +216,7 @@ func cmdMaster() {
 			failMaster(status, fmt.Errorf("project context before wave %d: %w", wave, err))
 		}
 		brief = projectCtx.PlannerInputWithSource()
-		if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "PLANNING", CurrentPhase: "planning", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: fmt.Sprintf("planning wave %d", wave)}); err != nil {
+		if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: project.LifecycleActive, Activities: []string{project.ActivityPlanning}, CurrentPhase: "planning", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: fmt.Sprintf("planning wave %d", wave), Reason: fmt.Sprintf("planning wave %d", wave), UpdatedBy: "Yardmaster"}); err != nil {
 			failMaster(status, fmt.Errorf("project state before wave %d: %w", wave, err))
 		}
 		if _, err := project.DefaultStore().ApplyPendingFeedback(projectID, "master-planning-boundary"); err != nil {
@@ -252,7 +251,7 @@ func cmdMaster() {
 
 		if plan.Done {
 			status.Waves = append(status.Waves, record)
-			if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "VERIFYING", CurrentPhase: "verification", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: "planner reports project done"}); err != nil {
+			if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: project.LifecycleActive, Activities: []string{project.ActivityVerifying}, CurrentPhase: "verification", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: "planner reports project done", Reason: "master acceptance verification started", UpdatedBy: "Yardmaster"}); err != nil {
 				failMaster(status, fmt.Errorf("project state before final acceptance: %w", err))
 			}
 			if len(manifest.Acceptance) > 0 {
@@ -273,7 +272,7 @@ func cmdMaster() {
 				status.State = "planning"
 				status.Summary = "Independent final inspection rejected completion: " + strings.TrimSpace(inspection.Summary)
 				status.PlannerMemory = compactPlannerMemory("FINAL INSPECTOR REJECTED COMPLETION: "+inspection.Memory+"\n"+inspection.Summary, status.PlannerMemory)
-				if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "PLANNING", CurrentPhase: "planning", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: "final semantic inspection rejected completion"}); err != nil {
+				if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: project.LifecycleActive, Activities: []string{project.ActivityPlanning}, CurrentPhase: "planning", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: "final semantic inspection rejected completion", Reason: "final inspection rejected completion; replan", UpdatedBy: "Yardmaster"}); err != nil {
 					failMaster(status, fmt.Errorf("project state after final inspection rejection: %w", err))
 				}
 				_ = saveMasterStatus(status)
@@ -296,6 +295,9 @@ func cmdMaster() {
 
 		status.State = "running"
 		_ = saveMasterStatus(status)
+		if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: project.LifecycleActive, Activities: []string{project.ActivityExecuting}, CurrentPhase: "executing", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: fmt.Sprintf("executing wave %d", wave), Reason: fmt.Sprintf("worker execution wave %d", wave), UpdatedBy: "Yardmaster"}); err != nil {
+			failMaster(status, fmt.Errorf("project state before worker wave %d: %w", wave, err))
+		}
 		childJobs := make([]*jobs.Job, 0, len(plan.Jobs))
 		for i, child := range plan.Jobs {
 			runtimeID := masterRuntimeID("job", manifest.ID, wave, i+1)
@@ -340,6 +342,9 @@ func cmdMaster() {
 		}
 		status.State = "integrating"
 		_ = saveMasterStatus(status)
+		if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: project.LifecycleActive, Activities: []string{project.ActivityIntegrating}, CurrentPhase: "integrating", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: fmt.Sprintf("integrating wave %d candidates", wave), Reason: fmt.Sprintf("integrating accepted work from wave %d", wave), UpdatedBy: "Yardmaster"}); err != nil {
+			failMaster(status, fmt.Errorf("project state before integration wave %d: %w", wave, err))
+		}
 
 		for _, result := range results {
 			if err := validateIntegrableMasterResult(result); err != nil {
@@ -358,7 +363,7 @@ func cmdMaster() {
 
 		status.Waves = append(status.Waves, record)
 		_ = saveMasterStatus(status)
-		if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: "EXECUTING", CurrentPhase: "executing", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: fmt.Sprintf("wave %d completed", wave)}); err != nil {
+		if err := project.DefaultStore().SaveState(projectID, project.ProjectState{ProjectID: projectID, State: project.LifecycleActive, Activities: []string{project.ActivityPlanning}, CurrentPhase: "planning", CurrentStrategy: projectCtx.Manual.CurrentStrategy, LastEvent: fmt.Sprintf("wave %d completed; reassessing", wave), Reason: fmt.Sprintf("wave %d completed; reassess remaining work", wave), UpdatedBy: "Yardmaster"}); err != nil {
 			failMaster(status, fmt.Errorf("project state after wave %d: %w", wave, err))
 		}
 	}
@@ -373,9 +378,13 @@ func pauseMaster(status *masterStatus, projectCtx project.ProjectContext, waveBu
 	_ = saveMasterStatus(status)
 
 	state := projectCtx.State
-	state.State = "PAUSED"
-	state.CurrentPhase = "executing"
-	state.LastEvent = fmt.Sprintf("bounded master run paused after wave %d", endWave)
+	state.State = project.LifecycleParked
+	state.Activities = nil
+	state.CurrentPhase = "parked"
+	state.YardmasterState = project.YardmasterParked
+	state.LastEvent = fmt.Sprintf("bounded master run parked after wave %d", endWave)
+	state.Reason = "bounded master run slice ended with resumable work"
+	state.UpdatedBy = "Yardmaster"
 	_ = project.DefaultStore().SaveState(projectCtx.Project.ProjectID, state)
 
 	fmt.Printf("GARY // MASTER PAUSED\nBranch: %s\nThrough wave: %d\nReason: bounded run slice completed; resume is safe\n", status.StagingBranch, endWave)
@@ -388,7 +397,7 @@ func ensureMasterProject(cfg *config.Config, manifest *masterManifest, brief str
 		if err != nil {
 			return project.ProjectContext{}, manifest.ProjectID, err
 		}
-		if existing.State == "ACCEPTED" || existing.State == "ARCHIVED" {
+		if existing.State == project.LifecycleAccepted || existing.State == project.LifecycleCancelled {
 			return project.ProjectContext{}, manifest.ProjectID, fmt.Errorf("project %s is terminal (%s)", manifest.ProjectID, existing.State)
 		}
 		if existing.Repo != "" && existing.Repo != manifest.Repo {
@@ -405,7 +414,7 @@ func ensureMasterProject(cfg *config.Config, manifest *masterManifest, brief str
 	}
 	projectID := manifest.ID
 	if existing, err := store.LoadProject(projectID); err == nil {
-		if existing.State == "ACCEPTED" || existing.State == "ARCHIVED" {
+		if existing.State == project.LifecycleAccepted || existing.State == project.LifecycleCancelled {
 			return project.ProjectContext{}, projectID, fmt.Errorf("project %s is terminal (%s)", projectID, existing.State)
 		}
 		if existing.Repo != "" && existing.Repo != manifest.Repo {
@@ -448,7 +457,7 @@ func recordMasterIntakeFailure(manifest *masterManifest, cause error) {
 	}
 	store := project.DefaultStore()
 	p, err := store.LoadProject(projectID)
-	if err != nil || p.State == "ACCEPTED" || p.State == "ARCHIVED" {
+	if err != nil || p.State == project.LifecycleAccepted || p.State == project.LifecycleCancelled {
 		return
 	}
 	state := project.ProjectState{
@@ -550,7 +559,7 @@ PLANNER-SPECIFIC RULES
 - Prefer finishing and verification over cleanup.
 - Give each Worker the outcome, relevant context, constraints, tool or toolchain assumptions and direct checks needed to work independently. Let the Worker choose implementation tactics and handle ordinary setup within the job's permissions.
 - ECONOMY: every planning call and every worker attempt is paid. Choose the smallest useful next slice, and do not schedule speculative future work.
-- ECONOMY: exactly one child job may run in a wave. Put one small, independently verifiable outcome in it; defer all other work to later waves after that result is integrated.
+- ECONOMY: use only as many child jobs as materially improve the critical path. Run independent jobs in parallel when isolation and dependencies make that safe; do not fan out merely because capacity exists.
 - SUPERVISION: workers are live-supervised by the Yardmaster from observable telemetry. Elapsed time is not a failure condition. Do not split a coherent semantic outcome merely to satisfy a clock.
 - SUPERVISION: roughly every five minutes of active work, and at natural checkpoints, the Yardmaster may CONTINUE, GUIDE, STOP_AND_REPLAN, or send the candidate to inspection. Plan work that can benefit from this feedback loop.
 - TIME ESTIMATION: every job must include an estimated_minutes value from 1 through 60. This is a pacing/cost estimate, not a deadline. Prefer the smallest coherent independently verifiable outcome; compare estimates with actual_seconds to improve later planning without killing productive work.
@@ -621,15 +630,10 @@ func compactPlannerMemory(memory, fallback string) string {
 	return truncatePlannerText(memory, maxPlannerMemoryBytes)
 }
 
-// enforceEconomicPlan is a final control-plane gate. A planner may still
-// return multiple ideas despite the contract; only the first bounded job is
-// paid for, and the Yardmaster can schedule the rest after observing progress.
+// enforceEconomicPlan retains a compatibility hook for older callers. Cost
+// control now comes from bounded manifests, worker capacity, evidence, and
+// Yardmaster judgement rather than silently forcing every wave to one job.
 func enforceEconomicPlan(plan *masterPlan) *masterPlan {
-	if plan == nil || len(plan.Jobs) <= maxEconomicWaveJobs {
-		return plan
-	}
-	plan.Jobs = plan.Jobs[:maxEconomicWaveJobs]
-	plan.Summary = strings.TrimSpace(plan.Summary) + " Additional planned jobs were deferred to later waves by the economy gate."
 	return plan
 }
 

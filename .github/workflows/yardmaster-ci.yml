@@ -13,7 +13,17 @@ on:
       - "internal/config/**"
       - "internal/gitops/**"
       - "internal/doctrine/**"
+      - "internal/jobs/**"
+      - "internal/project/**"
+      - "schema/**"
+      - "docs/GARY_STATE_MACHINE.md"
+      - "docs/YARDMASTER_OPERATING_GUIDE.md"
+      - "docs/JOBPACKET_CONTRACT.md"
+      - "docs/ACCEPTANCE_INTEGRATION_PROTOCOL.md"
+      - "docs/FAILURE_RECOVERY_MAP.md"
+      - "docs/project-context.md"
       - "GARY_RULEBOOK.md"
+      - ".github/workflows/gary-master.yml"
       - ".github/workflows/yardmaster-ci.yml"
 
 permissions:
@@ -27,4 +37,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go test ./...
+      - name: Test
+        run: go test ./...
+      - name: Vet
+        run: go vet ./...

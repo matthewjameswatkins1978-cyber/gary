@@ -10,10 +10,11 @@ import (
 func watchdogProject(t *testing.T, id string) Store {
 	t.Helper()
 	store := NewStore(t.TempDir())
-	if _, err := store.CreateAndIngest(context.Background(), id, id, "", "", []byte("packet"), testManual); err != nil {
+	ctx, err := store.CreateAndIngest(context.Background(), id, id, "", "", []byte("packet"), testManual)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveState(id, ProjectState{ProjectID: id, State: "PAUSED", CurrentPhase: "executing", RemainingCapabilities: []string{"finish the project"}, YardmasterState: YardmasterParked, ParkReason: ParkReasonWorkExhausted}); err != nil {
+	if err := store.SaveState(id, ProjectState{ProjectID: id, State: LifecycleParked, Generation: ctx.Project.Generation, CurrentPhase: "parked", RemainingCapabilities: []string{"finish the project"}, YardmasterState: YardmasterParked, ParkReason: ParkReasonWorkExhausted}); err != nil {
 		t.Fatal(err)
 	}
 	return store
@@ -51,7 +52,7 @@ func TestAutoWakeClaimIsAtomicAndDoesNotTouchRunningProject(t *testing.T) {
 		t.Fatalf("claimed state = %+v err=%v", ctx.State, err)
 	}
 
-	if err := store.SaveState("wake-race", ProjectState{ProjectID: "wake-race", State: "EXECUTING", CurrentPhase: "executing", YardmasterState: YardmasterRunning, RemainingCapabilities: []string{"still running"}}); err != nil {
+	if err := store.SaveState("wake-race", ProjectState{ProjectID: "wake-race", State: LifecycleActive, Generation: ctx.Project.Generation, Activities: []string{ActivityExecuting}, CurrentPhase: "executing", YardmasterState: YardmasterRunning, RemainingCapabilities: []string{"still running"}}); err != nil {
 		t.Fatal(err)
 	}
 	decision, err := store.ClaimAutoWake("wake-race", time.Unix(101, 0).UTC(), DefaultWatchdogPolicy())
@@ -61,27 +62,33 @@ func TestAutoWakeClaimIsAtomicAndDoesNotTouchRunningProject(t *testing.T) {
 }
 
 func TestAutoWakeSkipsLegitimateWaitingAndNoWork(t *testing.T) {
-	store := watchdogProject(t, "wake-gates")
-	if err := store.SaveState("wake-gates", ProjectState{ProjectID: "wake-gates", State: "PAUSED", YardmasterState: YardmasterParked, WaitingFor: "operator decision", RemainingCapabilities: []string{"work"}}); err != nil {
+	store := watchdogProject(t, "wake-waiting")
+	waitCtx, err := store.LoadContext("wake-waiting")
+	if err != nil {
 		t.Fatal(err)
 	}
-	decision, err := store.ClaimAutoWake("wake-gates", time.Unix(100, 0).UTC(), DefaultWatchdogPolicy())
+	if err := store.SaveState("wake-waiting", ProjectState{ProjectID: "wake-waiting", State: LifecycleWaiting, Generation: waitCtx.Project.Generation, YardmasterState: YardmasterParked, WaitingFor: "operator decision", RemainingCapabilities: []string{"work"}, Reason: "waiting for operator decision"}); err != nil {
+		t.Fatal(err)
+	}
+	decision, err := store.ClaimAutoWake("wake-waiting", time.Unix(100, 0).UTC(), DefaultWatchdogPolicy())
 	if err != nil || decision.Reason != NoActionWaiting {
 		t.Fatalf("waiting tick = %+v err=%v", decision, err)
 	}
-	ctx, err := store.LoadContext("wake-gates")
+
+	noWork := watchdogProject(t, "wake-no-work")
+	ctx, err := noWork.LoadContext("wake-no-work")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx.Manual.RemainingCapabilities = nil
 	ctx.Manual.ManualVersion++
-	if err := store.SaveManual("wake-gates", ctx.Manual); err != nil {
+	if err := noWork.SaveManual("wake-no-work", ctx.Manual); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveState("wake-gates", ProjectState{ProjectID: "wake-gates", State: "PAUSED", YardmasterState: YardmasterParked}); err != nil {
+	if err := noWork.SaveState("wake-no-work", ProjectState{ProjectID: "wake-no-work", State: LifecycleParked, YardmasterState: YardmasterParked}); err != nil {
 		t.Fatal(err)
 	}
-	decision, err = store.ClaimAutoWake("wake-gates", time.Unix(101, 0).UTC(), DefaultWatchdogPolicy())
+	decision, err = noWork.ClaimAutoWake("wake-no-work", time.Unix(101, 0).UTC(), DefaultWatchdogPolicy())
 	if err != nil || decision.Reason != NoActionNoWork {
 		t.Fatalf("no-work tick = %+v err=%v", decision, err)
 	}
@@ -130,7 +137,7 @@ func TestAutoWakeOutcomeRecordsProgressAndKeepsBoardInProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, err := store.LoadContext("wake-progress")
-	if err != nil || ctx.State.Watchdog.LastOutcome != "PROGRESS" || ctx.State.YardmasterState != YardmasterParked {
+	if err != nil || ctx.State.Watchdog.LastOutcome != "PROGRESS" || ctx.State.YardmasterState != YardmasterParked || ctx.Project.State != LifecycleParked {
 		t.Fatalf("progress outcome = %+v err=%v", ctx.State, err)
 	}
 	board, err := store.LoadBoard()

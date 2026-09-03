@@ -213,15 +213,15 @@ func (s Store) AppliedFeedback(id string) ([]FeedbackRecord, error) {
 }
 
 // ApplyPendingFeedback applies preference/correction records only while the
-// project is explicitly at PLANNING. It writes application events and never
-// rewrites a worker packet or the immutable packet/manual.
+// project is ACTIVE at a safe PLANNING activity boundary. It writes application
+// events and never rewrites a worker packet or the immutable packet/manual.
 func (s Store) ApplyPendingFeedback(id, boundary string) ([]FeedbackRecord, error) {
-	p, err := s.LoadProject(id)
+	ctx, err := s.LoadContext(id)
 	if err != nil {
 		return nil, err
 	}
-	if p.State != "PLANNING" {
-		return nil, fmt.Errorf("%w: project state is %s", ErrReviewUnsafeBoundary, p.State)
+	if ctx.Project.State != LifecycleActive || !ctx.State.HasActivity(ActivityPlanning) {
+		return nil, fmt.Errorf("%w: lifecycle=%s activities=%v", ErrReviewUnsafeBoundary, ctx.Project.State, ctx.State.Activities)
 	}
 	if strings.TrimSpace(boundary) == "" {
 		return nil, fmt.Errorf("%w: boundary is required", ErrReviewUnsafeBoundary)
@@ -296,7 +296,8 @@ func feedbackInitialStatus(scope string) string {
 }
 
 func terminalReviewState(state string) bool {
-	return state == "ACCEPTED" || state == "ARCHIVED"
+	lifecycle, _, _ := canonicalLifecycle(state)
+	return lifecycle == LifecycleAccepted || lifecycle == LifecycleCancelled
 }
 
 func validateFeedbackEvent(event FeedbackEvent) error {

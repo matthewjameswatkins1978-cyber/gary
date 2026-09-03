@@ -10,14 +10,17 @@ The control plane owns orchestration. Implementation workers operate in isolated
 
 Current documentation is organised deliberately:
 
-- `GARY_RULEBOOK.md` — completion principle, universal boundaries, Yardmaster and Worker roles.
-- `docs/YARDMASTER_OPERATING_GUIDE.md` — advisory engineering tradecraft for project setup, JobPackets, supervision, repair, integration, and completion.
-- `docs/project-context.md` — durable project packet/manual/state model.
-- `docs/github-app-setup.md` — short-lived GitHub result-push credentials.
-- `docs/github-oidc-setup.md` — GitHub Actions to Google Cloud identity setup.
-- `docs/reliability-r1.md` and `docs/verification/` — historical design/verification evidence, not current runtime doctrine.
+- `GARY_RULEBOOK.md` — the GARY Bible: canonical doctrine and role boundaries.
+- `docs/GARY_STATE_MACHINE.md` — canonical lifecycle, activities, transition generation, and board projection.
+- `docs/YARDMASTER_OPERATING_GUIDE.md` — practical Yardmaster tradecraft.
+- `docs/JOBPACKET_CONTRACT.md` — canonical Worker handoff.
+- `docs/ACCEPTANCE_INTEGRATION_PROTOCOL.md` — verification, bounded Yardmaster repair, acceptance, reconciliation, and integration.
+- `docs/FAILURE_RECOVERY_MAP.md` — stage-accurate failure diagnosis and recovery.
+- `docs/project-context.md` — durable project packet/manual/lifecycle storage and migration model.
+- `docs/github-app-setup.md` and `docs/github-oidc-setup.md` — credential and cloud identity setup.
+- `docs/reliability-r1.md`, `docs/verification/`, and dated incident records — historical evidence, not current runtime doctrine.
 
-For exact mechanics, current code, schemas, tests, and workflows are authoritative.
+For exact mechanics, code, schemas, tests, and workflows are authoritative only within the policy defined by the canonical doctrine above.
 
 ## Quick start
 
@@ -89,6 +92,7 @@ go run ./cmd/gary project amend book-burner AMENDMENT.md
 go run ./cmd/gary project inspect book-burner --json
 go run ./cmd/gary project explain book-burner --master-id book-burner-launch
 go run ./cmd/gary project feedback book-burner --scope project_preference --text "Prefer smaller worker packets."
+go run ./cmd/gary project cancel book-burner --reason "explicit non-successful closure"
 ```
 
 Project-backed master work rehydrates validated project context before planning and child execution. Missing or tampered provenance is an integrity problem, not something an agent is allowed to reason around.
@@ -98,8 +102,8 @@ is read-only and reconstructs recorded state, packet/manual provenance, master
 wave plans, worker results, branches/commits, and cost telemetry; it does not
 ask the model to reveal hidden reasoning. `project feedback` records explicit
 append-only review events. Notes and doctrine proposals remain observational;
-project preferences and corrections become visible to the Yardmaster only at
-the next safe `PLANNING` boundary. No feedback changes the packet, manual,
+project preferences and corrections become visible to the Yardmaster only while
+the project is `ACTIVE` at the next safe `PLANNING` activity boundary. No feedback changes the packet, manual,
 in-flight worker packet, acceptance gate, or global doctrine automatically.
 
 Do not put credentials in this repository; copy `.env.example` to `.env`
@@ -115,7 +119,7 @@ Elapsed time and raw attempt count are observations, not project-success criteri
 
 ## Evidence and acceptance
 
-A worker saying "done" is not acceptance, and neither is a Batch terminal label. A recoverable child candidate is checkpointed, then GARY's trusted control layer reruns the required mechanical checks on the exact candidate in a clean workspace. If those checks pass, Yardmaster performs a bounded merge-quality inspection of the actual change. Only a quality `PASS` plus trusted mechanical verification makes the child result accepted and eligible for staging integration. `SMALL_FIX`, `MAJOR_FIX`, and `REPLAN` preserve useful work while routing the appropriate correction.
+A worker saying "done" is not acceptance, and neither is a Batch terminal label. A recoverable child candidate is checkpointed, then GARY's trusted control layer reruns the required mechanical checks on the exact candidate in a clean workspace. If those checks pass, Yardmaster performs a bounded merge-quality inspection of the actual change. Only a quality `PASS` plus trusted mechanical verification makes the child result accepted and eligible for staging integration. For `SMALL_FIX`, the Yardmaster may make one small obvious direct repair, after which the exact repaired candidate is reverified and reinspected; larger corrections remain Worker work. `MAJOR_FIX` and `REPLAN` preserve useful work while changing the repair or control route.
 
 Master completion is a separate gate: project-level acceptance runs against the integrated staging state, followed by independent semantic inspection where configured. Ordinary workers do not gain merge or production authority merely by completing a child job.
 
@@ -142,4 +146,4 @@ Useful agent-development tools may include `gopls`, `goimports`, and `staticchec
 
 ## Doctrine
 
-**Small instructions. Clear roles. Small context. Hard evidence. Finish the work.**
+**Small rules. Clear authority. Durable truth. Hard evidence. Intelligent action. Finish the work.**

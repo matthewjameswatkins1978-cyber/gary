@@ -87,3 +87,47 @@ func TestWorkerSupervisorPromptContainsLiveControlDoctrine(t *testing.T) {
 		}
 	}
 }
+
+func TestSmallFixDoctrineHasBoundedYardmasterRepairAndReverification(t *testing.T) {
+	plannerData, err := os.ReadFile("planner.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plannerSource := string(plannerData)
+	for _, marker := range []string{
+		"runYardmasterSmallRepair",
+		"one bounded direct repair",
+		"git-apply compatible",
+		"substantial implementation",
+	} {
+		if !strings.Contains(plannerSource, marker) {
+			t.Fatalf("Yardmaster SMALL_FIX planner path missing %q", marker)
+		}
+	}
+
+	runData, err := os.ReadFile("run.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runSource := string(runData)
+	for _, marker := range []string{
+		"runYardmasterSmallRepair(cfg, job, workDir, quality)",
+		"verifyExistingCandidate(workDir, job)",
+		"runChildQualityInspection(cfg, job, workDir)",
+		"YardmasterRepaired:",
+		"yardmaster-repair.patch",
+	} {
+		if !strings.Contains(runSource, marker) {
+			t.Fatalf("Yardmaster SMALL_FIX acceptance path missing %q", marker)
+		}
+	}
+}
+
+func TestYardmasterSmallRepairCannotExpandCandidateScope(t *testing.T) {
+	if err := validateSmallRepairScope([]string{"src/lib.rs"}, []string{"src/lib.rs"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateSmallRepairScope([]string{"src/lib.rs"}, []string{"src/lib.rs", "README.md"}); err == nil {
+		t.Fatal("small repair scope expansion was accepted")
+	}
+}

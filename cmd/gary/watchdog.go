@@ -67,7 +67,7 @@ func cmdProjectTick() {
 		fmt.Fprintf(os.Stderr, "project tick: load wake result: %v\n", loadErr)
 		os.Exit(1)
 	}
-	progress := afterCtx.Project.State == "ACCEPTED" || before != afterCtx.ProgressFingerprint()
+	progress := afterCtx.Project.State == project.LifecycleAccepted || afterCtx.Project.State == project.LifecycleCancelled || before != afterCtx.ProgressFingerprint()
 	if err := store.RecordAutoWakeOutcome(fs.Arg(0), decision.WakeID, time.Now().UTC(), project.WakeOutcome{Progress: progress}, project.DefaultWatchdogPolicy()); err != nil {
 		fmt.Fprintf(os.Stderr, "project tick: record wake outcome: %v\n", err)
 		os.Exit(1)

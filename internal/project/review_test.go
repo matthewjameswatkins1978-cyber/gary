@@ -44,13 +44,13 @@ func TestReviewFeedbackScopesAndPlannerVisibility(t *testing.T) {
 		t.Fatalf("unapplied feedback leaked into planner input: %s", got)
 	}
 
-	if err := store.SaveState("review", ProjectState{ProjectID: "review", State: "EXECUTING", CurrentPhase: "executing"}); err != nil {
+	if err := store.SaveState("review", ProjectState{ProjectID: "review", State: LifecycleActive, Activities: []string{ActivityExecuting}, CurrentPhase: "executing"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.ApplyPendingFeedback("review", "master-planning-boundary"); err == nil || !strings.Contains(err.Error(), ErrReviewUnsafeBoundary.Error()) {
 		t.Fatalf("unsafe feedback application error = %v", err)
 	}
-	if err := store.SaveState("review", ProjectState{ProjectID: "review", State: "PLANNING", CurrentPhase: "planning"}); err != nil {
+	if err := store.SaveState("review", ProjectState{ProjectID: "review", State: LifecycleActive, Activities: []string{ActivityPlanning}, CurrentPhase: "planning"}); err != nil {
 		t.Fatal(err)
 	}
 	records, err = store.ApplyPendingFeedback("review", "master-planning-boundary")
@@ -95,7 +95,7 @@ func TestReviewApplicationIsAppendOnlyAndDoesNotMutateWorkerContext(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveState("review", ProjectState{ProjectID: "review", State: "PLANNING", CurrentPhase: "planning"}); err != nil {
+	if err := store.SaveState("review", ProjectState{ProjectID: "review", State: LifecycleActive, Activities: []string{ActivityPlanning}, CurrentPhase: "planning"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.ApplyPendingFeedback("review", "safe-boundary"); err != nil {
