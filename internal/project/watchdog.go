@@ -156,10 +156,10 @@ func (s Store) ClaimAutoWake(id string, now time.Time, policy WatchdogPolicy) (W
 			decision.Action, decision.Reason = "NO_ACTION", NoActionWaiting
 		case ctx.Project.State == LifecycleBlocked:
 			decision.Action, decision.Reason = "NO_ACTION", NoActionBlocked
-		case ctx.Project.State != LifecycleParked:
-			decision.Action, decision.Reason = "NO_ACTION", NoActionNotParked
 		case state.YardmasterState == YardmasterRunning:
 			decision.Action, decision.Reason = "NO_ACTION", NoActionRunning
+		case ctx.Project.State != LifecycleParked:
+			decision.Action, decision.Reason = "NO_ACTION", NoActionNotParked
 		case state.YardmasterState == YardmasterWaking:
 			decision.Action, decision.Reason = "NO_ACTION", NoActionWaking
 		case state.YardmasterState != YardmasterParked:
