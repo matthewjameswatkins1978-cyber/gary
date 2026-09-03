@@ -395,7 +395,7 @@ func TestMasterPlannerPromptIncludesCorrectRoleUniversalRulesAndJobBrief(t *test
 	if !strings.Contains(prompt, brief) {
 		t.Fatal("planner prompt must preserve job-specific instructions")
 	}
-	for _, marker := range []string{"ECONOMY: every planning call", "exactly one child job may run in a wave", "never repeat a scaffold", "accepted child work is an integration obligation", "BUDGET_STOPPED", "control-plane integrity fault"} {
+	for _, marker := range []string{"ECONOMY: every planning call", "use only as many child jobs as materially improve the critical path", "never repeat a scaffold", "accepted child work is an integration obligation", "BUDGET_STOPPED", "control-plane integrity fault"} {
 		if !strings.Contains(prompt, marker) {
 			t.Fatalf("planner prompt missing economy rule %q", marker)
 		}
@@ -454,7 +454,7 @@ func TestMasterPlannerPromptDelegatesHeavyWork(t *testing.T) {
 	m := &masterManifest{ID: "job", Repo: "https://github.com/matthewjameswatkins1978-cyber/gary.git", MaxJobsPerWave: 4}
 	prompt := buildMasterPlannerPrompt(m, "finish it", "stage", 1, "[]", "")
 	for _, required := range []string{
-		"You are the planning and supervision layer. You do not implement child jobs.",
+		"You are the planning and supervision layer. You do not normally implement child jobs.",
 		doctrine.CompletionPrinciple,
 		"Give each Worker the outcome, relevant context, constraints, tool or toolchain assumptions",
 		"delegate execution and verification to child jobs",
