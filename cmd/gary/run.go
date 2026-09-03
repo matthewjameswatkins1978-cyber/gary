@@ -503,17 +503,95 @@ attemptLoop:
 					snapshotJobComplete(job.ID, result)
 					return result
 
-				case childQualitySmallFix, childQualityMajorFix:
+				case childQualitySmallFix:
+					repairCount++
+					lastProgressState = "mechanically-passed-quality-small-repair"
+					lastFailure = strings.TrimSpace(quality.Summary)
+					lastRepairBrief = strings.TrimSpace(quality.Memory)
+					progressHistory = append(progressHistory, "QUALITY_REVIEW "+lastFailure)
+					logPrint(prefix, "  YARDMASTER SMALL FIX: %s", lastFailure)
+					if lastRepairBrief != "" {
+						logPrint(prefix, "  YARDMASTER REPAIR GUIDANCE: %s", lastRepairBrief)
+					}
+
+					// First try the cheap path the doctrine explicitly allows:
+					// one bounded Yardmaster patch on the returned candidate.
+					repairCost, repairErr := runYardmasterSmallRepair(cfg, job, workDir, quality)
+					runCost.Add(repairCost)
+					if repairErr == nil {
+						logPrintln(prefix, "  YARDMASTER SMALL REPAIR APPLIED — re-running trusted verification")
+						if verifyErr := verifyExistingCandidate(workDir, job); verifyErr == nil {
+							repairedQuality, repairedQualityCost, repairedQualityErr := runChildQualityInspection(cfg, job, workDir)
+							runCost.Add(repairedQualityCost)
+							if repairedQualityErr == nil && classifyChildQuality(repairedQuality) == childQualityPass {
+								commitSHA, _ := gitops.CommitSHA(workDir)
+								if err := gitops.Push(workDir, "origin", garyBranch); err == nil {
+									repairedDiff, _ := plannerCommandOutput(workDir, "git", "diff", "--find-renames", job.BaseBranch+"...HEAD")
+									duration := time.Since(submittedAt)
+									result := jobs.RunResult{
+										JobID:                job.ID,
+										ProjectID:            job.ProjectID,
+										MasterPacketDigest:   job.MasterPacketDigest,
+										ProjectManualVersion: job.ProjectManualVersion,
+										BatchJobID:           jobName,
+										BatchState:           batchState,
+										ArtifactPrefix:       attemptGCSPath,
+										Branch:               garyBranch,
+										CommitSHA:            commitSHA,
+										Accepted:             true,
+										Verification:         "trusted-independent",
+										QualityReview:        strings.TrimSpace(repairedQuality.Summary),
+										DurationSecs:         duration.Seconds(),
+										PatchBytes:           int64(len(repairedDiff)),
+										Attempts:             attempt,
+										RepairCount:          repairCount,
+										YardmasterRepaired:   true,
+										Escalated:            escalated,
+										CloserUsed:           closerUsed,
+										FinalStatus:          "DONE",
+										ModelCostEstimated:   runCost.ModelCostUSD,
+										ComputeCostEstimated: runCost.ComputeCostUSD,
+										TotalCostEstimated:   runCost.TotalCostUSD,
+										Cost:                 runCost,
+									}
+									os.RemoveAll(attemptDir)
+									saveRunResult(cfg, result)
+									writeLedger(cfg, result, model)
+									snapshotJobComplete(job.ID, result)
+									return result
+								} else {
+									lastFailure = "Yardmaster small repair passed re-verification but push failed: " + err.Error()
+								}
+							} else if repairedQualityErr != nil {
+								lastFailure = "Yardmaster small repair quality reinspection failed: " + repairedQualityErr.Error()
+							} else {
+								lastFailure = strings.TrimSpace(repairedQuality.Summary)
+								lastRepairBrief = strings.TrimSpace(repairedQuality.Memory)
+							}
+						} else {
+							lastFailure = "Yardmaster small repair failed trusted re-verification: " + verifyErr.Error()
+						}
+					} else {
+						lastFailure = "Direct Yardmaster repair unavailable or unsafe: " + repairErr.Error()
+					}
+
+					// If the bounded direct repair cannot safely finish the job,
+					// preserve the diagnosis and use the normal Worker repair loop.
+					progressHistory = append(progressHistory, "YARDMASTER_SMALL_REPAIR "+lastFailure)
+					os.RemoveAll(attemptDir)
+					if attempt == attemptLimit {
+						escalated = true
+						break attemptLoop
+					}
+					continue attemptLoop
+
+				case childQualityMajorFix:
 					repairCount++
 					lastProgressState = "mechanically-passed-quality-repair"
 					lastFailure = strings.TrimSpace(quality.Summary)
 					lastRepairBrief = strings.TrimSpace(quality.Memory)
 					progressHistory = append(progressHistory, "QUALITY_REVIEW "+lastFailure)
-					if disposition == childQualitySmallFix {
-						logPrint(prefix, "  YARDMASTER SMALL FIX: %s", lastFailure)
-					} else {
-						logPrint(prefix, "  YARDMASTER MAJOR FIX: %s", lastFailure)
-					}
+					logPrint(prefix, "  YARDMASTER MAJOR FIX: %s", lastFailure)
 					if lastRepairBrief != "" {
 						logPrint(prefix, "  YARDMASTER REPAIR GUIDANCE: %s", lastRepairBrief)
 					}
@@ -522,10 +600,8 @@ attemptLoop:
 						escalated = true
 						break attemptLoop
 					}
-					// The next worker attempt receives the checkpointed patch and
-					// the Yardmaster's review. Small issues preserve the approach;
-					// major issues receive stronger guidance while preserving any
-					// useful work the review explicitly says to keep.
+					// Preserve the useful candidate and use the next Worker attempt
+					// for substantial correction with stronger evidence.
 					continue attemptLoop
 
 				case childQualityReplan:
@@ -1711,4 +1787,15 @@ func writeLedger(cfg *config.Config, result jobs.RunResult, model string) {
 	if err := AppendLedger(cfg.ResultsDir, entry); err != nil {
 		logPrint("", "  ledger write failed: %v", err)
 	}
+}
+
+
+func verifyExistingCandidate(workDir string, job *jobs.Job) error {
+	for _, command := range job.Acceptance {
+		out, err := runAcceptanceCommand(workDir, command, "")
+		if err != nil {
+			return fmt.Errorf("%s failed: %w\n%s", command, err, strings.TrimSpace(string(out)))
+		}
+	}
+	return nil
 }
