@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	BoardSchema      = "gary.project-board.v1"
+	BoardSchema      = "gary.project-board.v2"
+	LegacyBoardSchema = "gary.project-board.v1"
 	BoardInProcess   = "IN_PROCESS"
 	BoardCompleted   = "COMPLETED"
 	BoardCancelled   = "CANCELLED"
@@ -99,9 +100,10 @@ func (s Store) LoadBoard() (ProjectBoard, error) {
 	} else if err != nil {
 		return ProjectBoard{}, err
 	}
-	if board.Schema != BoardSchema {
+	if board.Schema != BoardSchema && board.Schema != LegacyBoardSchema {
 		return ProjectBoard{}, fmt.Errorf("invalid project board schema %q", board.Schema)
 	}
+	board.Schema = BoardSchema
 	sort.Slice(board.Projects, func(i, j int) bool { return board.Projects[i].ProjectID < board.Projects[j].ProjectID })
 	return board, nil
 }
