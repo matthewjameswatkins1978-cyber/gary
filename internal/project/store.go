@@ -339,6 +339,9 @@ func (s Store) LoadContext(id string) (ProjectContext, error) {
 	if err != nil {
 		return ProjectContext{}, err
 	}
+	if state.State != p.State {
+		return ProjectContext{}, fmt.Errorf("%w: state lifecycle %s, project lifecycle %s", ErrLifecycleStaleGeneration, state.State, p.State)
+	}
 	if state.Generation < 1 {
 		state.Generation = p.Generation
 	}
@@ -508,6 +511,9 @@ func (s Store) saveStateUnlocked(id string, state ProjectState) error {
 	prior, _, err = normalizeProjectedState(prior)
 	if err != nil {
 		return err
+	}
+	if prior.State != p.State {
+		return fmt.Errorf("%w: state lifecycle %s, project lifecycle %s", ErrLifecycleStaleGeneration, prior.State, p.State)
 	}
 	if prior.Generation < 1 {
 		prior.Generation = p.Generation
@@ -695,21 +701,23 @@ func (s Store) CancelProject(id, reason string) error {
 
 // ArchiveProject is storage metadata only. It does not change lifecycle.
 func (s Store) ArchiveProject(id string) error {
-	p, err := s.LoadProject(id)
-	if err != nil {
-		return err
-	}
-	if p.State != LifecycleAccepted && p.State != LifecycleCancelled {
-		return fmt.Errorf("%w: project state is %s", ErrProjectNotAcceptable, p.State)
-	}
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-	p.ArchivedAt = now
-	p.UpdatedAt = now
-	if err := writeJSON(filepath.Join(s.projectDir(id), "project.json"), p); err != nil {
-		return err
-	}
-	archive := filepath.Join(s.projectDir(id), "archive", "archive.json")
-	return writeJSON(archive, map[string]string{"project_id": id, "lifecycle_state": p.State, "archived_at": now})
+	return s.withProjectStateLock(id, func() error {
+		p, err := s.LoadProject(id)
+		if err != nil {
+			return err
+		}
+		if p.State != LifecycleAccepted && p.State != LifecycleCancelled {
+			return fmt.Errorf("%w: project state is %s", ErrProjectNotAcceptable, p.State)
+		}
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		p.ArchivedAt = now
+		p.UpdatedAt = now
+		if err := writeJSON(filepath.Join(s.projectDir(id), "project.json"), p); err != nil {
+			return err
+		}
+		archive := filepath.Join(s.projectDir(id), "archive", "archive.json")
+		return writeJSON(archive, map[string]string{"project_id": id, "lifecycle_state": p.State, "archived_at": now})
+	})
 }
 
 func ValidateManual(m ProjectManual, id, packetDigest string, version int) error {

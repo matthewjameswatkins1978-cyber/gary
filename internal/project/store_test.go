@@ -155,7 +155,7 @@ func TestLoadContextRejectsInvalidLifecycleProjection(t *testing.T) {
 			if err := os.WriteFile(path, data, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := store.LoadContext(tc.name); !errors.Is(err, ErrProjectNotAcceptable) {
+			if _, err := store.LoadContext(tc.name); !errors.Is(err, ErrLifecycleStaleGeneration) {
 				t.Fatalf("invalid %s projection loaded: %v", tc.state, err)
 			}
 		})
@@ -186,6 +186,35 @@ func TestLoadContextRejectsStateProjectGenerationMismatch(t *testing.T) {
 	}
 	if _, err := store.LoadContext("generation-mismatch"); !errors.Is(err, ErrLifecycleStaleGeneration) {
 		t.Fatalf("generation mismatch was accepted: %v", err)
+	}
+}
+
+func TestLoadContextRejectsSameGenerationLifecycleProjectionMismatch(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if _, err := store.CreateAndIngest(context.Background(), "state-project-mismatch", "State/project mismatch", "", "", []byte("packet"), testManual); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(store.Root(), "state-project-mismatch", "state.json")
+	var raw map[string]any
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	raw["state"] = LifecycleParked
+	raw["reason"] = "tampered projection"
+	raw["current_phase"] = "parked"
+	data, err = json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.LoadContext("state-project-mismatch"); !errors.Is(err, ErrLifecycleStaleGeneration) {
+		t.Fatalf("same-generation lifecycle mismatch loaded: %v", err)
 	}
 }
 

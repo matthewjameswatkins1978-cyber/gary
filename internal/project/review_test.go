@@ -2,9 +2,11 @@ package project
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -133,5 +135,34 @@ func TestReviewEventsFailClosedOnInvalidDoctrineApplication(t *testing.T) {
 	}
 	if _, err := store.LoadFeedback("review"); err == nil || !strings.Contains(err.Error(), ErrFeedbackInvalid.Error()) {
 		t.Fatalf("tampered review stream accepted: %v", err)
+	}
+}
+
+func TestReviewFeedbackConcurrentAppendsPreserveEventChain(t *testing.T) {
+	store, _ := newReviewProject(t)
+	const writers = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, writers)
+	for i := 0; i < writers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, err := store.AppendFeedback("review", "matthew", FeedbackScopeNote, "wave-1", "job-1", fmt.Sprintf("observation %d", i))
+			errs <- err
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	events, err := store.LoadFeedbackEvents("review")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != writers {
+		t.Fatalf("feedback events=%d want %d", len(events), writers)
 	}
 }
