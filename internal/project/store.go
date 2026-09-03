@@ -22,10 +22,12 @@ import (
 )
 
 const (
-	ProjectSchema   = "gary.project.v1"
-	ManualSchema    = "gary.project-manual.v1"
-	AmendmentSchema = "gary.project-amendment.v1"
-	StateSchema     = "gary.project-state.v1"
+	ProjectSchema       = "gary.project.v2"
+	LegacyProjectSchema = "gary.project.v1"
+	ManualSchema        = "gary.project-manual.v1"
+	AmendmentSchema     = "gary.project-amendment.v1"
+	StateSchema         = "gary.project-state.v2"
+	LegacyStateSchema   = "gary.project-state.v1"
 )
 
 var projectIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,59}$`)
@@ -251,9 +253,10 @@ func (s Store) LoadProject(id string) (Project, error) {
 		}
 		return Project{}, err
 	}
-	if p.Schema != ProjectSchema || p.ProjectID != id || p.MasterPacketVersion != 1 || p.MasterPacketDigest == "" {
+	if (p.Schema != ProjectSchema && p.Schema != LegacyProjectSchema) || p.ProjectID != id || p.MasterPacketVersion != 1 || p.MasterPacketDigest == "" {
 		return Project{}, fmt.Errorf("%w: invalid project metadata", ErrProjectMissing)
 	}
+	p.Schema = ProjectSchema
 	lifecycle, _, archived := canonicalLifecycle(p.State)
 	if lifecycle == "" {
 		return Project{}, fmt.Errorf("%w: invalid project lifecycle %q", ErrProjectMissing, p.State)
@@ -328,9 +331,10 @@ func (s Store) LoadContext(id string) (ProjectContext, error) {
 	if err := readJSON(filepath.Join(s.projectDir(id), "state.json"), &state); err != nil {
 		return ProjectContext{}, fmt.Errorf("%w: state: %v", ErrProjectMissing, err)
 	}
-	if state.Schema != StateSchema || state.ProjectID != id {
+	if (state.Schema != StateSchema && state.Schema != LegacyStateSchema) || state.ProjectID != id {
 		return ProjectContext{}, fmt.Errorf("%w: invalid project state", ErrProjectMissing)
 	}
+	state.Schema = StateSchema
 	state, archived, err := normalizeProjectedState(state)
 	if err != nil {
 		return ProjectContext{}, err
