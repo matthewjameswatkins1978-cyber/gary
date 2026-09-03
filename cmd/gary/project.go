@@ -51,7 +51,7 @@ func cmdProject() {
 }
 
 func printProjectUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: gary project <start|status|resume|amend|board|cancel|inspect|explain|feedback>")
+	fmt.Fprintln(os.Stderr, "Usage: gary project <start|status|resume|amend|board|cancel|tick|inspect|explain|feedback>")
 	fmt.Fprintln(os.Stderr, "  gary project start [--id PROJECT-ID] [--repo URL] [--base-branch BRANCH] PACKET")
 	fmt.Fprintln(os.Stderr, "  gary project status PROJECT-ID")
 	fmt.Fprintln(os.Stderr, "  gary project resume PROJECT-ID")
@@ -181,7 +181,7 @@ func printProjectContext(ctx project.ProjectContext, jsonOutput bool) {
 		}{ctx.Project, ctx.State, ctx.Manual, ctx.Feedback, boardEntry})
 		return
 	}
-	fmt.Printf("Project: %s\nState: %s\nMaster packet: %s\nManual: v%d\nPhase: %s\n", ctx.Project.ProjectID, ctx.Project.State, ctx.Project.MasterPacketDigest, ctx.Project.ProjectManualVersion, ctx.State.CurrentPhase)
+	fmt.Printf("Project: %s\nLifecycle: %s\nGeneration: %d\nMaster packet: %s\nManual: v%d\nActivities: %s\n", ctx.Project.ProjectID, ctx.Project.State, ctx.Project.Generation, ctx.Project.MasterPacketDigest, ctx.Project.ProjectManualVersion, strings.Join(ctx.State.Activities, ", "))
 	if boardEntry != nil {
 		fmt.Printf("Board: %s\n", boardEntry.Status)
 	}
@@ -630,10 +630,11 @@ important_rationale, known_dependencies, known_external_services, known_risks,
 open_questions, conflicts, current_phase, current_strategy,
 completed_capabilities, remaining_capabilities, active_decisions,
 superseded_decisions, source_packet_digest, manual_version and manual_digest.
-Also emit board_policy with IN_PROCESS, COMPLETED, Yardmaster, and a concise
-completion condition. The Yardmaster alone may move the board entry to
-COMPLETED, and only after project-level acceptance; pauses and worker failures
-remain IN_PROCESS.
+Also emit board_policy with IN_PROCESS, COMPLETED, CANCELLED, Yardmaster, and concise
+completion/cancellation conditions. The Yardmaster alone may move the board entry to
+COMPLETED, and only after project-level acceptance. Explicit authorised non-successful
+closure maps to CANCELLED. ACTIVE, PARKED, WAITING, BLOCKED, worker failures, and
+ordinary retries remain IN_PROCESS.
 `, doctrine.CompletionPrinciple, input.Project.ProjectID, input.Project.MasterPacketDigest, input.Packet, amendments.String())
 }
 
