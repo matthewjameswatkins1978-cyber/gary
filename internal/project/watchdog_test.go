@@ -10,10 +10,11 @@ import (
 func watchdogProject(t *testing.T, id string) Store {
 	t.Helper()
 	store := NewStore(t.TempDir())
-	if _, err := store.CreateAndIngest(context.Background(), id, id, "", "", []byte("packet"), testManual); err != nil {
+	ctx, err := store.CreateAndIngest(context.Background(), id, id, "", "", []byte("packet"), testManual)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.SaveState(id, ProjectState{ProjectID: id, State: LifecycleParked, CurrentPhase: "parked", RemainingCapabilities: []string{"finish the project"}, YardmasterState: YardmasterParked, ParkReason: ParkReasonWorkExhausted}); err != nil {
+	if err := store.SaveState(id, ProjectState{ProjectID: id, State: LifecycleParked, Generation: ctx.Project.Generation, CurrentPhase: "parked", RemainingCapabilities: []string{"finish the project"}, YardmasterState: YardmasterParked, ParkReason: ParkReasonWorkExhausted}); err != nil {
 		t.Fatal(err)
 	}
 	return store
@@ -51,7 +52,7 @@ func TestAutoWakeClaimIsAtomicAndDoesNotTouchRunningProject(t *testing.T) {
 		t.Fatalf("claimed state = %+v err=%v", ctx.State, err)
 	}
 
-	if err := store.SaveState("wake-race", ProjectState{ProjectID: "wake-race", State: LifecycleActive, Activities: []string{ActivityExecuting}, CurrentPhase: "executing", YardmasterState: YardmasterRunning, RemainingCapabilities: []string{"still running"}}); err != nil {
+	if err := store.SaveState("wake-race", ProjectState{ProjectID: "wake-race", State: LifecycleActive, Generation: ctx.Project.Generation, Activities: []string{ActivityExecuting}, CurrentPhase: "executing", YardmasterState: YardmasterRunning, RemainingCapabilities: []string{"still running"}}); err != nil {
 		t.Fatal(err)
 	}
 	decision, err := store.ClaimAutoWake("wake-race", time.Unix(101, 0).UTC(), DefaultWatchdogPolicy())
@@ -62,7 +63,11 @@ func TestAutoWakeClaimIsAtomicAndDoesNotTouchRunningProject(t *testing.T) {
 
 func TestAutoWakeSkipsLegitimateWaitingAndNoWork(t *testing.T) {
 	store := watchdogProject(t, "wake-waiting")
-	if err := store.SaveState("wake-waiting", ProjectState{ProjectID: "wake-waiting", State: LifecycleWaiting, YardmasterState: YardmasterParked, WaitingFor: "operator decision", RemainingCapabilities: []string{"work"}, Reason: "waiting for operator decision"}); err != nil {
+	waitCtx, err := store.LoadContext("wake-waiting")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveState("wake-waiting", ProjectState{ProjectID: "wake-waiting", State: LifecycleWaiting, Generation: waitCtx.Project.Generation, YardmasterState: YardmasterParked, WaitingFor: "operator decision", RemainingCapabilities: []string{"work"}, Reason: "waiting for operator decision"}); err != nil {
 		t.Fatal(err)
 	}
 	decision, err := store.ClaimAutoWake("wake-waiting", time.Unix(100, 0).UTC(), DefaultWatchdogPolicy())
