@@ -496,13 +496,17 @@ func (s Store) saveStateUnlocked(id string, state ProjectState) error {
 	if prior.Generation < 1 {
 		prior.Generation = p.Generation
 	}
-	if state.Generation != 0 && state.Generation != p.Generation {
-		return fmt.Errorf("%w: got %d, current %d", ErrLifecycleStaleGeneration, state.Generation, p.Generation)
-	}
 
 	state, _, err = normalizeProjectedState(state)
 	if err != nil {
 		return err
+	}
+	lifecycleTransition := state.State != p.State
+	if lifecycleTransition && state.Generation == 0 {
+		return fmt.Errorf("%w: lifecycle transition %s -> %s requires expected generation %d", ErrLifecycleStaleGeneration, p.State, state.State, p.Generation)
+	}
+	if state.Generation != 0 && state.Generation != p.Generation {
+		return fmt.Errorf("%w: got %d, current %d", ErrLifecycleStaleGeneration, state.Generation, p.Generation)
 	}
 	if p.State == LifecycleAccepted || p.State == LifecycleCancelled {
 		if state.State != p.State {
