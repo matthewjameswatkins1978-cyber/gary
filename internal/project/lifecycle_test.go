@@ -150,8 +150,12 @@ func TestIllegalLifecycleTransitionsFailClosed(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	parked, err := store.LoadContext("illegal-transition")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := store.SaveState("illegal-transition", ProjectState{
-		ProjectID: "illegal-transition", State: LifecycleAccepted,
+		ProjectID: "illegal-transition", State: LifecycleAccepted, Generation: parked.Project.Generation,
 		Activities: []string{ActivityVerifying}, Reason: "illegal shortcut",
 	}); !errors.Is(err, ErrProjectNotAcceptable) {
 		t.Fatalf("PARKED -> ACCEPTED shortcut err=%v", err)
