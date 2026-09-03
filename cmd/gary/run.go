@@ -525,8 +525,13 @@ attemptLoop:
 							runCost.Add(repairedQualityCost)
 							if repairedQualityErr == nil && classifyChildQuality(repairedQuality) == childQualityPass {
 								commitSHA, _ := gitops.CommitSHA(workDir)
+								repairedDiff, _ := plannerCommandOutput(workDir, "git", "diff", "--find-renames", job.BaseBranch+"...HEAD")
+								// Preserve the repaired exact delta before delivery. If
+								// GitHub writeback fails, this remains a delivery/control
+								// failure rather than a reason to reimplement the child job.
+								repairArtifact := attemptGCSPath + "/yardmaster-repair.patch"
+								repairArtifactErr := writeGCSObject(repairArtifact, []byte(repairedDiff))
 								if err := gitops.Push(workDir, "origin", garyBranch); err == nil {
-									repairedDiff, _ := plannerCommandOutput(workDir, "git", "diff", "--find-renames", job.BaseBranch+"...HEAD")
 									duration := time.Since(submittedAt)
 									result := jobs.RunResult{
 										JobID:                job.ID,
@@ -560,7 +565,43 @@ attemptLoop:
 									snapshotJobComplete(job.ID, result)
 									return result
 								} else {
-									lastFailure = "Yardmaster small repair passed re-verification but push failed: " + err.Error()
+									lastFailure = "Yardmaster small repair passed trusted re-verification and quality inspection, but GitHub writeback failed: " + err.Error()
+									if repairArtifactErr != nil {
+										lastFailure += "; repaired patch preservation also failed: " + repairArtifactErr.Error()
+									}
+									duration := time.Since(submittedAt)
+									result := jobs.RunResult{
+										JobID:                job.ID,
+										ProjectID:            job.ProjectID,
+										MasterPacketDigest:   job.MasterPacketDigest,
+										ProjectManualVersion: job.ProjectManualVersion,
+										BatchJobID:           jobName,
+										BatchState:           batchState,
+										ArtifactPrefix:       attemptGCSPath,
+										Branch:               garyBranch,
+										CommitSHA:            commitSHA,
+										Accepted:             false,
+										Verification:         "trusted-independent",
+										QualityReview:        strings.TrimSpace(repairedQuality.Summary),
+										DurationSecs:         duration.Seconds(),
+										PatchBytes:           int64(len(repairedDiff)),
+										Attempts:             attempt,
+										RepairCount:          repairCount,
+										YardmasterRepaired:   true,
+										Escalated:            escalated,
+										CloserUsed:           closerUsed,
+										FinalStatus:          "BLOCKED",
+										FailureReason:        compactFailureLogs(lastFailure, 4000),
+										ModelCostEstimated:   runCost.ModelCostUSD,
+										ComputeCostEstimated: runCost.ComputeCostUSD,
+										TotalCostEstimated:   runCost.TotalCostUSD,
+										Cost:                 runCost,
+									}
+									os.RemoveAll(attemptDir)
+									saveRunResult(cfg, result)
+									writeLedger(cfg, result, model)
+									snapshotJobComplete(job.ID, result)
+									return result
 								}
 							} else if repairedQualityErr != nil {
 								lastFailure = "Yardmaster small repair quality reinspection failed: " + repairedQualityErr.Error()
