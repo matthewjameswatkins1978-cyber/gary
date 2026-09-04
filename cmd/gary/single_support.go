@@ -295,6 +295,7 @@ func hasPythonInstall(commands []string) bool {
 				return true
 			}
 		}
+	}
 	return false
 }
 
