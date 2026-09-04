@@ -81,9 +81,6 @@ func cmdRoute() {
 		os.Exit(2)
 	}
 	provider := "google-cloud-batch"
-	if cfg.WorkerRuntime == "managed" {
-		provider = "google-managed-agent"
-	}
 	if requested := stringValue(req.Situation, "requested_provider"); requested != "" && requested != provider {
 		fmt.Fprintf(os.Stderr, "route provider mismatch: requested %q, configured %q\n", requested, provider)
 		os.Exit(2)

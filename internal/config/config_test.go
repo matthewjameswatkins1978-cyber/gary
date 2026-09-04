@@ -6,180 +6,81 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	os.Unsetenv("GARY_GCP_PROJECT")
-	os.Unsetenv("GARY_GCP_REGION")
-	os.Unsetenv("GARY_GCP_ZONE")
-	os.Unsetenv("GARY_GITHUB_REPO")
-	os.Unsetenv("GARY_RESULTS_DIR")
-
+	for _, key := range []string{
+		"GARY_GCP_PROJECT", "GARY_GCP_REGION", "GARY_GCP_ZONE", "GARY_GITHUB_REPO",
+		"GARY_RESULTS_DIR", "GARY_IMPLEMENTER_MODEL", "GARY_MASTER_MODEL", "GARY_CLOSER_MODEL",
+		"GARY_WORKER_RUNTIME",
+	} {
+		os.Unsetenv(key)
+	}
 	cfg, err := Load()
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatal(err)
 	}
-
 	if cfg.ResultsDir != "results" && cfg.ResultsDir != "./results" && cfg.ResultsDir != ".\\results" {
-		t.Errorf("default ResultsDir = %q, want results, ./results, or .\\results", cfg.ResultsDir)
+		t.Fatalf("unexpected ResultsDir %q", cfg.ResultsDir)
 	}
-	if cfg.GCPProject != "" {
-		t.Errorf("GCPProject = %q, want empty", cfg.GCPProject)
+	if cfg.ImplementerModel != "gemini-3.8-flash" {
+		t.Fatalf("ImplementerModel=%q want gemini-3.8-flash", cfg.ImplementerModel)
 	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
-	os.Setenv("GARY_GCP_PROJECT", "my-project")
-	os.Setenv("GARY_GCP_REGION", "us-central1")
-	os.Setenv("GARY_GCP_ZONE", "us-central1-a")
-	os.Setenv("GARY_GITHUB_REPO", "owner/repo")
-	os.Setenv("GARY_RESULTS_DIR", "/tmp/results")
-	defer func() {
-		os.Unsetenv("GARY_GCP_PROJECT")
-		os.Unsetenv("GARY_GCP_REGION")
-		os.Unsetenv("GARY_GCP_ZONE")
-		os.Unsetenv("GARY_GITHUB_REPO")
-		os.Unsetenv("GARY_RESULTS_DIR")
-	}()
-
+	values := map[string]string{
+		"GARY_GCP_PROJECT":       "my-project",
+		"GARY_GCP_REGION":        "us-central1",
+		"GARY_GCP_ZONE":          "us-central1-a",
+		"GARY_GITHUB_REPO":       "owner/repo",
+		"GARY_RESULTS_DIR":       "/tmp/results",
+		"GARY_IMPLEMENTER_MODEL": "human-approved-model",
+		"GARY_WORKER_RUNTIME":    "batch",
+	}
+	for k, v := range values {
+		os.Setenv(k, v)
+		defer os.Unsetenv(k)
+	}
 	cfg, err := Load()
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatal(err)
 	}
-
-	if cfg.GCPProject != "my-project" {
-		t.Errorf("GCPProject = %q, want my-project", cfg.GCPProject)
+	if cfg.GCPProject != "my-project" || cfg.GCPRegion != "us-central1" || cfg.GCPZone != "us-central1-a" {
+		t.Fatalf("cloud env not loaded: %#v", cfg)
 	}
-	if cfg.GCPRegion != "us-central1" {
-		t.Errorf("GCPRegion = %q, want us-central1", cfg.GCPRegion)
+	if cfg.GitHubRepo != "owner/repo" || cfg.ResultsDir != "/tmp/results" {
+		t.Fatalf("repository/results env not loaded: %#v", cfg)
 	}
-	if cfg.GCPZone != "us-central1-a" {
-		t.Errorf("GCPZone = %q, want us-central1-a", cfg.GCPZone)
-	}
-	if cfg.GitHubRepo != "owner/repo" {
-		t.Errorf("GitHubRepo = %q, want owner/repo", cfg.GitHubRepo)
-	}
-	if cfg.ResultsDir != "/tmp/results" {
-		t.Errorf("ResultsDir = %q, want /tmp/results", cfg.ResultsDir)
+	if cfg.ImplementerModel != "human-approved-model" {
+		t.Fatalf("explicit model override lost: %q", cfg.ImplementerModel)
 	}
 }
 
-func TestValidateMissing(t *testing.T) {
-	cfg := &Config{}
-	err := cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error for missing config, got nil")
+func TestValidate(t *testing.T) {
+	if err := (&Config{}).Validate(); err == nil {
+		t.Fatal("missing cloud config should fail")
 	}
-}
-
-func TestValidatePartial(t *testing.T) {
-	cfg := &Config{GCPProject: "p"}
-	err := cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error for missing region, got nil")
+	if err := (&Config{GCPProject: "p"}).Validate(); err == nil {
+		t.Fatal("missing region should fail")
 	}
-
-	cfg = &Config{GCPRegion: "r"}
-	err = cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error for missing project, got nil")
+	if err := (&Config{GCPRegion: "r"}).Validate(); err == nil {
+		t.Fatal("missing project should fail")
 	}
-}
-
-func TestValidateComplete(t *testing.T) {
-	cfg := &Config{GCPProject: "p", GCPRegion: "r"}
-	err := cfg.Validate()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err := (&Config{GCPProject: "p", GCPRegion: "r"}).Validate(); err != nil {
+		t.Fatalf("complete cloud config failed: %v", err)
 	}
 }
 
 func TestHasGCPConfig(t *testing.T) {
-	tests := []struct {
-		name string
+	for _, tc := range []struct {
 		cfg  *Config
 		want bool
 	}{
-		{"both set", &Config{GCPProject: "p", GCPRegion: "r"}, true},
-		{"project only", &Config{GCPProject: "p"}, false},
-		{"region only", &Config{GCPRegion: "r"}, false},
-		{"neither", &Config{}, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.cfg.HasGCPConfig(); got != tt.want {
-				t.Errorf("HasGCPConfig() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestLoadImplementerModelDefault(t *testing.T) {
-	os.Unsetenv("GARY_IMPLEMENTER_MODEL")
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.ImplementerModel != "gemini-3.5-flash-lite" {
-		t.Errorf("ImplementerModel = %q, want gemini-3.5-flash-lite", cfg.ImplementerModel)
-	}
-}
-
-func TestLoadImplementerModelFromEnv(t *testing.T) {
-	os.Setenv("GARY_IMPLEMENTER_MODEL", "gemini-2.5-pro")
-	defer os.Unsetenv("GARY_IMPLEMENTER_MODEL")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.ImplementerModel != "gemini-2.5-pro" {
-		t.Errorf("ImplementerModel = %q, want gemini-2.5-pro", cfg.ImplementerModel)
-	}
-}
-
-func TestLoadMasterModelDefault(t *testing.T) {
-	os.Unsetenv("GARY_MASTER_MODEL")
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.MasterModel != "gemini-3.8-flash" {
-		t.Errorf("MasterModel = %q, want gemini-3.8-flash", cfg.MasterModel)
-	}
-}
-
-func TestLoadGeminiAPIKey(t *testing.T) {
-	os.Setenv("GEMINI_API_KEY", "test-key-123")
-	defer os.Unsetenv("GEMINI_API_KEY")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.GeminiAPIKey != "test-key-123" {
-		t.Errorf("GeminiAPIKey = %q, want test-key-123", cfg.GeminiAPIKey)
-	}
-}
-
-func TestLoadWorkerRuntimeDefault(t *testing.T) {
-	os.Unsetenv("GARY_WORKER_RUNTIME")
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.WorkerRuntime != "batch" {
-		t.Errorf("WorkerRuntime = %q, want batch", cfg.WorkerRuntime)
-	}
-}
-
-func TestLoadWorkerRuntimeFromEnv(t *testing.T) {
-	os.Setenv("GARY_WORKER_RUNTIME", "managed")
-	defer os.Unsetenv("GARY_WORKER_RUNTIME")
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.WorkerRuntime != "managed" {
-		t.Errorf("WorkerRuntime = %q, want managed", cfg.WorkerRuntime)
+		{&Config{GCPProject: "p", GCPRegion: "r"}, true},
+		{&Config{GCPProject: "p"}, false},
+		{&Config{GCPRegion: "r"}, false},
+		{&Config{}, false},
+	} {
+		if got := tc.cfg.HasGCPConfig(); got != tc.want {
+			t.Fatalf("HasGCPConfig=%v want %v", got, tc.want)
+		}
 	}
 }

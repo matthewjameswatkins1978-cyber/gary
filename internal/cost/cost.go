@@ -1,5 +1,5 @@
 // Package cost contains the small, versioned cost records shared by GARY's
-// worker, planner, ledger, and terminal status paths.
+// single-agent worker, ledger, and terminal status paths.
 package cost
 
 import (
@@ -78,19 +78,17 @@ type Component struct {
 	UnmeteredReason      string  `json:"unmetered_reason,omitempty"`
 }
 
-// Summary is the terminal cost record for an ordinary or master job.
+// Summary is the terminal cost record for one GARY work invocation.
 type Summary struct {
-	PricingStatus          string      `json:"pricing_status"`
-	Currency               string      `json:"currency"`
-	PricingVersion         string      `json:"pricing_version"`
-	YardmasterModelCostUSD float64     `json:"yardmaster_model_cost_usd,omitempty"`
-	WorkerModelCostUSD     float64     `json:"worker_model_cost_usd,omitempty"`
-	CloserRepairCostUSD    float64     `json:"closer_repair_cost_usd,omitempty"`
-	ModelCostUSD           float64     `json:"model_cost_usd"`
-	ComputeCostUSD         float64     `json:"compute_cost_usd"`
-	TotalCostUSD           float64     `json:"total_cost_usd"`
-	Components             []Component `json:"components,omitempty"`
-	UnmeteredComponents    []string    `json:"unmetered_components,omitempty"`
+	PricingStatus       string      `json:"pricing_status"`
+	Currency            string      `json:"currency"`
+	PricingVersion      string      `json:"pricing_version"`
+	WorkerModelCostUSD  float64     `json:"worker_model_cost_usd,omitempty"`
+	ModelCostUSD        float64     `json:"model_cost_usd"`
+	ComputeCostUSD      float64     `json:"compute_cost_usd"`
+	TotalCostUSD        float64     `json:"total_cost_usd"`
+	Components          []Component `json:"components,omitempty"`
+	UnmeteredComponents []string    `json:"unmetered_components,omitempty"`
 }
 
 // NewSummary creates a summary with stable accounting metadata.
@@ -115,13 +113,8 @@ func (s *Summary) Add(c Component) {
 	s.ModelCostUSD += c.ModelCostUSD
 	s.ComputeCostUSD += c.ComputeCostUSD
 	s.TotalCostUSD += c.TotalCostUSD
-	switch c.Kind {
-	case "yardmaster":
-		s.YardmasterModelCostUSD += c.ModelCostUSD
-	case "worker":
+	if c.Kind == "worker" {
 		s.WorkerModelCostUSD += c.ModelCostUSD
-	case "closer", "repair":
-		s.CloserRepairCostUSD += c.ModelCostUSD
 	}
 	if c.UnmeteredReason != "" {
 		s.UnmeteredComponents = append(s.UnmeteredComponents, c.UnmeteredReason)

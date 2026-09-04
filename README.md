@@ -1,149 +1,158 @@
 # GARY
 
-**General Agent Routing Yard**
+GARY is a small harness for giving one capable AI agent one complete software job in an isolated cloud workspace.
 
-GARY turns project plans into bounded implementation work for disposable AI workers, preserves durable project context, supervises progress from observable evidence, controls cost and authority, integrates accepted work, and verifies completion at project level.
+The agent gets the whole job, the repository, ordinary development freedom, and a fixed model. GARY provides the boring machinery around it: short-lived repository access, Google Cloud Batch isolation, cost/runtime ceilings, artifact capture, independent acceptance checks, and delivery of the exact verified branch.
 
-The control plane owns orchestration. Implementation workers operate in isolated repository state and return evidence-backed results. Rules protect authority, provenance, security, cost, and acceptance; the Yardmaster is otherwise expected to use judgement to get the real job finished.
+There is no AI manager, worker hierarchy, live supervisor, wave planner, automatic retry loop, or automatic model escalation in the normal execution path.
 
-## Documentation
-
-Current documentation is organised deliberately:
-
-- `GARY_RULEBOOK.md` — the GARY Bible: canonical doctrine and role boundaries.
-- `docs/GARY_STATE_MACHINE.md` — canonical lifecycle, activities, transition generation, and board projection.
-- `docs/YARDMASTER_OPERATING_GUIDE.md` — practical Yardmaster tradecraft.
-- `docs/JOBPACKET_CONTRACT.md` — canonical Worker handoff.
-- `docs/ACCEPTANCE_INTEGRATION_PROTOCOL.md` — verification, bounded Yardmaster repair, acceptance, reconciliation, and integration.
-- `docs/FAILURE_RECOVERY_MAP.md` — stage-accurate failure diagnosis and recovery.
-- `docs/project-context.md` — durable project packet/manual/lifecycle storage and migration model.
-- `docs/github-app-setup.md` and `docs/github-oidc-setup.md` — credential and cloud identity setup.
-- `docs/reliability-r1.md`, `docs/verification/`, and dated incident records — historical evidence, not current runtime doctrine.
-
-For exact mechanics, code, schemas, tests, and workflows are authoritative only within the policy defined by the canonical doctrine above.
-
-## Quick start
-
-```powershell
-go run ./cmd/gary version
-go run ./cmd/gary doctor
-go test ./...
-```
-
-The decision-only Telltail adapter consumes one `telltail.adapter.v1` request from stdin and returns one `telltail.decision.v1` response without launching a worker or changing a repository:
-
-```powershell
-Get-Content -Raw telltail-adapter-request.json | go run ./cmd/gary route --dry-run --json
-```
-
-## Configuration
-
-Typical local/cloud configuration:
-
-```powershell
-$env:GARY_GCP_PROJECT = "your-project-id"
-$env:GARY_GCP_REGION = "europe-west2"
-$env:GARY_GCP_ZONE = "europe-west2-a"
-$env:GARY_GITHUB_REPO = "owner/repo"
-$env:GARY_RESULTS_DIR = ".\results"
-$env:GARY_PROJECTS_DIR = ".\gary\projects"
-```
-
-Or copy `.env.example` to `.env` and use the values appropriate to the current environment. Never commit credentials.
-
-| Variable | Required | Description |
-|---|---|---|
-| `GARY_GCP_PROJECT` | Yes for cloud operations | Google Cloud project ID |
-| `GARY_GCP_REGION` | Yes for cloud operations | Google Cloud region |
-| `GARY_GCP_ZONE` | No | Google Cloud zone when a path requires one |
-| `GARY_GITHUB_REPO` | No | GARY control repository (`owner/repo`) |
-| `GARY_RESULTS_DIR` | No | Local results directory |
-| `GARY_WORKER_RUNTIME` | No | Worker runtime selection where supported |
-| `GARY_PROJECTS_DIR` | No | Durable project-context root |
-
-See `.env.example` and current configuration code for the complete set and defaults.
-
-## Repository layout
+## Core idea
 
 ```text
-cmd/gary/             CLI and master/Yardmaster entry points
-internal/config/      configuration
-internal/jobs/        jobs, dossiers, and results
-internal/batch/       Google Cloud Batch boundary
-internal/supervisor/  supervision state/evidence
-internal/project/     durable project context
-internal/gitops/      repository operations
-internal/githubapp/   short-lived GitHub App credentials
-docker/worker/        disposable worker image
-scripts/              maintenance and smoke helpers
-docs/                 current guidance plus historical verification notes
-gary/                 durable/control-plane project and master state
+whole job packet
+      |
+      v
+  gary work
+      |
+      v
+one Gemini 3.8 Flash agent
+in one disposable Batch workspace
+      |
+      v
+candidate patch + evidence
+      |
+      v
+independent acceptance
+      |
+   +--+--+
+   |     |
+ DONE  BLOCKED / FAILED
 ```
 
-## Durable projects
+The implementation agent chooses how to do the work. It may inspect, research, install ordinary dependencies and tools, change tactics, debug, and test without asking for permission every five minutes.
 
-Long master packets can be ingested into durable project context. The original packet is stored before Yardmaster execution, identified by SHA-256, and preserved. Versioned project manuals and amendments retain provenance rather than replacing the source packet.
+It stops for the human only when progress genuinely requires something outside its authority or reach, such as an unavailable secret, inaccessible account or hardware, permission increase, material unapproved spend, consequential irreversible action, contradictory requirement needing a product decision, or a stronger model.
 
-```powershell
-go run ./cmd/gary project start --id book-burner --repo https://github.com/matthewjameswatkins1978-cyber/book-burner.git --base-branch master MASTER_PACKET.md
-go run ./cmd/gary project status book-burner
-go run ./cmd/gary project resume book-burner
-go run ./cmd/gary project amend book-burner AMENDMENT.md
-go run ./cmd/gary project inspect book-burner --json
-go run ./cmd/gary project explain book-burner --master-id book-burner-launch
-go run ./cmd/gary project feedback book-burner --scope project_preference --text "Prefer smaller worker packets."
-go run ./cmd/gary project cancel book-burner --reason "explicit non-successful closure"
+A stronger model is always a human decision. GARY never routes or escalates models automatically.
+
+## Job format
+
+A job points to the complete packet rather than decomposing it into child jobs:
+
+```json
+{
+  "id": "example-job",
+  "repo": "https://github.com/example/project.git",
+  "base_branch": "master",
+  "packet_path": "JOB.md",
+  "acceptance": [
+    "go test ./...",
+    "go vet ./..."
+  ],
+  "max_run_seconds": 3600
+}
 ```
 
-Project-backed master work rehydrates validated project context before planning and child execution. Missing or tampered provenance is an integrity problem, not something an agent is allowed to reason around.
+`packet_path` is resolved relative to the job JSON. For small jobs, `task` may contain the complete instruction directly instead. Do not supply both.
 
-Conduct Review is a low-friction side channel for supervision. `project explain`
-is read-only and reconstructs recorded state, packet/manual provenance, master
-wave plans, worker results, branches/commits, and cost telemetry; it does not
-ask the model to reveal hidden reasoning. `project feedback` records explicit
-append-only review events. Notes and doctrine proposals remain observational;
-project preferences and corrections become visible to the Yardmaster only while
-the project is `ACTIVE` at the next safe `PLANNING` activity boundary. No feedback changes the packet, manual,
-in-flight worker packet, acceptance gate, or global doctrine automatically.
+The packet itself is the source of truth. GARY does not ask another model to summarise or repartition it before implementation.
 
-Do not put credentials in this repository; copy `.env.example` to `.env`
-for local development.
+## Run
 
-## Worker model
+GARY work is enabled for the explicitly authorised live-fire run. Outside an
+authorised run, parking is an external human-controlled switch; it is not an
+agent lifecycle state.
 
-Workers are implementation agents. They receive a bounded outcome, relevant context, repository state, constraints, and executable evidence of success. They may choose implementation tactics and ordinary development setup within their authority.
-
-The Yardmaster should divide work into coherent outcomes, run independent work concurrently when isolation makes that safe, supervise from engineering evidence, preserve useful partial work, and replan when reality changes.
-
-Elapsed time and raw attempt count are observations, not project-success criteria. Genuine cost, infrastructure, security, authority, and acceptance boundaries remain enforceable limits.
-
-## Evidence and acceptance
-
-A worker saying "done" is not acceptance, and neither is a Batch terminal label. A recoverable child candidate is checkpointed, then GARY's trusted control layer reruns the required mechanical checks on the exact candidate in a clean workspace. If those checks pass, Yardmaster performs a bounded merge-quality inspection of the actual change. Only a quality `PASS` plus trusted mechanical verification makes the child result accepted and eligible for staging integration. For `SMALL_FIX`, the Yardmaster may make one small obvious direct repair, after which the exact repaired candidate is reverified and reinspected; larger corrections remain Worker work. `MAJOR_FIX` and `REPLAN` preserve useful work while changing the repair or control route.
-
-Master completion is a separate gate: project-level acceptance runs against the integrated staging state, followed by independent semantic inspection where configured. Ordinary workers do not gain merge or production authority merely by completing a child job.
-
-Structured result and master status locations are implementation details; use the current CLI and `docs/README.md` rather than historical verification notes when exact locations matter.
-
-## Cloud heartbeat
+When enabled, the execution front door is:
 
 ```powershell
+go run ./cmd/gary work job.json
+```
+
+Useful non-work commands:
+
+```powershell
+go run ./cmd/gary doctor
+go run ./cmd/gary status
+go run ./cmd/gary cost <job-id>
 go run ./cmd/gary smoke
+go test ./...
+go vet ./...
 ```
 
-This exercises the configured Google Cloud Batch path and records the result. It requires the current Google Cloud project/region identity setup.
+`route --dry-run --json` remains only as a decision-only Telltail adapter. It launches no worker and changes no target repository.
+
+## Outcomes
+
+The meaningful work outcomes are deliberately small:
+
+- `DONE` — the exact candidate passed independent acceptance and was delivered;
+- `BLOCKED` — responsible continuation requires something outside GARY's authority or reach;
+- `FAILED` — execution or implementation ended without completion and without a genuine external blocker.
+
+`RUNNING` is observable while the Batch job is active. Parking is an external administrative switch, not an agent lifecycle state machine.
+
+## Blockers
+
+If the agent is genuinely blocked, it writes an out-of-band `.gary-blocked.json` containing:
+
+```json
+{
+  "kind": "credential",
+  "summary": "deployment requires an unavailable signing credential",
+  "needed": "the authorised signing credential",
+  "evidence": "the required release command rejects the unsigned artifact",
+  "unblock_action": "provide the credential or change the release requirement"
+}
+```
+
+The wrapper removes this file before committing the target repository and returns it to the controller as evidence.
+
+For model escalation, `kind` is `model_escalation`. The request is reported to the human and nothing automatically changes model.
+
+## What GARY keeps
+
+GARY preserves evidence that is expensive or dangerous to reconstruct:
+
+- the supplied job/packet at intake;
+- base repository state and resulting branch/commit;
+- declared acceptance checks and results;
+- Batch identity and result artifacts;
+- model usage and cost records;
+- genuine blocker evidence;
+- enough infrastructure logs to diagnose failures.
+
+It does not need permanent planner memory, child-job histories, supervision telemetry, AI-to-AI guidance, or a second model narrating the first model's work.
+
+## Security and authority
+
+Workers receive a short-lived GitHub App installation token for the target repository, never the App private key. Google Cloud identity and secrets remain at the appropriate trusted boundary.
+
+The disposable Batch workspace is the main implementation sandbox. The agent may act broadly inside that workspace while consequential external authority remains constrained.
+
+See `docs/github-app-setup.md` and `docs/github-oidc-setup.md` for identity setup.
+
+## Acceptance
+
+The agent is expected to run the relevant checks while it works. After the agent returns a candidate, GARY independently clones the base repository, applies that exact patch, and reruns the declared acceptance commands in a clean workspace.
+
+Only that independent pass can produce `DONE`.
+
+Batch `SUCCEEDED` means the container finished. It is not software acceptance.
 
 ## Development
 
-GARY is a Go project. At minimum use the repository-required Go toolchain and run:
+GARY is written in Go.
 
 ```powershell
 go test ./...
 go vet ./...
 ```
 
-Useful agent-development tools may include `gopls`, `goimports`, and `staticcheck`, but the repository's current tests and declared toolchain are the source of truth.
+CI is deliberately execution-free: it never invokes `gary work`, Google Batch, or Gemini.
 
 ## Doctrine
 
-**Small rules. Clear authority. Durable truth. Hard evidence. Intelligent action. Finish the work.**
+Read `GARY_RULEBOOK.md`. It is intentionally short.
+
+**Whole job. One capable agent. Useful tools. Real boundaries. Hard evidence. Human-controlled escalation. Finish the work.**

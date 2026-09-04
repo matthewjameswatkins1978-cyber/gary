@@ -1,129 +1,50 @@
-# Durable project context
+# Durable work evidence
 
-GARY stores durable project truth under `gary/projects/<project-id>/` by default.
+GARY does not maintain a second AI-authored project manual or a multi-agent lifecycle as active context.
 
-A typical project contains:
-
-```text
-project.json
-state.json
-events/lifecycle.jsonl
-source/MASTER_PACKET.md
-manuals/project-manual-v001.json
-amendments/
-jobs/
-evidence/
-feedback/events.jsonl
-archive/
-```
-
-The immutable Project Packet is written before Yardmaster intake and identified by SHA-256. Versioned manuals and amendments retain provenance rather than replacing the source packet.
-
-## Canonical lifecycle and projections
-
-The canonical lifecycle is defined in `docs/GARY_STATE_MACHINE.md`.
-
-Lifecycle states are:
+For each real job, preserve only durable information that is valuable after context or infrastructure disappears:
 
 ```text
-ACTIVE | PARKED | WAITING | BLOCKED | ACCEPTED | CANCELLED
+original job manifest
+original human job packet
+repository and base identity
+assigned model
+configured cost/runtime boundary
+Batch job identity
+candidate patch/artifacts
+acceptance output
+usage/cost record
+result branch and commit
+blocker evidence, when present
 ```
 
-While `ACTIVE`, the project may have one or more activities such as `PLANNING`, `EXECUTING`, `VERIFYING`, and `INTEGRATING`.
+## Original packet
 
-`events/lifecycle.jsonl` is the append-only lifecycle history. Each transition advances a project generation and is digest-linked to the previous event. `project.json`, `state.json`, and the project board are current projections of that history.
+The human packet is source truth and should be stored byte-for-byte at intake, with a digest where useful for integrity checking.
 
-Older durable projects using `PLANNING`, `EXECUTING`, `VERIFYING`, `PAUSED`, `FAILED`, or `ARCHIVED` as project states are read through a compatibility migration:
+Do not replace it with a model summary. Summaries may be created temporarily by the implementation agent for its own working convenience, but they are not project authority.
 
-- planning/executing/verifying/integrating become activities under `ACTIVE`;
-- paused/failed become `PARKED`;
-- legacy archived projects retain the successful `ACCEPTED` outcome and expose archive status as metadata.
+## Active context
 
-New writes use only the canonical lifecycle.
+The implementation agent receives the complete job plus the small GARY constitution. Additional tool or project documentation should be retrieved only when relevant.
 
-## Project board
+Old conversations, planner memories, child-job histories, lifecycle event streams, project boards, and supervision telemetry are not default prompt material.
 
-The durable board lives at:
+## Results
 
-```text
-gary/projects/board/projects.json
-```
+The result record should make it possible to answer:
 
-It is a human-facing projection:
+- what was requested;
+- what repository/base was used;
+- which model ran;
+- what candidate was returned;
+- what independent acceptance showed;
+- what was delivered;
+- what it cost;
+- whether a genuine blocker stopped the job.
 
-```text
-ACTIVE / PARKED / WAITING / BLOCKED -> IN_PROCESS
-ACCEPTED                            -> COMPLETED
-CANCELLED                           -> CANCELLED
-```
+That is enough durable truth for the simple architecture.
 
-Worker success, retries, pauses, infrastructure failures, and child acceptance never complete a board entry.
+## Historical project machinery
 
-The board is visible with:
-
-```powershell
-go run ./cmd/gary project board
-go run ./cmd/gary project board --json
-```
-
-## Rehydration
-
-`gary project resume <project-id>` performs a fresh validated rehydration and returns a resumable non-terminal project to `ACTIVE` with `PLANNING` activity. It does not launch a Worker itself.
-
-Project-backed master work rehydrates durable context before every planning wave and rebuilds narrow child context from the current manual before Worker submission.
-
-Missing or tampered packet/manual provenance is an integrity fault, not something an agent may reason around.
-
-## Parked auto-wake
-
-`gary project tick <project-id>` is a deterministic watchdog.
-
-It may claim a wake only when:
-
-- lifecycle is `PARKED`;
-- explicit executable work exists;
-- no Yardmaster is active;
-- no equivalent wake is active;
-- the project is not actually waiting or blocked.
-
-A valid wake returns the project to `ACTIVE` planning and invokes the ordinary Yardmaster path. It never wakes a Worker independently or mutates an in-flight packet.
-
-Wake claims are atomic. Repeated no-progress wakes back off and eventually trip a circuit breaker.
-
-## Cancellation and archive
-
-`CANCELLED` is an explicit terminal non-successful closure.
-
-```powershell
-go run ./cmd/gary project cancel <project-id> --reason "..."
-```
-
-Archiving is storage metadata only. It does not turn a cancelled project into a completed project and does not change an accepted project into a different outcome.
-
-## Conduct Review
-
-Questions and interventions remain separate operations:
-
-```powershell
-go run ./cmd/gary project explain <project-id> --master-id <master-id> --json
-go run ./cmd/gary project feedback <project-id> --scope note --text "..."
-```
-
-`explain` is read-only and reconstructs observable evidence rather than hidden reasoning.
-
-Feedback scopes are `note`, `project_preference`, `project_correction`, and `propose_doctrine`.
-
-Preferences and corrections become execution-visible only while lifecycle is `ACTIVE` at a safe `PLANNING` activity boundary. They never rewrite an in-flight Worker packet, the immutable Project Packet, or global doctrine automatically.
-
-## Separation of durable truth
-
-Keep these concepts distinct:
-
-- Project Packet/manual: what the project is and what must be true.
-- Lifecycle event stream: whether the project may continue and how it reached the current lifecycle state.
-- State projection: current activities, progress, waiting/blocking detail, and watchdog state.
-- Master/Worker records: what GARY attempted and observed.
-- Acceptance/integration evidence: what was verified, judged, accepted, and integrated.
-- Feedback events: explicit human observations and scoped interventions.
-
-Project context is treated as untrusted input with respect to GARY authority. It cannot override sandbox, provider, credential, acceptance-command, or deterministic routing controls.
+Older `gary/projects/` packets, manuals, lifecycle streams, board projections, feedback records and wake state remain historical evidence in Git history and existing repositories. They are not part of the new `gary work` execution contract.

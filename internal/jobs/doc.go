@@ -1,3 +1,3 @@
-// Package jobs will define bounded worker-job and worker-result records.
-// TODO: Keep job inputs explicit and serialisable.
+// Package jobs defines the explicit serialisable records shared by one-agent
+// work and its trusted result ledger.
 package jobs

@@ -8,12 +8,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/matthewjameswatkins1978-cyber/gary/internal/benchmark"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
-// LedgerEntry is one line in the JSONL cost ledger.
 type LedgerEntry struct {
 	Timestamp            string        `json:"timestamp"`
 	JobID                string        `json:"job_id"`
@@ -29,7 +27,6 @@ type LedgerEntry struct {
 	Cost                 *cost.Summary `json:"cost,omitempty"`
 }
 
-// CostSummary holds cumulative cost totals.
 type CostSummary struct {
 	RunCost    float64
 	MonthCost  float64
@@ -38,36 +35,27 @@ type CostSummary struct {
 	LastRunSet bool
 }
 
-func ledgerPath(resultsDir string) string {
-	return filepath.Join(resultsDir, "cost-ledger.jsonl")
-}
+func ledgerPath(resultsDir string) string { return filepath.Join(resultsDir, "cost-ledger.jsonl") }
 
-// AppendLedger writes one entry to the JSONL ledger.
 func AppendLedger(resultsDir string, entry LedgerEntry) error {
-	dir := filepath.Dir(ledgerPath(resultsDir))
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(ledgerPath(resultsDir)), 0o755); err != nil {
 		return err
 	}
-
 	f, err := os.OpenFile(ledgerPath(resultsDir), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-
 	data, err := json.Marshal(entry)
 	if err != nil {
 		return err
 	}
-	data = append(data, '\n')
-	_, err = f.Write(data)
+	_, err = f.Write(append(data, '\n'))
 	return err
 }
 
-// ReadLedger reads all entries from the JSONL ledger.
 func ReadLedger(resultsDir string) ([]LedgerEntry, error) {
-	path := ledgerPath(resultsDir)
-	f, err := os.Open(path)
+	f, err := os.Open(ledgerPath(resultsDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -75,52 +63,38 @@ func ReadLedger(resultsDir string) ([]LedgerEntry, error) {
 		return nil, err
 	}
 	defer f.Close()
-
 	var entries []LedgerEntry
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
+		if scanner.Text() == "" {
 			continue
 		}
 		var entry LedgerEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
+		if json.Unmarshal(scanner.Bytes(), &entry) == nil {
+			entries = append(entries, entry)
 		}
-		entries = append(entries, entry)
 	}
 	return entries, scanner.Err()
 }
 
-// SummarizeCosts computes run/month/lifetime cost totals from ledger entries.
-// runID groups entries belonging to the current run (by prefix of timestamp).
 func SummarizeCosts(resultsDir, runID string) CostSummary {
 	entries, _ := ReadLedger(resultsDir)
-	now := time.Now()
-	monthPrefix := now.Format("2006-01")
+	monthPrefix := time.Now().Format("2006-01")
 	var s CostSummary
-
 	for _, e := range entries {
 		total := e.TotalCost()
 		s.LifeCost += total
-
 		if len(e.Timestamp) >= 7 && e.Timestamp[:7] == monthPrefix {
 			s.MonthCost += total
 		}
-
 		if runID != "" && len(e.Timestamp) >= len(runID) && e.Timestamp[:len(runID)] == runID {
 			s.RunCost += total
 		}
-
-		s.LastRun = e
-		s.LastRunSet = true
+		s.LastRun, s.LastRunSet = e, true
 	}
-
 	return s
 }
 
-// TotalCost returns the structured total for new entries, or the legacy
-// heuristic total for old entries. The latter remains an estimate by schema.
 func (e LedgerEntry) TotalCost() float64 {
 	if e.Cost != nil {
 		return e.Cost.TotalCostUSD
@@ -128,48 +102,43 @@ func (e LedgerEntry) TotalCost() float64 {
 	return e.TotalCostEstimated
 }
 
-// BudgetCheck reports whether a new job can start within the per-run cost limit.
-// currentRunCommitted is the estimated total cost of jobs already dispatched
-// in this invocation. Month-to-date and lifetime spend are NOT considered.
 func BudgetCheck(maxCostUSD, currentRunCommitted, estimatedJobCost float64) (bool, string) {
 	if maxCostUSD <= 0 {
 		return true, ""
 	}
-
 	projected := currentRunCommitted + estimatedJobCost
 	if projected > maxCostUSD {
-		return false, fmt.Sprintf("ESTIMATED run committed $%.2f + job $%.2f = $%.2f exceeds limit $%.2f",
-			currentRunCommitted, estimatedJobCost, projected, maxCostUSD)
+		return false, fmt.Sprintf("ESTIMATED run committed $%.2f + job $%.2f = $%.2f exceeds limit $%.2f", currentRunCommitted, estimatedJobCost, projected, maxCostUSD)
 	}
 	return true, ""
 }
 
-// EstimateJobCost produces a conservative ESTIMATED cost for one coding job attempt
-// using the historical default worker model.
 func EstimateJobCost(attempts int) float64 {
-	return EstimateJobCostForModel("gemini-3.5-flash-lite", attempts)
+	return EstimateJobCostForModel("gemini-3.8-flash", attempts)
 }
 
-// EstimateJobCostForModel estimates a job using the model actually requested.
+// EstimateJobCostForModel is deliberately only a pre-dispatch guard. The
+// persisted ledger uses provider usage where available and observed Batch time.
 func EstimateJobCostForModel(model string, attempts int) float64 {
-	pt := benchmark.PriceTableForModel(model)
-
-	// Conservative estimate per attempt:
-	// ~15K input tokens, ~7.5K output tokens (incl. thinking), ~2K cached
-	inputPerAttempt := 15000
-	outputPerAttempt := 7500
-	cachedPerAttempt := 2000
-
-	modelCost := benchmark.EstimateCost(pt, inputPerAttempt*attempts, outputPerAttempt*attempts, 0, cachedPerAttempt*attempts)
-
-	// Pre-dispatch compute estimate: typical attempt is ~270s. The rate itself
-	// comes from the shared versioned compute table.
+	if attempts < 1 {
+		return 0
+	}
+	pt := cost.PriceForModel(model)
+	modelCost := 0.0
+	if pt.Known {
+		const inputPerAttempt = 15000
+		const cachedPerAttempt = 2000
+		const outputPerAttempt = 7500
+		modelCost = cost.ModelCost(pt,
+			(inputPerAttempt-cachedPerAttempt)*attempts,
+			cachedPerAttempt*attempts,
+			outputPerAttempt*attempts,
+		)
+	}
 	computeCost, _ := cost.ComputeCost("e2-small", "STANDARD", float64(attempts)*270.0)
-
 	return modelCost + computeCost
 }
 
-// MakeLedgerEntry creates a LedgerEntry from a RunResult.
 func MakeLedgerEntry(result jobs.RunResult, model string) LedgerEntry {
 	return LedgerEntry{
 		Timestamp:            time.Now().UTC().Format(time.RFC3339),

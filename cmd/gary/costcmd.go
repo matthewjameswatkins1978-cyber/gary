@@ -10,11 +10,10 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
 )
 
-// cmdCost exposes the existing persisted status/ledger machinery without
-// introducing a second billing store or an interactive UI.
+// cmdCost reports persisted cost for one single-agent GARY work run.
 func cmdCost() {
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "Usage: gary cost <job-or-master-id>")
+		fmt.Fprintln(os.Stderr, "Usage: gary cost <job-id>")
 		os.Exit(1)
 	}
 	id := os.Args[2]
@@ -24,33 +23,25 @@ func cmdCost() {
 		os.Exit(1)
 	}
 
-	if data, err := os.ReadFile(filepath.Join("gary", "master", "status", id+".json")); err == nil {
-		var status masterStatus
-		if err := json.Unmarshal(data, &status); err == nil {
-			ensureMasterCost(&status)
-			printCostLine(id, status.State, status.Cost)
-			return
-		}
+	data, err := os.ReadFile(filepath.Join(cfg.ResultsDir, "runs", id+".json"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "cost: no persisted result for %s\n", id)
+		os.Exit(1)
 	}
-
-	if data, err := os.ReadFile(filepath.Join(cfg.ResultsDir, "runs", id+".json")); err == nil {
-		var result struct {
-			FinalStatus        string        `json:"final_status"`
-			TotalCostEstimated float64       `json:"total_cost_estimated"`
-			Cost               *cost.Summary `json:"cost,omitempty"`
-		}
-		if err := json.Unmarshal(data, &result); err == nil {
-			if result.Cost != nil {
-				printCostLine(id, result.FinalStatus, result.Cost)
-			} else {
-				fmt.Printf("%s\n%s\n$%.4f USD\nLEGACY_ESTIMATE\n", id, result.FinalStatus, result.TotalCostEstimated)
-			}
-			return
-		}
+	var result struct {
+		FinalStatus        string        `json:"final_status"`
+		TotalCostEstimated float64       `json:"total_cost_estimated"`
+		Cost               *cost.Summary `json:"cost,omitempty"`
 	}
-
-	fmt.Fprintf(os.Stderr, "cost: no persisted result for %s\n", id)
-	os.Exit(1)
+	if err := json.Unmarshal(data, &result); err != nil {
+		fmt.Fprintf(os.Stderr, "cost: invalid persisted result for %s: %v\n", id, err)
+		os.Exit(1)
+	}
+	if result.Cost != nil {
+		printCostLine(id, result.FinalStatus, result.Cost)
+		return
+	}
+	fmt.Printf("%s\n%s\n$%.4f USD\nLEGACY_ESTIMATE\n", id, result.FinalStatus, result.TotalCostEstimated)
 }
 
 func printCostLine(id, state string, summary *cost.Summary) {
