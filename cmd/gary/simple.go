@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,6 +27,10 @@ type workManifest struct {
 	Acceptance       []string `json:"acceptance"`
 	EstimatedMinutes int      `json:"estimated_minutes,omitempty"`
 	MaxRunSeconds    int      `json:"max_run_seconds,omitempty"`
+
+	PacketBytes  []byte `json:"-"`
+	PacketDigest string `json:"-"`
+	PacketSource string `json:"-"`
 }
 
 type blockerRecord struct {
@@ -41,7 +46,8 @@ func cmdWork() {
 		fmt.Fprintln(os.Stderr, "Usage: gary work <job.json>")
 		os.Exit(1)
 	}
-	manifest, err := loadWorkManifest(os.Args[2])
+	manifestPath := os.Args[2]
+	manifest, err := loadWorkManifest(manifestPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "work: %v\n", err)
 		os.Exit(1)
@@ -49,6 +55,10 @@ func cmdWork() {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "work config: %v\n", err)
+		os.Exit(1)
+	}
+	if err := persistWorkPacket(cfg.ResultsDir, manifest); err != nil {
+		fmt.Fprintf(os.Stderr, "work packet preservation: %v\n", err)
 		os.Exit(1)
 	}
 	if cfg.GCPProject == "" {
@@ -63,12 +73,13 @@ func cmdWork() {
 	}
 
 	job := &jobs.Job{
-		ID:               manifest.ID,
-		Repo:             manifest.Repo,
-		BaseBranch:       manifest.BaseBranch,
-		Task:             manifest.Task,
-		Acceptance:       manifest.Acceptance,
-		EstimatedMinutes: manifest.EstimatedMinutes,
+		ID:                 manifest.ID,
+		Repo:               manifest.Repo,
+		BaseBranch:         manifest.BaseBranch,
+		Task:               manifest.Task,
+		Acceptance:         manifest.Acceptance,
+		EstimatedMinutes:   manifest.EstimatedMinutes,
+		MasterPacketDigest: manifest.PacketDigest,
 	}
 	result := RunSingleAgentJob(cfg, job, manifest.MaxRunSeconds)
 	printSingleAgentResult(result, cfg.ImplementerModel)
@@ -104,11 +115,18 @@ func loadWorkManifest(path string) (*workManifest, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read packet: %w", err)
 		}
+		m.PacketBytes = append([]byte(nil), packet...)
+		m.PacketSource = packetPath
 		m.Task = string(packet)
+	} else {
+		m.PacketBytes = []byte(m.Task)
+		m.PacketSource = path + "#task"
 	}
 	if strings.TrimSpace(m.Task) == "" {
 		return nil, fmt.Errorf("packet_path or task is required")
 	}
+	digest := sha256.Sum256(m.PacketBytes)
+	m.PacketDigest = fmt.Sprintf("%x", digest[:])
 	if m.MaxRunSeconds == 0 {
 		m.MaxRunSeconds = 3600
 	}
@@ -136,6 +154,7 @@ func RunSingleAgentJob(cfg *config.Config, job *jobs.Job, maxRunSeconds int) job
 	finish := func(result jobs.RunResult) jobs.RunResult {
 		result.JobID = job.ID
 		result.Branch = branch
+		result.MasterPacketDigest = job.MasterPacketDigest
 		result.DurationSecs = time.Since(started).Seconds()
 		result.Cost = runCost
 		result.ModelCostEstimated = runCost.ModelCostUSD
