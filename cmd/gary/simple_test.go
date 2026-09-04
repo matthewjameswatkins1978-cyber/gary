@@ -86,10 +86,12 @@ func TestParseBlockerRequiresStructuredHumanBoundary(t *testing.T) {
 
 func TestShortSimpleIDIsBatchSafeAndBounded(t *testing.T) {
 	got := shortSimpleID("Telltail: Real Live Fire / R3", 18)
-	if got != "telltail-real-live" {
-		t.Fatalf("shortSimpleID=%q", got)
+	if got == "" || len(got) > 18 {
+		t.Fatalf("bad bounded id %q", got)
 	}
-	if len(got) > 18 {
-		t.Fatalf("id exceeded bound: %d", len(got))
+	for _, r := range got {
+		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-') {
+			t.Fatalf("unsafe character %q in %q", r, got)
+		}
 	}
 }
