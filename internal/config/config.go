@@ -1,5 +1,4 @@
-// Package config loads and validates GARY configuration from
-// environment variables.
+// Package config loads GARY runtime configuration.
 package config
 
 import (
@@ -9,7 +8,10 @@ import (
 	"strconv"
 )
 
-// Config holds the GARY environment configuration.
+// Config holds runtime and hard-boundary configuration.
+// CloserModel and MasterModel are retained only so legacy code still compiles
+// while the old orchestration path is removed. The active single-agent path
+// never selects either model automatically.
 type Config struct {
 	GCPProject       string
 	GCPRegion        string
@@ -24,7 +26,6 @@ type Config struct {
 	MaxCostUSD       float64
 }
 
-// Load reads configuration from environment variables and applies defaults.
 func Load() (*Config, error) {
 	c := &Config{
 		GCPProject:       os.Getenv("GARY_GCP_PROJECT"),
@@ -42,19 +43,9 @@ func Load() (*Config, error) {
 	if c.ResultsDir == "" {
 		c.ResultsDir = filepath.Join(".", "results")
 	}
-
 	if c.ImplementerModel == "" {
-		c.ImplementerModel = "gemini-3.5-flash-lite"
+		c.ImplementerModel = "gemini-3.8-flash"
 	}
-
-	if c.CloserModel == "" {
-		c.CloserModel = "gemini-3.6-flash"
-	}
-
-	if c.MasterModel == "" {
-		c.MasterModel = "gemini-3.8-flash"
-	}
-
 	if c.WorkerRuntime == "" {
 		c.WorkerRuntime = "batch"
 	}
@@ -66,31 +57,23 @@ func Load() (*Config, error) {
 		}
 		c.MaxCostUSD = n
 	}
-
 	return c, nil
 }
 
-// Validate checks that the configuration contains the values required for
-// cloud operations. Local-only usage (version, doctor) does not require
-// validation.
 func (c *Config) Validate() error {
 	var missing []string
-
 	if c.GCPProject == "" {
 		missing = append(missing, "GARY_GCP_PROJECT")
 	}
 	if c.GCPRegion == "" {
 		missing = append(missing, "GARY_GCP_REGION")
 	}
-
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required configuration: %v", missing)
 	}
-
 	return nil
 }
 
-// HasGCPConfig reports whether the GCP project and region are set.
 func (c *Config) HasGCPConfig() bool {
 	return c.GCPProject != "" && c.GCPRegion != ""
 }
