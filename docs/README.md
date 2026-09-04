@@ -5,7 +5,7 @@ Keep the active documentation surface small.
 ## Current documents
 
 1. `../GARY_RULEBOOK.md` — the small constitution and authority boundary.
-2. `GARY_STATE_MACHINE.md` — minimal work outcomes and the external PARKED control.
+2. `GARY_STATE_MACHINE.md` — minimal work outcomes and the external parking control.
 3. `JOBPACKET_CONTRACT.md` — whole-job intake contract.
 4. `ACCEPTANCE_INTEGRATION_PROTOCOL.md` — exact-candidate independent acceptance and delivery.
 5. `FAILURE_RECOVERY_MAP.md` — repair the layer that actually failed.

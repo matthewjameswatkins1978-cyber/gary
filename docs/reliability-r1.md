@@ -1,6 +1,6 @@
 # GARY Reliability R1 — Historical Record
 
-> **Historical document.** This describes an earlier reliability design and is retained for provenance. It is **not** the current GARY runtime contract. In particular, retry counts, planner timing, worker-attempt policy, model selection, and escalation behaviour have changed since R1. For current behaviour, use `GARY_RULEBOOK.md`, `docs/YARDMASTER_OPERATING_GUIDE.md`, the current workflows/code, and the tests.
+> **Historical document.** This describes an earlier reliability design and is retained for provenance. It is **not** the current GARY runtime contract. In particular, retry counts, planner timing, worker-attempt policy, model selection, and escalation behaviour have changed since R1. For current behaviour, use `GARY_RULEBOOK.md`, `docs/JOBPACKET_CONTRACT.md`, the current workflows/code, and the tests.
 
 ## Original goal
 

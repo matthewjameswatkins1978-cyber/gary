@@ -23,23 +23,17 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.ImplementerModel != "gemini-3.8-flash" {
 		t.Fatalf("ImplementerModel=%q want gemini-3.8-flash", cfg.ImplementerModel)
 	}
-	if cfg.MasterModel != "" || cfg.CloserModel != "" {
-		t.Fatalf("legacy intelligent fallbacks must have no defaults: master=%q closer=%q", cfg.MasterModel, cfg.CloserModel)
-	}
-	if cfg.WorkerRuntime != "batch" {
-		t.Fatalf("WorkerRuntime=%q want batch", cfg.WorkerRuntime)
-	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
 	values := map[string]string{
-		"GARY_GCP_PROJECT": "my-project",
-		"GARY_GCP_REGION": "us-central1",
-		"GARY_GCP_ZONE": "us-central1-a",
-		"GARY_GITHUB_REPO": "owner/repo",
-		"GARY_RESULTS_DIR": "/tmp/results",
+		"GARY_GCP_PROJECT":       "my-project",
+		"GARY_GCP_REGION":        "us-central1",
+		"GARY_GCP_ZONE":          "us-central1-a",
+		"GARY_GITHUB_REPO":       "owner/repo",
+		"GARY_RESULTS_DIR":       "/tmp/results",
 		"GARY_IMPLEMENTER_MODEL": "human-approved-model",
-		"GARY_WORKER_RUNTIME": "batch",
+		"GARY_WORKER_RUNTIME":    "batch",
 	}
 	for k, v := range values {
 		os.Setenv(k, v)
@@ -88,17 +82,5 @@ func TestHasGCPConfig(t *testing.T) {
 		if got := tc.cfg.HasGCPConfig(); got != tc.want {
 			t.Fatalf("HasGCPConfig=%v want %v", got, tc.want)
 		}
-	}
-}
-
-func TestLoadGeminiAPIKey(t *testing.T) {
-	os.Setenv("GEMINI_API_KEY", "test-key-123")
-	defer os.Unsetenv("GEMINI_API_KEY")
-	cfg, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.GeminiAPIKey != "test-key-123" {
-		t.Fatalf("GeminiAPIKey=%q", cfg.GeminiAPIKey)
 	}
 }

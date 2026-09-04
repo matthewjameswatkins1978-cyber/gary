@@ -8,21 +8,14 @@ import (
 	"strconv"
 )
 
-// Config holds runtime and hard-boundary configuration.
-// CloserModel and MasterModel are retained only so legacy code still compiles
-// while the old orchestration path is removed. The active single-agent path
-// never selects either model automatically.
+// Config holds runtime and hard-boundary configuration for one Batch agent.
 type Config struct {
 	GCPProject       string
 	GCPRegion        string
 	GCPZone          string
 	GitHubRepo       string
 	ResultsDir       string
-	GeminiAPIKey     string
 	ImplementerModel string
-	CloserModel      string
-	MasterModel      string
-	WorkerRuntime    string
 	MaxCostUSD       float64
 }
 
@@ -33,11 +26,7 @@ func Load() (*Config, error) {
 		GCPZone:          os.Getenv("GARY_GCP_ZONE"),
 		GitHubRepo:       os.Getenv("GARY_GITHUB_REPO"),
 		ResultsDir:       os.Getenv("GARY_RESULTS_DIR"),
-		GeminiAPIKey:     os.Getenv("GEMINI_API_KEY"),
 		ImplementerModel: os.Getenv("GARY_IMPLEMENTER_MODEL"),
-		CloserModel:      os.Getenv("GARY_CLOSER_MODEL"),
-		MasterModel:      os.Getenv("GARY_MASTER_MODEL"),
-		WorkerRuntime:    os.Getenv("GARY_WORKER_RUNTIME"),
 	}
 
 	if c.ResultsDir == "" {
@@ -45,9 +34,6 @@ func Load() (*Config, error) {
 	}
 	if c.ImplementerModel == "" {
 		c.ImplementerModel = "gemini-3.8-flash"
-	}
-	if c.WorkerRuntime == "" {
-		c.WorkerRuntime = "batch"
 	}
 
 	if v := os.Getenv("GARY_MAX_COST_USD"); v != "" {

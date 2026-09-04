@@ -1,4 +1,5 @@
 # Workflows
 
-Reserved for a deliberately small CI workflow after the initial CLI contract
-exists. No automated cloud deployment belongs here in V1.
+The repository has one cheap CI workflow and one explicitly scoped live-fire
+workflow. CI never invokes Gemini or Google Batch; the live-fire workflow is
+armed only on `master` and runs the prepared packet once after merge.

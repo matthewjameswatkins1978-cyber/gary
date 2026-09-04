@@ -267,12 +267,12 @@ func TestEstimateJobCost(t *testing.T) {
 	}
 }
 
-func TestEstimateJobCostForModelPricesYardmasterHigher(t *testing.T) {
+func TestEstimateJobCostForModelPricesFlashHigher(t *testing.T) {
 	lite := EstimateJobCostForModel("gemini-3.5-flash-lite", 1)
-	yardmaster := EstimateJobCostForModel("gemini-3.8-flash", 1)
+	flash := EstimateJobCostForModel("gemini-3.8-flash", 1)
 
-	if yardmaster <= lite {
-		t.Fatalf("expected Gemini 3.7 estimate > Flash Lite, got %f <= %f", yardmaster, lite)
+	if flash <= lite {
+		t.Fatalf("expected Gemini 3.8 Flash estimate > Flash Lite, got %f <= %f", flash, lite)
 	}
 }
 

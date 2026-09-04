@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -23,6 +24,10 @@ type workPacketProvenance struct {
 func persistWorkPacket(resultsDir string, m *workManifest) error {
 	if m == nil || m.ID == "" || len(m.PacketBytes) == 0 || m.PacketDigest == "" {
 		return fmt.Errorf("incomplete work packet provenance")
+	}
+	digest := sha256.Sum256(m.PacketBytes)
+	if m.PacketDigest != fmt.Sprintf("%x", digest[:]) {
+		return fmt.Errorf("packet digest does not match authoritative bytes")
 	}
 	shortDigest := m.PacketDigest
 	if len(shortDigest) > 12 {

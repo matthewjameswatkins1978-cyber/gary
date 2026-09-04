@@ -59,7 +59,9 @@ The packet itself is the source of truth. GARY does not ask another model to sum
 
 ## Run
 
-GARY is currently administratively parked. Do not execute work until Matthew explicitly says to unpark GARY.
+GARY work is enabled for the explicitly authorised live-fire run. Outside an
+authorised run, parking is an external human-controlled switch; it is not an
+agent lifecycle state.
 
 When enabled, the execution front door is:
 

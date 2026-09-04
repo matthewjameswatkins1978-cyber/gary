@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,11 +45,13 @@ func TestLoadWorkManifestReadsWholePacket(t *testing.T) {
 
 func TestPersistWorkPacketIsExactAndImmutable(t *testing.T) {
 	dir := t.TempDir()
-	m := &workManifest{ID: "packet-test", PacketBytes: []byte("a\r\nb\n"), PacketDigest: "0123456789abcdef", PacketSource: "JOB.md"}
+	packet := []byte("a\r\nb\n")
+	digest := sha256.Sum256(packet)
+	m := &workManifest{ID: "packet-test", PacketBytes: packet, PacketDigest: fmt.Sprintf("%x", digest[:]), PacketSource: "JOB.md"}
 	if err := persistWorkPacket(dir, m); err != nil {
 		t.Fatal(err)
 	}
-	storedDir := filepath.Join(dir, "packets", "packet-test-0123456789ab")
+	storedDir := filepath.Join(dir, "packets", "packet-test-"+m.PacketDigest[:12])
 	got, err := os.ReadFile(filepath.Join(storedDir, "packet.raw"))
 	if err != nil {
 		t.Fatal(err)
@@ -65,6 +69,15 @@ func TestPersistWorkPacketIsExactAndImmutable(t *testing.T) {
 	}
 	if err := persistWorkPacket(dir, m); err != nil {
 		t.Fatalf("identical packet should be idempotent: %v", err)
+	}
+}
+
+func TestPersistWorkPacketRejectsMismatchedDigest(t *testing.T) {
+	err := persistWorkPacket(t.TempDir(), &workManifest{
+		ID: "packet-test", PacketBytes: []byte("a\r\nb\n"), PacketDigest: "not-the-byte-digest", PacketSource: "JOB.md",
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("expected digest mismatch rejection, got %v", err)
 	}
 }
 

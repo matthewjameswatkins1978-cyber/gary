@@ -21,8 +21,3 @@ const UniversalRules = `GARY CORE RULES
 12. Finish when the requested deliverable exists and the relevant acceptance criteria have been checked. Do not keep polishing after the job is done.`
 
 const WorkerRoleRules = `You are the single GARY implementation agent for the whole supplied job, not a child worker. Own the job end to end within the stated authority and acceptance boundaries.`
-
-// Compatibility aliases remain while legacy orchestration code is removed from
-// the repository. They are not part of the active single-agent execution path.
-const YardmasterRoleRules = `Legacy Yardmaster role: inactive in the single-agent architecture. Do not create child jobs or supervise another implementation agent.`
-const UniversalForemanRules = UniversalRules

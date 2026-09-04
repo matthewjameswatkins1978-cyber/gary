@@ -16,8 +16,8 @@ import (
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/jobs"
 )
 
-// workManifest is the whole-job front door. It deliberately has no model
-// escalation, worker-count, wave, planner, supervisor, or retry settings.
+// workManifest is the whole-job front door. It deliberately has no
+// decomposition, supervision, retry, or model-routing settings.
 type workManifest struct {
 	ID               string   `json:"id"`
 	Repo             string   `json:"repo"`
@@ -284,7 +284,6 @@ func RunSingleAgentJob(cfg *config.Config, job *jobs.Job, maxRunSeconds int) job
 		Attempts:       1,
 		Accepted:       true,
 		Verification:   "trusted-independent",
-		QualityReview:  "not-used-single-agent",
 		FinalStatus:    "DONE",
 	})
 }

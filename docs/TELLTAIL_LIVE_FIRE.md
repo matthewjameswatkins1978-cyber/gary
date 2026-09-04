@@ -1,6 +1,8 @@
 # Telltail live fire for simplified GARY
 
-This test is prepared but must not be launched while GARY is administratively parked.
+This packet is the single authorised Telltail live-fire for the simplified
+GARY. It runs only from `master` after the simplification has passed its cheap
+CI gates.
 
 ## Real job
 
@@ -59,10 +61,12 @@ Keep measurement outside the worker wherever possible so the worker cannot grade
 
 ## Launch
 
-Only after Matthew explicitly says **unpark GARY**:
+After the simplification is merged to `master`, the protected workflow launches
+this packet once:
 
 ```powershell
 go run ./cmd/gary work gary/work/telltail-v03-single-agent.json
 ```
 
-Until then, this file is preparation only.
+The packet must not be rewritten, decomposed, retried as a paid implementation,
+or handed to a second agent.

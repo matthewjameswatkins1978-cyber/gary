@@ -3,7 +3,7 @@ name: GARY Telltail single-agent live fire
 on:
   push:
     branches:
-      - simplify/single-agent-v0
+      - master
     paths:
       - ".github/GARY_TELLTAIL_LIVE_FIRE_TRIGGER"
 
