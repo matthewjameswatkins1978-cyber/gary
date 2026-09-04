@@ -1,0 +1,102 @@
+name: GARY Telltail single-agent live fire
+
+on:
+  push:
+    branches:
+      - simplify/single-agent-v0
+    paths:
+      - ".github/GARY_TELLTAIL_LIVE_FIRE_TRIGGER"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: gary-telltail-single-agent-live-fire
+  cancel-in-progress: false
+
+jobs:
+  live-fire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      GARY_GCP_PROJECT: ${{ vars.GARY_GCP_PROJECT }}
+      GARY_GCP_REGION: ${{ vars.GARY_GCP_REGION }}
+      GARY_WIF_PROVIDER: ${{ vars.GARY_WIF_PROVIDER }}
+      GARY_DISPATCH_SERVICE_ACCOUNT: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+      GARY_IMPLEMENTER_MODEL: gemini-3.8-flash
+      GARY_MAX_COST_USD: "0.06"
+      GARY_RESULTS_DIR: results
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Verify required control-plane configuration
+        env:
+          GARY_GITHUB_APP_ID: ${{ vars.GARY_GITHUB_APP_ID }}
+          GARY_GITHUB_APP_INSTALLATION_ID: ${{ vars.GARY_GITHUB_APP_INSTALLATION_ID }}
+          GARY_GITHUB_APP_PRIVATE_KEY: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$GARY_GCP_PROJECT"
+          test -n "$GARY_GCP_REGION"
+          test -n "$GARY_WIF_PROVIDER"
+          test -n "$GARY_DISPATCH_SERVICE_ACCOUNT"
+          test -n "$GARY_GITHUB_APP_ID"
+          test -n "$GARY_GITHUB_APP_INSTALLATION_ID"
+          test -n "$GARY_GITHUB_APP_PRIVATE_KEY"
+
+      - name: Authenticate to Google Cloud with OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GARY_WIF_PROVIDER }}
+          service_account: ${{ vars.GARY_DISPATCH_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify simplified GARY before paid execution
+        run: |
+          set -euo pipefail
+          go test ./...
+          go vet ./...
+          help="$(go run ./cmd/gary help 2>&1)"
+          grep -q 'work <job.json>' <<<"$help"
+          ! grep -q 'master       Run' <<<"$help"
+          ! grep -q 'run-many' <<<"$help"
+
+      - name: Run exactly one Telltail build agent
+        id: livefire
+        env:
+          GARY_GITHUB_APP_ID: ${{ vars.GARY_GITHUB_APP_ID }}
+          GARY_GITHUB_APP_INSTALLATION_ID: ${{ vars.GARY_GITHUB_APP_INSTALLATION_ID }}
+          GARY_GITHUB_APP_PRIVATE_KEY: ${{ secrets.GARY_GITHUB_APP_PRIVATE_KEY }}
+        run: |
+          set -o pipefail
+          go run ./cmd/gary work gary/work/telltail-v03-single-agent.json 2>&1 | tee live-fire-output.txt
+
+      - name: Summarize persisted result
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f results/runs/telltail-v03-single-agent.json ]; then
+            cat results/runs/telltail-v03-single-agent.json | tee live-fire-result.json
+          else
+            printf '{"final_status":"NO_RESULT_RECORD"}\n' | tee live-fire-result.json
+          fi
+
+      - name: Upload live-fire evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gary-telltail-single-agent-live-fire
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            live-fire-output.txt
+            live-fire-result.json
+            results/**
