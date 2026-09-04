@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,11 +30,41 @@ func TestLoadWorkManifestReadsWholePacket(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Task != want {
+	if got.Task != want || !bytes.Equal(got.PacketBytes, []byte(want)) {
 		t.Fatalf("whole packet changed during intake\ngot: %q\nwant:%q", got.Task, want)
+	}
+	if got.PacketDigest == "" || got.PacketSource != packet {
+		t.Fatalf("packet provenance missing: digest=%q source=%q", got.PacketDigest, got.PacketSource)
 	}
 	if got.MaxRunSeconds != 3600 {
 		t.Fatalf("default max_run_seconds=%d want 3600", got.MaxRunSeconds)
+	}
+}
+
+func TestPersistWorkPacketIsExactAndImmutable(t *testing.T) {
+	dir := t.TempDir()
+	m := &workManifest{ID: "packet-test", PacketBytes: []byte("a\r\nb\n"), PacketDigest: "0123456789abcdef", PacketSource: "JOB.md"}
+	if err := persistWorkPacket(dir, m); err != nil {
+		t.Fatal(err)
+	}
+	storedDir := filepath.Join(dir, "packets", "packet-test-0123456789ab")
+	got, err := os.ReadFile(filepath.Join(storedDir, "packet.raw"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, m.PacketBytes) {
+		t.Fatalf("stored packet changed bytes: %q", got)
+	}
+	var p workPacketProvenance
+	data, err := os.ReadFile(filepath.Join(storedDir, "provenance.json"))
+	if err != nil || json.Unmarshal(data, &p) != nil {
+		t.Fatalf("bad provenance: %v", err)
+	}
+	if p.SHA256 != m.PacketDigest || p.SizeBytes != len(m.PacketBytes) {
+		t.Fatalf("bad provenance: %+v", p)
+	}
+	if err := persistWorkPacket(dir, m); err != nil {
+		t.Fatalf("identical packet should be idempotent: %v", err)
 	}
 }
 
