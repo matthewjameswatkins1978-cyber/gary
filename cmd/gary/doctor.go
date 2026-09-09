@@ -43,14 +43,16 @@ func runChecks() []check {
 	checks = append(checks, checkGoimports())
 	checks = append(checks, checkStaticcheck())
 	checks = append(checks, checkGit())
-	checks = append(checks, checkDocker())
-	checks = append(checks, checkGcloud())
+	checks = append(checks, checkCodex())
 	checks = append(checks, checkGitHubCLI())
-	checks = append(checks, checkGoogleAccount())
-	checks = append(checks, checkGCPProject())
-	checks = append(checks, checkGCPRegion())
-	checks = append(checks, checkGeminiAPIKey())
 	checks = append(checks, checkConfig())
+	if os.Getenv("GARY_ENABLE_BATCH") == "1" {
+		checks = append(checks, checkDocker())
+		checks = append(checks, checkGcloud())
+		checks = append(checks, checkGoogleAccount())
+		checks = append(checks, checkGCPProject())
+		checks = append(checks, checkGCPRegion())
+	}
 
 	return checks
 }
@@ -119,6 +121,14 @@ func checkGit() check {
 		return check{"Git", "FAIL", "not found on PATH"}
 	}
 	return check{"Git", "PASS", strings.TrimSpace(out)}
+}
+
+func checkCodex() check {
+	out, err := runCmd("codex", "--version")
+	if err != nil {
+		return check{"Codex App Server", "FAIL", "codex not found on PATH"}
+	}
+	return check{"Codex App Server", "PASS", strings.TrimSpace(out)}
 }
 
 func checkDocker() check {
@@ -211,14 +221,6 @@ func checkConfig() check {
 	parts = append(parts, "results="+cfg.ResultsDir)
 
 	return check{"Config", "PASS", strings.Join(parts, ", ")}
-}
-
-func checkGeminiAPIKey() check {
-	key := os.Getenv("GEMINI_API_KEY")
-	if key == "" {
-		return check{"Gemini API key", "FAIL", "set GEMINI_API_KEY environment variable"}
-	}
-	return check{"Gemini API key", "OK", "set"}
 }
 
 func runCmd(name string, args ...string) (string, error) {

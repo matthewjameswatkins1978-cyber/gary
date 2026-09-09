@@ -1,5 +1,17 @@
 # GARY
 
+## Current prototype: local Luna Yardmaster
+
+The normal path is now local-first: `gary work job.json` starts one durable
+Luna thread through the local Codex App Server and exposes a small yard boundary
+for one local Git worktree, one Codex worker, real status/diff inspection,
+deterministic acceptance and a persisted Matthew blocker. GARY does not rebuild
+an agent supervisor or cloud scheduler. See
+[`docs/LUNA_YARDMASTER_PROTOTYPE.md`](docs/LUNA_YARDMASTER_PROTOTYPE.md).
+
+The former Google Cloud Batch path is retained only as the explicit
+`gary work-batch job.json` legacy command.
+
 GARY is a small harness for giving one capable AI agent one complete software job in an isolated cloud workspace.
 
 The agent gets the whole job, the repository, ordinary development freedom, and a fixed model. GARY provides the boring machinery around it: short-lived repository access, Google Cloud Batch isolation, cost/runtime ceilings, artifact capture, independent acceptance checks, and delivery of the exact verified branch.

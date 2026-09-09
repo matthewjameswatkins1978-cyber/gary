@@ -41,9 +41,9 @@ type blockerRecord struct {
 	UnblockAction string `json:"unblock_action"`
 }
 
-func cmdWork() {
+func cmdWorkBatch() {
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "Usage: gary work <job.json>")
+		fmt.Fprintln(os.Stderr, "Usage: gary work-batch <job.json>")
 		os.Exit(1)
 	}
 	manifestPath := os.Args[2]

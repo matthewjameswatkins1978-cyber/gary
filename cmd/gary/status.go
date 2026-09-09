@@ -1,9 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
@@ -15,72 +16,64 @@ func cmdStatus() {
 		fmt.Fprintf(os.Stderr, "config load failed: %v\n", err)
 		os.Exit(1)
 	}
-
-	fmt.Println("GARY // STATUS")
-	fmt.Println()
-	fmt.Printf("Execution: single autonomous agent\n")
-	fmt.Printf("Model:     %s\n", cfg.ImplementerModel)
-
-	activeJobs := checkActiveBatchJobs(cfg)
-	if cfg.GCPProject != "" && cfg.GCPRegion != "" {
-		fmt.Printf("Active Batch jobs: %d\n", len(activeJobs))
-		for _, j := range activeJobs {
-			fmt.Printf("  %s\n", j)
-		}
-	} else {
-		fmt.Println("Active Batch jobs: unknown (no GCP config)")
+	stateDir := os.Getenv("GARY_STATE_DIR")
+	if stateDir == "" {
+		stateDir = filepath.Join(".", ".gary-state")
 	}
-
+	stateDir, _ = filepath.Abs(stateDir)
+	fmt.Println("GARY // LOCAL STATUS")
+	fmt.Println()
+	fmt.Printf("Runtime:   Luna + local Codex App Server\n")
+	fmt.Printf("State:     %s\n", stateDir)
+	files, _ := filepath.Glob(filepath.Join(stateDir, "jobs", "*.json"))
+	if len(files) == 0 {
+		fmt.Println("Jobs:      none")
+	} else {
+		fmt.Printf("Jobs:      %d\n", len(files))
+		for _, path := range files {
+			data, readErr := os.ReadFile(path)
+			var state struct {
+				Job struct {
+					ID string `json:"id"`
+				} `json:"job"`
+				ThreadID string `json:"thread_id"`
+				Status   string `json:"status"`
+				Worker   *struct {
+					ID     string `json:"id"`
+					Status string `json:"status"`
+				} `json:"worker"`
+			}
+			if readErr != nil || json.Unmarshal(data, &state) != nil {
+				fmt.Printf("  %s: unreadable state\n", filepath.Base(path))
+				continue
+			}
+			worker := "none"
+			if state.Worker != nil {
+				worker = state.Worker.ID + "/" + state.Worker.Status
+			}
+			fmt.Printf("  %s: %s thread=%s worker=%s\n", state.Job.ID, state.Status, shortThread(state.ThreadID), worker)
+		}
+	}
 	costs := SummarizeCosts(cfg.ResultsDir, "")
 	if costs.LastRunSet {
-		fmt.Printf("Last run:   %s (%s)\n", costs.LastRun.JobID, costs.LastRun.Status)
-		fmt.Printf("Last cost:  $%.4f (%s)\n", costs.LastRun.TotalCost(), ledgerCostQuality(costs.LastRun))
+		fmt.Printf("Legacy cost ledger: $%.4f last=%s\n", costs.LastRun.TotalCost(), costs.LastRun.JobID)
 	} else {
-		fmt.Println("Last run:   none")
+		fmt.Println("Legacy cost ledger: empty")
 	}
-	fmt.Printf("Month cost: $%.4f\n", costs.MonthCost)
-	fmt.Printf("Life cost:  $%.4f\n", costs.LifeCost)
-
-	if cfg.MaxCostUSD > 0 {
-		fmt.Printf("Run budget: $%.2f pre-dispatch ceiling\n", cfg.MaxCostUSD)
+	if os.Getenv("GARY_ENABLE_BATCH") == "1" {
+		fmt.Println("Legacy Batch: enabled explicitly")
 	} else {
-		fmt.Println("Run budget: not configured")
-	}
-	if len(activeJobs) == 0 {
-		fmt.Println("Cloud:      IDLE")
-	} else {
-		fmt.Println("Cloud:      ACTIVE")
+		fmt.Println("Legacy Batch: disabled (set GARY_ENABLE_BATCH=1 only for old experiments)")
 	}
 }
 
-func ledgerCostQuality(entry LedgerEntry) string {
-	if entry.Cost != nil {
-		return entry.Cost.PricingStatus
+func shortThread(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "none"
 	}
-	return "LEGACY_ESTIMATE"
-}
-
-func checkActiveBatchJobs(cfg *config.Config) []string {
-	if cfg.GCPProject == "" || cfg.GCPRegion == "" {
-		return nil
+	if len(id) > 18 {
+		return id[:18]
 	}
-	args := []string{
-		"batch", "jobs", "list",
-		"--project", cfg.GCPProject,
-		"--location", cfg.GCPRegion,
-		"--format", "value(name,status.state)",
-		"--filter", "status.state!=SUCCEEDED AND status.state!=FAILED AND status.state!=CANCELLED AND status.state!=DELETED",
-	}
-	out, err := exec.Command("gcloud", args...).CombinedOutput()
-	if err != nil {
-		return nil
-	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	var active []string
-	for _, line := range lines {
-		if line = strings.TrimSpace(line); line != "" {
-			active = append(active, line)
-		}
-	}
-	return active
+	return id
 }

@@ -1,0 +1,11 @@
+{
+  "id": "local-luna-canary",
+  "repo_path": "C:/path/to/a/disposable/git/repository",
+  "base_ref": "main",
+  "task": "Add a small, tested feature. Inspect the repository first, keep the change bounded, and leave the result committed in the worker worktree.",
+  "acceptance": [
+    "go test ./...",
+    "go vet ./..."
+  ],
+  "state_dir": "C:/path/to/local/gary-state"
+}
