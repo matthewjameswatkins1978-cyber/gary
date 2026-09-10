@@ -18,7 +18,10 @@ Matthew -> gary work -> local Codex App Server -> durable Luna thread
 
 ## Run
 
-Use a disposable local Git repository and copy `examples/luna-yardmaster/job.example.json`.
+The canonical front door is `gary do`; use a prepared manifest only when
+recovering or testing the lower-level boundary. Use a disposable local Git
+repository and copy `examples/luna-yardmaster/job.example.json` for a direct
+prototype run.
 Set `repo_path` to its absolute path, then run:
 
 ```powershell
@@ -30,9 +33,11 @@ worker output, last message, acceptance result and blocker record. Set
 `GARY_STATE_DIR` only if a shared state location is preferred; otherwise the
 manifest's `state_dir`, or `.gary-state` beside the manifest, is used.
 
-`gpt-5.6-luna` is the only worker profile enabled by this prototype. The
-worker is launched through the installed `codex exec --json` command in a
-fresh local worktree. It receives no GitHub token and does not push.
+The baseline worker profile is `gpt-5.6-luna`. The explicit `mimo-v2.5`
+profile is launched through the same installed `codex exec --json` boundary
+with the MiMo Token Plan Responses provider override. It requires a
+process-injected `MIMO_API_KEY` and never persists that credential. Workers run
+in fresh local worktrees, receive no GitHub token and do not push.
 
 ## Restart and Matthew boundary
 

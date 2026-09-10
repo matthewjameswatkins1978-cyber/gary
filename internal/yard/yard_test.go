@@ -7,6 +7,37 @@ import (
 	"testing"
 )
 
+func TestWorkerCommandProfiles(t *testing.T) {
+	t.Setenv("MIMO_API_KEY", "test-only-not-a-real-key")
+	t.Setenv("GARY_MIMO_BASE_URL", "https://token-plan-ams.xiaomimimo.com/v1")
+
+	args, metadata, err := workerCommand("gpt-5.6-luna")
+	if err != nil || strings.Join(args, " ") != "exec --json -m gpt-5.6-luna" {
+		t.Fatalf("baseline command = %#v metadata=%+v err=%v", args, metadata, err)
+	}
+
+	args, metadata, err = workerCommand("mimo-v2.5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"-m mimo-v2.5", "model_provider=\"mimo\"", "model_providers.mimo.wire_api=\"responses\"", "model_providers.mimo.base_url=\"https://token-plan-ams.xiaomimimo.com/v1\"", "web_search=\"disabled\""} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("MiMo command missing %q: %s", want, joined)
+		}
+	}
+	if metadata.Provider != "Xiaomi MiMo" || metadata.BillingClass != "Token Plan" || metadata.IdentityConfidence != "LOW" {
+		t.Fatalf("unexpected MiMo metadata: %+v", metadata)
+	}
+}
+
+func TestWorkerCommandRejectsUnconfiguredMiMo(t *testing.T) {
+	t.Setenv("MIMO_API_KEY", "")
+	if _, _, err := workerCommand("mimo-v2.5"); err == nil || !strings.Contains(err.Error(), "MIMO_API_KEY") {
+		t.Fatalf("expected concrete missing-credential error, got %v", err)
+	}
+}
+
 func TestStateSurvivesManagerRestart(t *testing.T) {
 	root := t.TempDir()
 	spec := JobSpec{ID: "restart-test", RepoPath: root, BaseRef: "main", Task: "test persistence", Acceptance: []string{"exit 0"}}

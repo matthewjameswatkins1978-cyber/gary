@@ -21,11 +21,12 @@ import (
 const StateVersion = 1
 
 type JobSpec struct {
-	ID         string   `json:"id"`
-	RepoPath   string   `json:"repo_path"`
-	BaseRef    string   `json:"base_ref"`
-	Task       string   `json:"task"`
-	Acceptance []string `json:"acceptance"`
+	ID            string   `json:"id"`
+	RepoPath      string   `json:"repo_path"`
+	BaseRef       string   `json:"base_ref"`
+	WorkerProfile string   `json:"worker_profile,omitempty"`
+	Task          string   `json:"task"`
+	Acceptance    []string `json:"acceptance"`
 }
 
 type JobState struct {
@@ -41,21 +42,27 @@ type JobState struct {
 }
 
 type WorkerRecord struct {
-	ID              string `json:"id"`
-	JobID           string `json:"job_id"`
-	Profile         string `json:"profile"`
-	Task            string `json:"task"`
-	Worktree        string `json:"worktree"`
-	Branch          string `json:"branch"`
-	CommitSHA       string `json:"commit_sha,omitempty"`
-	PID             int    `json:"pid"`
-	LogPath         string `json:"log_path"`
-	LastMessagePath string `json:"last_message_path"`
-	AcceptancePath  string `json:"acceptance_path"`
-	Status          string `json:"status"`
-	ExitCode        *int   `json:"exit_code,omitempty"`
-	StartedAt       string `json:"started_at"`
-	FinishedAt      string `json:"finished_at,omitempty"`
+	ID                 string `json:"id"`
+	JobID              string `json:"job_id"`
+	Profile            string `json:"profile"`
+	Provider           string `json:"provider,omitempty"`
+	Harness            string `json:"harness,omitempty"`
+	Endpoint           string `json:"endpoint,omitempty"`
+	BillingClass       string `json:"billing_class,omitempty"`
+	Certification      string `json:"certification,omitempty"`
+	IdentityConfidence string `json:"identity_confidence,omitempty"`
+	Task               string `json:"task"`
+	Worktree           string `json:"worktree"`
+	Branch             string `json:"branch"`
+	CommitSHA          string `json:"commit_sha,omitempty"`
+	PID                int    `json:"pid"`
+	LogPath            string `json:"log_path"`
+	LastMessagePath    string `json:"last_message_path"`
+	AcceptancePath     string `json:"acceptance_path"`
+	Status             string `json:"status"`
+	ExitCode           *int   `json:"exit_code,omitempty"`
+	StartedAt          string `json:"started_at"`
+	FinishedAt         string `json:"finished_at,omitempty"`
 }
 
 type Blocker struct {
@@ -127,7 +134,7 @@ func NewManager(spec JobSpec, stateDir string) (*Manager, error) {
 		if err := json.Unmarshal(data, &state); err != nil {
 			return nil, fmt.Errorf("read job state: %w", err)
 		}
-		if state.Job.ID != spec.ID || filepath.Clean(state.Job.RepoPath) != filepath.Clean(repo) || state.Job.BaseRef != spec.BaseRef {
+		if state.Job.ID != spec.ID || filepath.Clean(state.Job.RepoPath) != filepath.Clean(repo) || state.Job.BaseRef != spec.BaseRef || state.Job.WorkerProfile != spec.WorkerProfile {
 			return nil, errors.New("existing job state conflicts with supplied job")
 		}
 		state.StatePath = path
@@ -138,7 +145,7 @@ func NewManager(spec JobSpec, stateDir string) (*Manager, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	return &Manager{
 		stateDir: stateDir,
-		state:    JobState{Version: StateVersion, Job: JobSpec{ID: spec.ID, RepoPath: repo, BaseRef: spec.BaseRef, Task: spec.Task, Acceptance: append([]string(nil), spec.Acceptance...)}, Status: "RUNNING", CreatedAt: now, UpdatedAt: now, StatePath: path},
+		state:    JobState{Version: StateVersion, Job: JobSpec{ID: spec.ID, RepoPath: repo, BaseRef: spec.BaseRef, WorkerProfile: spec.WorkerProfile, Task: spec.Task, Acceptance: append([]string(nil), spec.Acceptance...)}, Status: "RUNNING", CreatedAt: now, UpdatedAt: now, StatePath: path},
 	}, nil
 }
 
@@ -206,10 +213,17 @@ func (m *Manager) SpawnWorker(task, profile string) (WorkerView, error) {
 		return m.workerViewLocked(m.state.Worker, true), nil
 	}
 	if profile == "" {
+		profile = m.state.Job.WorkerProfile
+	}
+	if profile == "" {
 		profile = "gpt-5.6-luna"
 	}
-	if profile != "gpt-5.6-luna" {
-		return WorkerView{}, fmt.Errorf("unsupported prototype worker profile %q; only gpt-5.6-luna is enabled", profile)
+	if required := strings.TrimSpace(m.state.Job.WorkerProfile); required != "" && profile != required {
+		return WorkerView{}, fmt.Errorf("job requires worker profile %q; refusing substitution with %q", required, profile)
+	}
+	args, metadata, err := workerCommand(profile)
+	if err != nil {
+		return WorkerView{}, err
 	}
 	workerID := "worker-" + time.Now().UTC().Format("20060102-150405.000000000")
 	workerRoot := filepath.Join(m.stateDir, "worktrees", safeName(m.state.Job.ID, 80)+"-"+safeName(workerID, 40))
@@ -231,7 +245,8 @@ func (m *Manager) SpawnWorker(task, profile string) (WorkerView, error) {
 		return WorkerView{}, fmt.Errorf("open worker log: %w", err)
 	}
 	workerTask := buildWorkerPrompt(task, m.state.Job)
-	cmd := exec.Command("codex", "exec", "--json", "-m", profile, "-C", workerRoot, "-o", lastMessagePath, "--dangerously-bypass-approvals-and-sandbox", workerTask)
+	args = append(args, "-C", workerRoot, "-o", lastMessagePath, "--dangerously-bypass-approvals-and-sandbox", workerTask)
+	cmd := exec.Command("codex", args...)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {
@@ -239,7 +254,7 @@ func (m *Manager) SpawnWorker(task, profile string) (WorkerView, error) {
 		return WorkerView{}, fmt.Errorf("start Codex worker: %w", err)
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	m.state.Worker = &WorkerRecord{ID: workerID, JobID: m.state.Job.ID, Profile: profile, Task: task, Worktree: workerRoot, Branch: branch, PID: cmd.Process.Pid, LogPath: logPath, LastMessagePath: lastMessagePath, AcceptancePath: acceptancePath, Status: "RUNNING", StartedAt: now}
+	m.state.Worker = &WorkerRecord{ID: workerID, JobID: m.state.Job.ID, Profile: profile, Provider: metadata.Provider, Harness: metadata.Harness, Endpoint: metadata.Endpoint, BillingClass: metadata.BillingClass, Certification: metadata.Certification, IdentityConfidence: metadata.IdentityConfidence, Task: task, Worktree: workerRoot, Branch: branch, PID: cmd.Process.Pid, LogPath: logPath, LastMessagePath: lastMessagePath, AcceptancePath: acceptancePath, Status: "RUNNING", StartedAt: now}
 	m.state.Status = "RUNNING"
 	if err := m.saveLocked(); err != nil {
 		_ = cmd.Process.Kill()
@@ -250,10 +265,63 @@ func (m *Manager) SpawnWorker(task, profile string) (WorkerView, error) {
 	return m.workerViewLocked(m.state.Worker, true), nil
 }
 
+type workerMetadata struct {
+	Provider           string
+	Harness            string
+	Endpoint           string
+	BillingClass       string
+	Certification      string
+	IdentityConfidence string
+}
+
+func workerCommand(profile string) ([]string, workerMetadata, error) {
+	if profile == "" {
+		profile = "gpt-5.6-luna"
+	}
+	switch profile {
+	case "gpt-5.6-luna":
+		return []string{"exec", "--json", "-m", profile}, workerMetadata{
+			Provider: "OpenAI", Harness: "Codex CLI", BillingClass: "included", Certification: "baseline",
+		}, nil
+	case "mimo-v2.5":
+		if strings.TrimSpace(os.Getenv("MIMO_API_KEY")) == "" {
+			return nil, workerMetadata{}, errors.New("worker profile mimo-v2.5 unavailable: MIMO_API_KEY is not configured")
+		}
+		endpoint := strings.TrimSpace(os.Getenv("GARY_MIMO_BASE_URL"))
+		if endpoint == "" {
+			endpoint = "https://token-plan-ams.xiaomimimo.com/v1"
+		}
+		return []string{
+				"exec", "--json", "-m", profile,
+				"-c", "model_provider=\"mimo\"",
+				"-c", "model_providers.mimo.name=\"mimo\"",
+				"-c", "model_providers.mimo.base_url=\"" + endpoint + "\"",
+				"-c", "model_providers.mimo.env_key=\"MIMO_API_KEY\"",
+				"-c", "model_providers.mimo.wire_api=\"responses\"",
+				"-c", "model_reasoning_effort=\"high\"",
+				"-c", "model_supports_reasoning_summaries=true",
+				"-c", "model_reasoning_summary=\"none\"",
+				"-c", "model_context_window=1048576",
+				"-c", "web_search=\"disabled\"",
+			}, workerMetadata{
+				Provider: "Xiaomi MiMo", Harness: "Codex CLI / Responses API", Endpoint: endpoint,
+				BillingClass: "Token Plan", Certification: "candidate", IdentityConfidence: "LOW",
+			}, nil
+	default:
+		return nil, workerMetadata{}, fmt.Errorf("unsupported worker profile %q; supported profiles are gpt-5.6-luna and mimo-v2.5", profile)
+	}
+}
+
 func buildWorkerPrompt(task string, job JobSpec) string {
+	profileInstruction := "Use the worker profile selected by GARY."
+	if job.WorkerProfile != "" {
+		profileInstruction = fmt.Sprintf("GARY requires the exact worker profile %q. Do not substitute another model or provider.", job.WorkerProfile)
+	}
 	return fmt.Sprintf(`You are the only implementation worker for a GARY local prototype job.
 
 Work only in the supplied current git worktree. Own this bounded task, inspect first, implement the smallest maintainable change, run the declared checks, and leave the verifiable changes in the worktree. Do not create another agent, supervisor, cloud job, or worktree. Do not push or modify credentials.
+
+%s
 
 TASK:
 %s
@@ -261,7 +329,7 @@ TASK:
 ACCEPTANCE COMMANDS (GARY will rerun these independently):
 %s
 
-When complete, commit the intentional changes with a clear message and report what you actually verified. If an external human-only boundary is genuinely reached, stop and explain the exact action required.`, task, strings.Join(job.Acceptance, "\n- "))
+When complete, commit the intentional changes with a clear message and report what you actually verified. If an external human-only boundary is genuinely reached, stop and explain the exact action required.`, profileInstruction, task, strings.Join(job.Acceptance, "\n- "))
 }
 
 func (m *Manager) waitWorker(cmd *exec.Cmd, logFile *os.File, workerID string) {

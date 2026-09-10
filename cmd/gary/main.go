@@ -19,6 +19,16 @@ func main() {
 		cmdDoctor()
 	case "work":
 		cmdYardmaster()
+	case "do":
+		cmdDo()
+	case "resume":
+		cmdResume()
+	case "needs-me":
+		cmdNeedsMatthew()
+	case "park":
+		cmdPark()
+	case "unpark":
+		cmdUnpark()
 	case "work-batch":
 		cmdWorkBatch()
 	case "yardmaster":
@@ -45,8 +55,13 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: gary <command>")
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Commands:")
+	fmt.Fprintln(os.Stderr, "  do <job>         Run one ordinary-language job through canonical GARY")
 	fmt.Fprintln(os.Stderr, "  work <job.json>  Give Luna one whole local-first job")
 	fmt.Fprintln(os.Stderr, "  yardmaster <job.json>  Alias for work")
+	fmt.Fprintln(os.Stderr, "  resume <job-id>  Resume a persisted job after Matthew's answer")
+	fmt.Fprintln(os.Stderr, "  needs-me         Show persisted human-only blockers")
+	fmt.Fprintln(os.Stderr, "  park             Prevent new jobs")
+	fmt.Fprintln(os.Stderr, "  unpark           Allow new jobs")
 	fmt.Fprintln(os.Stderr, "  work-batch <job.json>  Explicit legacy Google Cloud Batch path")
 	fmt.Fprintln(os.Stderr, "  status           Show recorded work status")
 	fmt.Fprintln(os.Stderr, "  cost             Show recorded job cost")

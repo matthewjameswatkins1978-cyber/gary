@@ -1,6 +1,6 @@
-# GARY
+# GARY Reborn
 
-## Current prototype: local Luna Yardmaster
+## Canonical product: local Luna Yardmaster
 
 The normal path is now local-first: `gary work job.json` starts one durable
 Luna thread through the local Codex App Server and exposes a small yard boundary
@@ -12,40 +12,39 @@ an agent supervisor or cloud scheduler. See
 The former Google Cloud Batch path is retained only as the explicit
 `gary work-batch job.json` legacy command.
 
-GARY is a small harness for giving one capable AI agent one complete software job in an isolated cloud workspace.
+GARY is Matthew's local foreman for one complete software job. The canonical
+path is a durable Luna Yardmaster thread, isolated Git worktrees, bounded Codex
+workers, deterministic acceptance and recoverable human boundaries.
 
-The agent gets the whole job, the repository, ordinary development freedom, and a fixed model. GARY provides the boring machinery around it: short-lived repository access, Google Cloud Batch isolation, cost/runtime ceilings, artifact capture, independent acceptance checks, and delivery of the exact verified branch.
+The local controller stays deliberately thin. Luna owns job judgement; Git,
+the filesystem and trusted acceptance own evidence. A worker's prose never
+means DONE. The current implementation supports the proven Luna route and the
+explicit Codex profiles `gpt-5.6-luna` and `mimo-v2.5`; an unconfigured route is
+rejected before dispatch.
 
-There is no AI manager, worker hierarchy, live supervisor, wave planner, automatic retry loop, or automatic model escalation in the normal execution path.
+There is no AI swarm, cloud scheduler, or second orchestration engine in the
+normal execution path.
 
 ## Core idea
 
 ```text
-whole job packet
-      |
-      v
-  gary work
-      |
-      v
-one Gemini 3.8 Flash agent
-in one disposable Batch workspace
-      |
-      v
-candidate patch + evidence
-      |
-      v
-independent acceptance
-      |
-   +--+--+
-   |     |
- DONE  BLOCKED / FAILED
+Matthew -> gary do -> immutable packet -> Luna Yardmaster
+                                      |
+                         isolated worker worktree
+                                      |
+                         trusted acceptance -> DONE
 ```
 
 The implementation agent chooses how to do the work. It may inspect, research, install ordinary dependencies and tools, change tactics, debug, and test without asking for permission every five minutes.
 
-It stops for the human only when progress genuinely requires something outside its authority or reach, such as an unavailable secret, inaccessible account or hardware, permission increase, material unapproved spend, consequential irreversible action, contradictory requirement needing a product decision, or a stronger model.
+It stops for the human only when progress genuinely requires something outside
+its authority or reach, such as an unavailable secret, inaccessible account or
+hardware, permission increase, material unapproved spend, consequential
+irreversible action, or contradictory requirement needing a product decision.
 
-A stronger model is always a human decision. GARY never routes or escalates models automatically.
+MiMo Token Plan is used only through the Codex CLI Responses route. GARY does
+not store the API key; set `MIMO_API_KEY` in the invoking process and override
+the regional endpoint with `GARY_MIMO_BASE_URL` when needed.
 
 ## Job format
 
@@ -75,11 +74,16 @@ GARY work is enabled for the explicitly authorised live-fire run. Outside an
 authorised run, parking is an external human-controlled switch; it is not an
 agent lifecycle state.
 
-When enabled, the execution front door is:
+The normal execution front door is:
 
 ```powershell
-go run ./cmd/gary work job.json
+gary do "Review this repository" --accept "go test ./..."
+gary do --file .\JOB.md --repo C:\work\project --base master --accept "go test ./..."
 ```
+
+The lower-level `work <job.json>` command remains available for prepared
+manifests and recovery. GARY stores new front-door jobs below
+`%USERPROFILE%\.gary`; set `GARY_STATE_ROOT` to override that location.
 
 Useful non-work commands:
 
@@ -99,7 +103,7 @@ go vet ./...
 The meaningful work outcomes are deliberately small:
 
 - `DONE` — the exact candidate passed independent acceptance and was delivered;
-- `BLOCKED` — responsible continuation requires something outside GARY's authority or reach;
+- `NEEDS_MATTHEW` — responsible continuation requires something outside GARY's authority or reach and the job is resumable;
 - `FAILED` — execution or implementation ended without completion and without a genuine external blocker.
 
 `RUNNING` is observable while the Batch job is active. Parking is an external administrative switch, not an agent lifecycle state machine.

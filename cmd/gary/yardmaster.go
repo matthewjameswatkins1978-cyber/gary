@@ -14,18 +14,20 @@ import (
 	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/appserver"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/yard"
 )
 
 type yardJobManifest struct {
-	ID         string   `json:"id"`
-	RepoPath   string   `json:"repo_path"`
-	Repo       string   `json:"repo,omitempty"`
-	BaseRef    string   `json:"base_ref"`
-	PacketPath string   `json:"packet_path,omitempty"`
-	Task       string   `json:"task,omitempty"`
-	Acceptance []string `json:"acceptance"`
-	StateDir   string   `json:"state_dir,omitempty"`
+	ID            string   `json:"id"`
+	RepoPath      string   `json:"repo_path"`
+	Repo          string   `json:"repo,omitempty"`
+	BaseRef       string   `json:"base_ref"`
+	WorkerProfile string   `json:"worker_profile,omitempty"`
+	PacketPath    string   `json:"packet_path,omitempty"`
+	Task          string   `json:"task,omitempty"`
+	Acceptance    []string `json:"acceptance"`
+	StateDir      string   `json:"state_dir,omitempty"`
 }
 
 const yardmasterPrompt = `You are Luna, the persistent GARY Yardmaster brain.
@@ -81,7 +83,7 @@ func cmdYardmaster() {
 		stateDir = os.Getenv("GARY_STATE_DIR")
 	}
 	if stateDir == "" {
-		stateDir = filepath.Join(filepath.Dir(manifestPath), ".gary-state")
+		stateDir = config.StateRoot()
 	}
 	manager, err := yard.NewManager(manifest.toSpec(), stateDir)
 	if err != nil {
@@ -223,11 +225,15 @@ func loadYardJobManifest(path string) (*yardJobManifest, error) {
 }
 
 func (m yardJobManifest) toSpec() yard.JobSpec {
-	return yard.JobSpec{ID: m.ID, RepoPath: m.RepoPath, BaseRef: m.BaseRef, Task: m.Task, Acceptance: m.Acceptance}
+	return yard.JobSpec{ID: m.ID, RepoPath: m.RepoPath, BaseRef: m.BaseRef, WorkerProfile: m.WorkerProfile, Task: m.Task, Acceptance: m.Acceptance}
 }
 
 func buildYardmasterInput(m *yardJobManifest, state yard.JobState, answer string) string {
-	return fmt.Sprintf("%s\n\nJOB ID: %s\nTARGET REPOSITORY: %s\nBASE REF: %s\nACCEPTANCE:\n- %s\n\nWHOLE JOB PACKET:\n%s\n\nDURABLE GARY STATE:\n%s\n\n%s", yardmasterPrompt, m.ID, m.RepoPath, m.BaseRef, strings.Join(m.Acceptance, "\n- "), m.Task, stateSummary(state), answerSummary(answer))
+	profile := m.WorkerProfile
+	if profile == "" {
+		profile = "not fixed; Luna may select the baseline profile"
+	}
+	return fmt.Sprintf("%s\n\nJOB ID: %s\nTARGET REPOSITORY: %s\nBASE REF: %s\nREQUIRED WORKER PROFILE: %s\nACCEPTANCE:\n- %s\n\nWHOLE JOB PACKET:\n%s\n\nDURABLE GARY STATE:\n%s\n\n%s", yardmasterPrompt, m.ID, m.RepoPath, m.BaseRef, profile, strings.Join(m.Acceptance, "\n- "), m.Task, stateSummary(state), answerSummary(answer))
 }
 
 func stateSummary(state yard.JobState) string {

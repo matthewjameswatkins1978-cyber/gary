@@ -18,7 +18,7 @@ func cmdStatus() {
 	}
 	stateDir := os.Getenv("GARY_STATE_DIR")
 	if stateDir == "" {
-		stateDir = filepath.Join(".", ".gary-state")
+		stateDir = config.StateRoot()
 	}
 	stateDir, _ = filepath.Abs(stateDir)
 	fmt.Println("GARY // LOCAL STATUS")

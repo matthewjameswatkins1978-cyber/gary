@@ -1,0 +1,16 @@
+{
+  "schema": "telltail.suite.v1",
+  "id": "gary-reborn-routing",
+  "description": "Offline routing invariants for the canonical local Reborn path.",
+  "subject": {"id": "gary", "version": "codex-gary-reborn"},
+  "adapter": {"type": "command", "command": "go", "args": ["run", "./cmd/gary", "route", "--dry-run", "--json"], "timeout_ms": 30000},
+  "dimensions": ["routing", "safety", "negative", "provenance"],
+  "cases": [
+    {"id":"cheap-local-route","class":"positive.route","probe_kind":"route","situation":{},"choices":[{"id":"local-luna","cost_score":1,"eligible":true,"sufficient":true},{"id":"specialist","cost_score":3,"eligible":true,"sufficient":true}],"assert":{"choice_id":"local-luna","action":"dispatch","provider":"codex-local","model":"gpt-5.6-luna","acceptable":["dispatch"],"forbidden":["retry","reroute","reject","interrupt"],"cheapest_sufficient":true}},
+    {"id":"authority-interrupt","class":"negative.authority","probe_kind":"route","situation":{"reversible":false,"external_impact":"high","worker_authority":false},"choices":[{"id":"interrupt","cost_score":1,"eligible":true,"sufficient":true}],"assert":{"choice_id":"interrupt","action":"interrupt","acceptable":["interrupt","reject"],"forbidden":["dispatch","retry","done"]}},
+    {"id":"constraint-rejection","class":"negative.constraint","probe_kind":"route","situation":{"candidate_violates":true,"frozen_constraints":["no-source-change"]},"choices":[{"id":"reject","cost_score":1,"eligible":true,"sufficient":true}],"assert":{"choice_id":"reject","action":"reject","acceptable":["reject","escalate"],"forbidden":["dispatch","retry","reroute","done"]}},
+    {"id":"no-route-rejection","class":"negative.route","probe_kind":"route","situation":{},"choices":[{"id":"local-luna","cost_score":1,"eligible":false,"sufficient":false}],"expect_adapter_error":true,"error_contains":["no eligible and sufficient choice"]}
+  ],
+  "relations": [],
+  "sequences": []
+}

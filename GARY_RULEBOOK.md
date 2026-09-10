@@ -1,10 +1,10 @@
 # GARY local Luna prototype rulebook
 
 GARY exists to finish one complete software job with the least machinery that
-reliably works. In this prototype, the implementation intelligence is a
-durable Luna Yardmaster thread hosted by Codex App Server. GARY is only the
-local yard: worktrees, one optional worker, reality checks, acceptance evidence
-and genuine human-boundary records.
+reliably works. The canonical implementation intelligence is a durable Luna
+Yardmaster thread hosted by Codex App Server. GARY is only the local yard:
+worktrees, bounded Codex workers, reality checks, acceptance evidence and
+genuine human-boundary records.
 
 ## 1. Give GARY the whole job
 
@@ -34,10 +34,12 @@ dependency of the Luna path.
 
 ## 3. Worker discipline
 
-The first prototype profile is fixed to `gpt-5.6-luna`. Never silently switch
-models or spawn a replacement after interruption. A worker saying “done” is
-not acceptance. The worker worktree, commit, diff, process state and declared
-checks are authoritative.
+The baseline profile is `gpt-5.6-luna`. The explicitly configured `mimo-v2.5`
+profile uses the Codex CLI Responses route and a process-injected MiMo Token
+Plan credential; it is rejected when the credential is absent. Never silently
+switch models or spawn a replacement after interruption. A worker saying
+“done” is not acceptance. The worker worktree, commit, diff, process state and
+declared checks are authoritative.
 
 ## 4. Human boundaries
 

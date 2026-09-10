@@ -19,6 +19,21 @@ type Config struct {
 	MaxCostUSD       float64
 }
 
+// StateRoot returns the canonical local GARY coordination directory. The
+// local Luna path is machine-local; provider credentials are never stored here.
+func StateRoot() string {
+	if root := os.Getenv("GARY_STATE_ROOT"); root != "" {
+		if absolute, err := filepath.Abs(root); err == nil {
+			return absolute
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".", ".gary")
+	}
+	return filepath.Join(home, ".gary")
+}
+
 func Load() (*Config, error) {
 	c := &Config{
 		GCPProject:       os.Getenv("GARY_GCP_PROJECT"),
