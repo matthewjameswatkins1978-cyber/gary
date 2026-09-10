@@ -47,7 +47,9 @@ type WorkerRecord struct {
 	Profile            string `json:"profile"`
 	Provider           string `json:"provider,omitempty"`
 	Harness            string `json:"harness,omitempty"`
+	Protocol           string `json:"protocol,omitempty"`
 	Endpoint           string `json:"endpoint,omitempty"`
+	CredentialStore    string `json:"credential_store,omitempty"`
 	BillingClass       string `json:"billing_class,omitempty"`
 	Certification      string `json:"certification,omitempty"`
 	IdentityConfidence string `json:"identity_confidence,omitempty"`
@@ -225,6 +227,9 @@ func (m *Manager) SpawnWorker(task, profile string) (WorkerView, error) {
 	if err != nil {
 		return WorkerView{}, err
 	}
+	if err := validateProfileSelection(m.state.Job, profile, metadata); err != nil {
+		return WorkerView{}, err
+	}
 	workerID := "worker-" + time.Now().UTC().Format("20060102-150405.000000000")
 	workerRoot := filepath.Join(m.stateDir, "worktrees", safeName(m.state.Job.ID, 80)+"-"+safeName(workerID, 40))
 	if err := os.MkdirAll(filepath.Dir(workerRoot), 0o755); err != nil {
@@ -245,8 +250,7 @@ func (m *Manager) SpawnWorker(task, profile string) (WorkerView, error) {
 		return WorkerView{}, fmt.Errorf("open worker log: %w", err)
 	}
 	workerTask := buildWorkerPrompt(task, m.state.Job)
-	args = append(args, "-C", workerRoot, "-o", lastMessagePath, "--dangerously-bypass-approvals-and-sandbox", workerTask)
-	cmd := exec.Command("codex", args...)
+	cmd := buildWorkerCommand(args, metadata, workerRoot, lastMessagePath, workerTask)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {
@@ -254,7 +258,7 @@ func (m *Manager) SpawnWorker(task, profile string) (WorkerView, error) {
 		return WorkerView{}, fmt.Errorf("start Codex worker: %w", err)
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	m.state.Worker = &WorkerRecord{ID: workerID, JobID: m.state.Job.ID, Profile: profile, Provider: metadata.Provider, Harness: metadata.Harness, Endpoint: metadata.Endpoint, BillingClass: metadata.BillingClass, Certification: metadata.Certification, IdentityConfidence: metadata.IdentityConfidence, Task: task, Worktree: workerRoot, Branch: branch, PID: cmd.Process.Pid, LogPath: logPath, LastMessagePath: lastMessagePath, AcceptancePath: acceptancePath, Status: "RUNNING", StartedAt: now}
+	m.state.Worker = &WorkerRecord{ID: workerID, JobID: m.state.Job.ID, Profile: profile, Provider: metadata.Provider, Harness: metadata.Harness, Protocol: metadata.Protocol, Endpoint: metadata.Endpoint, CredentialStore: metadata.CredentialStore, BillingClass: metadata.BillingClass, Certification: metadata.Certification, IdentityConfidence: metadata.IdentityConfidence, Task: task, Worktree: workerRoot, Branch: branch, PID: cmd.Process.Pid, LogPath: logPath, LastMessagePath: lastMessagePath, AcceptancePath: acceptancePath, Status: "RUNNING", StartedAt: now}
 	m.state.Status = "RUNNING"
 	if err := m.saveLocked(); err != nil {
 		_ = cmd.Process.Kill()
@@ -268,10 +272,25 @@ func (m *Manager) SpawnWorker(task, profile string) (WorkerView, error) {
 type workerMetadata struct {
 	Provider           string
 	Harness            string
+	Protocol           string
 	Endpoint           string
+	Executable         string
+	LaunchMode         string
+	CredentialStore    string
 	BillingClass       string
 	Certification      string
 	IdentityConfidence string
+	ExplicitOnly       bool
+}
+
+func validateProfileSelection(job JobSpec, profile string, metadata workerMetadata) error {
+	if required := strings.TrimSpace(job.WorkerProfile); required != "" && profile != required {
+		return fmt.Errorf("job requires worker profile %q; refusing substitution with %q", required, profile)
+	}
+	if metadata.ExplicitOnly && strings.TrimSpace(job.WorkerProfile) == "" {
+		return fmt.Errorf("worker profile %q is candidate-only; set worker_profile explicitly", profile)
+	}
+	return nil
 }
 
 func workerCommand(profile string) ([]string, workerMetadata, error) {
@@ -281,7 +300,25 @@ func workerCommand(profile string) ([]string, workerMetadata, error) {
 	switch profile {
 	case "gpt-5.6-luna":
 		return []string{"exec", "--json", "-m", profile}, workerMetadata{
-			Provider: "OpenAI", Harness: "Codex CLI", BillingClass: "included", Certification: "baseline",
+			Provider: "OpenAI", Harness: "Codex CLI", Protocol: "codex-native", Executable: "codex", LaunchMode: "codex", CredentialStore: "Codex local session", BillingClass: "included", Certification: "baseline",
+		}, nil
+	case "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.5":
+		return []string{"exec", "--json", "-m", profile}, workerMetadata{
+			Provider: "OpenAI", Harness: "Codex CLI", Protocol: "codex-native", Executable: "codex", LaunchMode: "codex", CredentialStore: "Codex local session", BillingClass: "included", Certification: "candidate", IdentityConfidence: "UNVERIFIED", ExplicitOnly: true,
+		}, nil
+	case "opencode-go/muse-spark-1.3-contributor", "deepseek/deepseek-v4-flash", "cheaper-inference/deepseek-v4-flash":
+		provider := map[string]string{
+			"opencode-go/muse-spark-1.3-contributor": "OpenCode Go",
+			"deepseek/deepseek-v4-flash":             "DeepSeek",
+			"cheaper-inference/deepseek-v4-flash":    "cheaper-inference",
+		}[profile]
+		return []string{"run", "--format", "json", "--model", profile}, workerMetadata{
+			Provider: provider, Harness: "OpenCode CLI", Protocol: "provider-managed", Executable: "opencode", LaunchMode: "opencode", CredentialStore: "OpenCode local auth", Certification: "candidate", IdentityConfidence: "UNVERIFIED", ExplicitOnly: true,
+		}, nil
+	case "antigravity/gemini-3.8-flash-high", "antigravity/gemini-3.8-flash-medium", "antigravity/gemini-3.8-flash-low":
+		model := strings.TrimPrefix(profile, "antigravity/")
+		return []string{"--output-format", "json", "--model", model}, workerMetadata{
+			Provider: "Google Antigravity", Harness: "AGY CLI", Protocol: "local-cli", Executable: "agy", LaunchMode: "antigravity", CredentialStore: "Antigravity local session", BillingClass: "included quota", Certification: "candidate", IdentityConfidence: "LOCAL_SESSION", ExplicitOnly: true,
 		}, nil
 	case "mimo-v2.5":
 		if strings.TrimSpace(os.Getenv("MIMO_API_KEY")) == "" {
@@ -304,12 +341,29 @@ func workerCommand(profile string) ([]string, workerMetadata, error) {
 				"-c", "model_context_window=1048576",
 				"-c", "web_search=\"disabled\"",
 			}, workerMetadata{
-				Provider: "Xiaomi MiMo", Harness: "Codex CLI / Responses API", Endpoint: endpoint,
-				BillingClass: "Token Plan", Certification: "candidate", IdentityConfidence: "LOW",
+				Provider: "Xiaomi MiMo", Harness: "Codex CLI / Responses API", Protocol: "responses", Executable: "codex", LaunchMode: "codex", CredentialStore: "process env MIMO_API_KEY", Endpoint: endpoint,
+				BillingClass: "Token Plan", Certification: "candidate", IdentityConfidence: "LOW", ExplicitOnly: true,
 			}, nil
 	default:
-		return nil, workerMetadata{}, fmt.Errorf("unsupported worker profile %q; supported profiles are gpt-5.6-luna and mimo-v2.5", profile)
+		return nil, workerMetadata{}, fmt.Errorf("unsupported worker profile %q; supported profiles are gpt-6-astra, gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna, gpt-5.5, opencode-go/muse-spark-1.3-contributor, deepseek/deepseek-v4-flash, cheaper-inference/deepseek-v4-flash, antigravity/gemini-3.8-flash-high, antigravity/gemini-3.8-flash-medium, antigravity/gemini-3.8-flash-low and mimo-v2.5", profile)
 	}
+}
+
+func buildWorkerCommand(args []string, metadata workerMetadata, workerRoot, lastMessagePath, task string) *exec.Cmd {
+	if metadata.Executable == "" {
+		metadata.Executable = "codex"
+	}
+	switch metadata.LaunchMode {
+	case "opencode":
+		args = append(args, "--dir", workerRoot, "--auto", task)
+	case "antigravity":
+		args = append(args, "--dangerously-skip-permissions", "--prompt", task)
+	default:
+		args = append(args, "-C", workerRoot, "-o", lastMessagePath, "--dangerously-bypass-approvals-and-sandbox", task)
+	}
+	cmd := exec.Command(metadata.Executable, args...)
+	cmd.Dir = workerRoot
+	return cmd
 }
 
 func buildWorkerPrompt(task string, job JobSpec) string {

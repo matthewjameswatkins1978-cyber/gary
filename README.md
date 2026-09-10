@@ -18,8 +18,13 @@ workers, deterministic acceptance and recoverable human boundaries.
 
 The local controller stays deliberately thin. Luna owns job judgement; Git,
 the filesystem and trusted acceptance own evidence. A worker's prose never
-means DONE. The current implementation supports the proven Luna route and the
-explicit Codex profiles `gpt-5.6-luna` and `mimo-v2.5`; an unconfigured route is
+means DONE. The current implementation supports the proven Luna route plus
+explicit candidate Codex profiles `gpt-6-astra`, `gpt-5.6-sol`,
+`gpt-5.6-terra`, `gpt-5.5`, OpenCode routes
+`opencode-go/muse-spark-1.3-contributor`, `deepseek/deepseek-v4-flash`, and
+`cheaper-inference/deepseek-v4-flash`, plus Antigravity CLI routes for the
+Gemini 3.8 Flash high/medium/low tiers and `mimo-v2.5`. Candidate profiles are
+rejected unless the job names them explicitly, and an unknown route is
 rejected before dispatch.
 
 There is no AI swarm, cloud scheduler, or second orchestration engine in the
@@ -45,6 +50,12 @@ irreversible action, or contradictory requirement needing a product decision.
 MiMo Token Plan is used only through the Codex CLI Responses route. GARY does
 not store the API key; set `MIMO_API_KEY` in the invoking process and override
 the regional endpoint with `GARY_MIMO_BASE_URL` when needed.
+
+OpenCode profiles use the existing local OpenCode credential store; GARY stores
+only the selected provider/model name and never copies the credential into job
+state or Git. Antigravity profiles use the local `agy` session and quota. These
+routes are candidate-only until a real filesystem/tool canary and independent
+acceptance certify them.
 
 ## Job format
 

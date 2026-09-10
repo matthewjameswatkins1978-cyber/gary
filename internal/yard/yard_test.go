@@ -29,6 +29,65 @@ func TestWorkerCommandProfiles(t *testing.T) {
 	if metadata.Provider != "Xiaomi MiMo" || metadata.BillingClass != "Token Plan" || metadata.IdentityConfidence != "LOW" {
 		t.Fatalf("unexpected MiMo metadata: %+v", metadata)
 	}
+	if metadata.Protocol != "responses" || !metadata.ExplicitOnly {
+		t.Fatalf("unexpected MiMo route metadata: %+v", metadata)
+	}
+
+	for _, profile := range []string{"gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.5"} {
+		args, metadata, err := workerCommand(profile)
+		if err != nil {
+			t.Fatalf("%s: %v", profile, err)
+		}
+		if got := strings.Join(args, " "); got != "exec --json -m "+profile {
+			t.Fatalf("%s command = %q", profile, got)
+		}
+		if metadata.Provider != "OpenAI" || metadata.Harness != "Codex CLI" || metadata.Protocol != "codex-native" || metadata.Certification != "candidate" || metadata.IdentityConfidence != "UNVERIFIED" || !metadata.ExplicitOnly {
+			t.Fatalf("unexpected %s metadata: %+v", profile, metadata)
+		}
+	}
+
+	for _, profile := range []string{"opencode-go/muse-spark-1.3-contributor", "deepseek/deepseek-v4-flash", "cheaper-inference/deepseek-v4-flash"} {
+		args, metadata, err := workerCommand(profile)
+		if err != nil {
+			t.Fatalf("%s: %v", profile, err)
+		}
+		if got := strings.Join(args, " "); got != "run --format json --model "+profile {
+			t.Fatalf("%s command = %q", profile, got)
+		}
+		if metadata.Harness != "OpenCode CLI" || metadata.Executable != "opencode" || metadata.LaunchMode != "opencode" || metadata.CredentialStore != "OpenCode local auth" || !metadata.ExplicitOnly {
+			t.Fatalf("unexpected %s metadata: %+v", profile, metadata)
+		}
+	}
+
+	for _, profile := range []string{"antigravity/gemini-3.8-flash-high", "antigravity/gemini-3.8-flash-medium", "antigravity/gemini-3.8-flash-low"} {
+		args, metadata, err := workerCommand(profile)
+		if err != nil {
+			t.Fatalf("%s: %v", profile, err)
+		}
+		model := strings.TrimPrefix(profile, "antigravity/")
+		if got := strings.Join(args, " "); got != "--output-format json --model "+model {
+			t.Fatalf("%s command = %q", profile, got)
+		}
+		if metadata.Harness != "AGY CLI" || metadata.Executable != "agy" || metadata.LaunchMode != "antigravity" || metadata.CredentialStore != "Antigravity local session" || !metadata.ExplicitOnly {
+			t.Fatalf("unexpected %s metadata: %+v", profile, metadata)
+		}
+	}
+}
+
+func TestCandidateProfilesRequireExplicitSelection(t *testing.T) {
+	t.Setenv("MIMO_API_KEY", "test-only-not-a-real-key")
+	for _, profile := range []string{"gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.5", "opencode-go/muse-spark-1.3-contributor", "deepseek/deepseek-v4-flash", "cheaper-inference/deepseek-v4-flash", "antigravity/gemini-3.8-flash-high", "antigravity/gemini-3.8-flash-medium", "antigravity/gemini-3.8-flash-low", "mimo-v2.5"} {
+		_, metadata, err := workerCommand(profile)
+		if err != nil {
+			t.Fatalf("%s: %v", profile, err)
+		}
+		if err := validateProfileSelection(JobSpec{ID: "candidate-test"}, profile, metadata); err == nil || !strings.Contains(err.Error(), "candidate-only") {
+			t.Fatalf("%s was silently selectable: %v", profile, err)
+		}
+		if err := validateProfileSelection(JobSpec{ID: "candidate-test", WorkerProfile: profile}, profile, metadata); err != nil {
+			t.Fatalf("explicit %s selection rejected: %v", profile, err)
+		}
+	}
 }
 
 func TestWorkerCommandRejectsUnconfiguredMiMo(t *testing.T) {

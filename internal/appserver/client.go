@@ -289,11 +289,11 @@ func (c *Client) Turn(ctx context.Context, threadID, input string, handler ToolH
 // Luna. JSON Schema is inline so the prototype has no MCP/config dependency.
 func DynamicTools() []map[string]any {
 	return []map[string]any{
-		functionTool("gary_spawn_worker", "Start the single bounded Codex worker in a fresh local git worktree. Never call this more than once for a job.", map[string]any{
+		functionTool("gary_spawn_worker", "Start the single bounded explicit worker route in a fresh local git worktree. Never call this more than once for a job; candidate routes must be named by the job.", map[string]any{
 			"type": "object", "additionalProperties": false,
 			"properties": map[string]any{
 				"task":    map[string]any{"type": "string"},
-				"profile": map[string]any{"type": "string", "description": "A supported Codex model id; use gpt-5.6-luna for the prototype."},
+				"profile": map[string]any{"type": "string", "description": "The exact worker profile named by the job, such as gpt-5.6-luna, an OpenCode provider/model, or an antigravity model route."},
 			},
 			"required": []string{"task", "profile"},
 		}),

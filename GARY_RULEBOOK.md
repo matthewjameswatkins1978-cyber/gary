@@ -34,9 +34,15 @@ dependency of the Luna path.
 
 ## 3. Worker discipline
 
-The baseline profile is `gpt-5.6-luna`. The explicitly configured `mimo-v2.5`
-profile uses the Codex CLI Responses route and a process-injected MiMo Token
-Plan credential; it is rejected when the credential is absent. Never silently
+The baseline profile is `gpt-5.6-luna`. Explicit candidate profiles include
+the other native Codex models, the OpenCode routes
+`opencode-go/muse-spark-1.3-contributor`, `deepseek/deepseek-v4-flash`, and
+`cheaper-inference/deepseek-v4-flash`, the Antigravity Gemini 3.8 Flash
+high/medium/low routes, and `mimo-v2.5`. OpenCode uses its existing local auth
+store; Antigravity uses its local session; neither credential is copied into
+GARY state. MiMo uses the Codex CLI Responses route and a process-injected
+Token Plan credential; it is rejected when the credential is absent. Candidate
+profiles must be named by the job and are never silently selected. Never silently
 switch models or spawn a replacement after interruption. A worker saying
 “done” is not acceptance. The worker worktree, commit, diff, process state and
 declared checks are authoritative.
