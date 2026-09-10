@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
@@ -30,6 +31,7 @@ func cmdDoctor() {
 		fmt.Println("Result: READY")
 	} else {
 		fmt.Println("Result: NOT READY")
+		os.Exit(2)
 	}
 }
 
@@ -44,6 +46,7 @@ func runChecks() []check {
 	checks = append(checks, checkStaticcheck())
 	checks = append(checks, checkGit())
 	checks = append(checks, checkCodex())
+	checks = append(checks, checkCodexAppServer())
 	checks = append(checks, checkGitHubCLI())
 	checks = append(checks, checkConfig())
 	if os.Getenv("GARY_ENABLE_BATCH") == "1" {
@@ -129,6 +132,42 @@ func checkCodex() check {
 		return check{"Codex App Server", "FAIL", "codex not found on PATH"}
 	}
 	return check{"Codex App Server", "PASS", strings.TrimSpace(out)}
+}
+
+func checkCodexAppServer() check {
+	version, err := runCmd("codex", "--version")
+	if err != nil {
+		return check{"App Server protocol", "FAIL", "codex is unavailable"}
+	}
+	dir, err := os.MkdirTemp("", "gary-app-schema-")
+	if err != nil {
+		return check{"App Server protocol", "FAIL", "cannot create schema probe: " + err.Error()}
+	}
+	defer os.RemoveAll(dir)
+	if _, err := runCmd("codex", "app-server", "generate-json-schema", "--out", dir, "--experimental"); err != nil {
+		return check{"App Server protocol", "FAIL", "schema generation failed: " + strings.TrimSpace(err.Error())}
+	}
+	var combined strings.Builder
+	_ = filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() {
+			return nil
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr == nil {
+			combined.Write(data)
+		}
+		return nil
+	})
+	missing := []string{}
+	for _, method := range []string{"initialize", "thread/start", "thread/resume", "turn/start", "turn/completed", "item/tool/call", "dynamicTools"} {
+		if !strings.Contains(combined.String(), method) {
+			missing = append(missing, method)
+		}
+	}
+	if len(missing) > 0 {
+		return check{"App Server protocol", "FAIL", "installed Codex " + strings.TrimSpace(version) + " schema lacks: " + strings.Join(missing, ", ")}
+	}
+	return check{"App Server protocol", "PASS", "Codex " + strings.TrimSpace(version) + "; required durable-thread and dynamic-tool methods present"}
 }
 
 func checkDocker() check {

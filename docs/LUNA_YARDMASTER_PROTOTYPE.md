@@ -9,8 +9,7 @@ router.
 Matthew -> gary work -> local Codex App Server -> durable Luna thread
                                       |
                                       +-- dynamic yard tools
-                                            +-- one git worktree
-                                            +-- one codex exec worker
+                                            +-- up to two independent worktrees/workers
                                             +-- real git status/diff
                                             +-- declared acceptance
                                             +-- persisted human blocker
@@ -60,10 +59,12 @@ worker.
 
 1. **Luna brain:** the App Server handshake, durable `thread/start`, whole-job
    prompt and streamed turn are recorded in the App Server JSONL log.
-2. **Worker control:** the dynamic `gary_spawn_worker` call creates one
-   worktree and one supported Codex worker; status and diff calls read reality.
-3. **Kill/resume:** stop the client while the worker is active, rerun the same
-   job, and capture the resumed thread id plus reconciled worker/worktree state.
+2. **Worker control:** the dynamic `gary_spawn_worker` call creates a bounded
+   worker in its own worktree; a second is permitted only when marked
+   independent, and status/diff calls read reality.
+3. **Sleep/restart:** after dispatch GARY waits mechanically with zero healthy
+   worker polling turns; stop/restart the client, rerun the same job, and
+   capture the resumed thread id plus reconciled worker/worktree state.
 4. **Matthew interruption:** use a disposable canary whose packet deliberately
    calls `gary_request_matthew`; capture the blocker JSON, exit status 3, then
    rerun with `--answer` and verify the same thread id.

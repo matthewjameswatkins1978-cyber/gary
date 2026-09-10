@@ -56,3 +56,13 @@ func TestDecideRouteRejectsMalformedRequests(t *testing.T) {
 		})
 	}
 }
+
+func TestCertifiedRouteBeatsCheaperCandidate(t *testing.T) {
+	got, err := decideRoute(routeRequest{Protocol: telltailAdapterProtocol, CaseID: "certification", ProbeKind: "route", Choices: []routeChoice{
+		{ID: "cheap-candidate", CostScore: 1, Eligible: true, Sufficient: true, Certification: "CANDIDATE"},
+		{ID: "proven", CostScore: 9, Eligible: true, Sufficient: true, Certification: "CERTIFIED"},
+	}})
+	if err != nil || got.ChoiceID != "proven" {
+		t.Fatalf("route=%+v err=%v; certified route should win", got, err)
+	}
+}

@@ -22,3 +22,9 @@
 4. Inspect only files relevant to the current job
 5. Check available CLI tooling before assuming something is missing
 6. Begin work
+
+## Canonical GARY
+
+When Matthew or another controlling agent says “Gary, do X”, “use GARY”, or
+equivalent, invoke the existing canonical GARY front door. Do not build a
+substitute GARY, dispatcher or orchestration layer.

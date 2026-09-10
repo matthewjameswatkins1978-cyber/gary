@@ -22,8 +22,8 @@ The normal `gary work` path is local-first. Codex App Server owns thread
 history, persistence/resume, approvals, input and streamed events. Dynamic
 GARY tools own only:
 
-- one fresh local Git worktree;
-- at most one supported `codex exec` worker;
+- fresh local Git worktrees;
+- at most two supported workers, only for genuinely independent tasks;
 - worker status, real Git diff and process reconciliation;
 - declared deterministic acceptance;
 - a persisted NEEDS_MATTHEW boundary.
@@ -66,16 +66,17 @@ first failures and merge conflicts remain the agent's job.
 - `DONE` — the actual worker candidate passed independent acceptance;
 - `FAILED` — execution ended without acceptance and without a genuine outside blocker.
 
-Only deterministic acceptance against the actual worker worktree can award
-`DONE`. The model's prose, a process exit code, an App Server turn status or a
-legacy cloud status cannot do so alone.
+Only deterministic acceptance against the actual worker worktree followed by
+serial clean-target integration can award `DONE`. The model's prose, a process
+exit code, an App Server turn status or a legacy cloud status cannot do so alone.
 
 ## 6. Restart
 
-Persist only the small job record linking job id, thread id, repo/base, worker,
-worktree and evidence paths. On restart, resume the same thread and reconcile
-the saved process/worktree/Git state. Never duplicate a worker merely because a
-client or App Server connection disappeared.
+Persist the original packet, a small job record, and a sparse event journal
+linking job id, thread id, repo/base, workers, worktrees and evidence paths. On
+restart, resume the same thread and reconcile the saved process/worktree/Git
+state. Never duplicate a worker merely because a client or App Server
+connection disappeared. A healthy worker causes no Yardmaster model turn.
 
 **Whole job. One capable agent. Useful local tools. Real boundaries. Hard
 evidence. Human-controlled escalation. Finish the work.**

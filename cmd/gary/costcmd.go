@@ -8,6 +8,7 @@ import (
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/cost"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/yard"
 )
 
 // cmdCost reports persisted cost for one single-agent GARY work run.
@@ -25,8 +26,18 @@ func cmdCost() {
 
 	data, err := os.ReadFile(filepath.Join(cfg.ResultsDir, "runs", id+".json"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cost: no persisted result for %s\n", id)
-		os.Exit(1)
+		root := config.StateRoot()
+		if override := os.Getenv("GARY_STATE_DIR"); override != "" {
+			root = override
+		}
+		manager, yardErr := yard.LoadManager(root, id)
+		if yardErr != nil {
+			fmt.Fprintf(os.Stderr, "cost: no persisted result for %s\n", id)
+			os.Exit(1)
+		}
+		state := manager.State()
+		fmt.Printf("%s\n%s\nEstimated wall: %s\nActual elapsed: %.1fs\nEstimated cash: %s\nActual cash: %s\nEconomics source: %s\nYardmaster turns: %d\nMatthew interventions: %d\n", id, state.Status, state.PreflightEstimatedWall, state.ActualElapsedSeconds, state.EstimatedIncrementalCash, state.ActualIncrementalCash, state.EconomicsSource, state.YardmasterTurns, state.MatthewInterventions)
+		return
 	}
 	var result struct {
 		FinalStatus        string        `json:"final_status"`

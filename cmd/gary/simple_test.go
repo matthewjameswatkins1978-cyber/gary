@@ -140,3 +140,46 @@ func TestShortSimpleIDIsBatchSafeAndBounded(t *testing.T) {
 		}
 	}
 }
+
+func TestParseDoArgsAcceptsFlagsBeforeAndAfterJob(t *testing.T) {
+	cases := [][]string{
+		{"Review this repository", "--accept", "go test ./..."},
+		{"--accept", "go test ./...", "Review this repository"},
+		{"--worker-profile", "mimo-v2.5", "job"},
+	}
+	for _, args := range cases {
+		got, err := parseDoArgs(args)
+		if err != nil {
+			t.Fatalf("args %q: %v", args, err)
+		}
+		if got.job == "" {
+			t.Fatalf("args %q lost job", args)
+		}
+	}
+	got, err := parseDoArgs([]string{"job", "--accept", "go test ./...", "--accept", "go vet ./..."})
+	if err != nil || len(got.acceptance) != 2 {
+		t.Fatalf("repeated acceptance: %+v %v", got, err)
+	}
+}
+
+func TestParseDoArgsSupportsFileAndDashJob(t *testing.T) {
+	got, err := parseDoArgs([]string{"--file", "JOB.md", "--repo", `C:\repo`, "--accept", "go test ./..."})
+	if err != nil || got.packetFile != "JOB.md" || got.repo != `C:\repo` {
+		t.Fatalf("file form: %+v %v", got, err)
+	}
+	got, err = parseDoArgs([]string{"--", "--job-starts-with-dash"})
+	if err != nil || got.job != "--job-starts-with-dash" {
+		t.Fatalf("dash job: %+v %v", got, err)
+	}
+	if _, err := parseDoArgs([]string{"--file", "JOB.md", "inline"}); err == nil {
+		t.Fatal("file and inline job must conflict")
+	}
+}
+
+func TestParseDoArgsRejectsUnknownAndMissingOptions(t *testing.T) {
+	for _, args := range [][]string{{"job", "--bogus"}, {"job", "--accept"}, {"--file"}} {
+		if _, err := parseDoArgs(args); err == nil {
+			t.Fatalf("args %q unexpectedly accepted", args)
+		}
+	}
+}

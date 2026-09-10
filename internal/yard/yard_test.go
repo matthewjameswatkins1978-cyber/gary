@@ -1,6 +1,7 @@
 package yard
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -200,5 +201,70 @@ func TestAcceptanceIsIndependentOfWorkerClaim(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(root, "acceptance.json"))
 	if err != nil || !strings.Contains(string(data), `"passed": true`) {
 		t.Fatalf("acceptance evidence missing: %v %s", err, data)
+	}
+}
+
+func TestEventJournalIsDurableAndIdempotent(t *testing.T) {
+	root := t.TempDir()
+	m, err := NewManager(JobSpec{ID: "events", RepoPath: root, BaseRef: "main", Task: "event test", Acceptance: []string{"exit 0"}, Preflight: "GARY PREFLIGHT"}, filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetStatus("DONE"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.SetStatus("DONE"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(m.State().EventsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("journal events=%d, want JOB_CREATED/PREFLIGHT/JOB_DONE exactly once", len(lines))
+	}
+	seen := map[string]bool{}
+	for _, line := range lines {
+		var event Event
+		if json.Unmarshal([]byte(line), &event) != nil {
+			t.Fatal("invalid event")
+		}
+		if seen[event.EventID] {
+			t.Fatalf("duplicate event %q", event.EventID)
+		}
+		seen[event.EventID] = true
+	}
+}
+
+func TestSecondWorkerRequiresIndependenceAndThirdIsRejected(t *testing.T) {
+	root := t.TempDir()
+	m, err := NewManager(JobSpec{ID: "workers", RepoPath: root, BaseRef: "main", Task: "parallel test", Acceptance: []string{"exit 0"}}, filepath.Join(root, "state"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.state.Workers = []*WorkerRecord{
+		{ID: "one", JobID: "workers", Profile: "gpt-5.6-luna", Task: "one", Status: "RUNNING", PID: os.Getpid(), Worktree: root},
+		{ID: "two", JobID: "workers", Profile: "gpt-5.6-luna", Task: "two", Status: "RUNNING", PID: os.Getpid(), Worktree: root},
+	}
+	m.state.Worker = m.state.Workers[1]
+	if err := m.saveLocked(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.SpawnWorkerBounded("three", "gpt-5.6-luna", true); err == nil || !strings.Contains(err.Error(), "maximum of two") {
+		t.Fatalf("third worker was not rejected: %v", err)
+	}
+}
+
+func TestSmallFixBoundaryRejectsOversizedPatch(t *testing.T) {
+	patch := "diff --git a/a.go b/a.go\n--- a/a.go\n+++ b/a.go\n"
+	for i := 0; i < 41; i++ {
+		patch += "+line\n"
+	}
+	if _, changed := patchStats(patch); changed != 41 {
+		t.Fatalf("changed lines=%d", changed)
+	}
+	if files, changed := patchStats(patch); files != 1 || changed <= 40 {
+		t.Fatalf("bad patch stats files=%d changed=%d", files, changed)
 	}
 }

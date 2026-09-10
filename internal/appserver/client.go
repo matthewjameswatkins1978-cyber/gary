@@ -289,17 +289,24 @@ func (c *Client) Turn(ctx context.Context, threadID, input string, handler ToolH
 // Luna. JSON Schema is inline so the prototype has no MCP/config dependency.
 func DynamicTools() []map[string]any {
 	return []map[string]any{
-		functionTool("gary_spawn_worker", "Start the single bounded explicit worker route in a fresh local git worktree. Never call this more than once for a job; candidate routes must be named by the job.", map[string]any{
+		functionTool("gary_spawn_worker", "Start a bounded explicit worker route in a fresh local git worktree. At most two may be active; a second must be genuinely independent and is integrated serially. Candidate routes must be named by the job.", map[string]any{
 			"type": "object", "additionalProperties": false,
 			"properties": map[string]any{
-				"task":    map[string]any{"type": "string"},
-				"profile": map[string]any{"type": "string", "description": "The exact worker profile named by the job, such as gpt-5.6-luna, an OpenCode provider/model, or an antigravity model route."},
+				"task":        map[string]any{"type": "string"},
+				"profile":     map[string]any{"type": "string", "description": "The exact worker profile named by the job, such as gpt-5.6-luna, an OpenCode provider/model, or an antigravity model route."},
+				"independent": map[string]any{"type": "boolean", "description": "Required true only when this task does not depend on sibling ephemeral state."},
 			},
-			"required": []string{"task", "profile"},
+			"required": []string{"task", "profile", "independent"},
 		}),
 		functionTool("gary_worker_status", "Reconcile the worker process and real git worktree state after any interruption.", objectSchema("worker_id")),
 		functionTool("gary_run_acceptance", "Run the job's declared deterministic acceptance commands in the worker worktree.", objectSchema("worker_id")),
 		functionTool("gary_inspect_diff", "Inspect the actual worker diff and commit state; do not rely on worker prose.", objectSchema("worker_id")),
+		functionTool("gary_integrate_worker", "Serially integrate an independently accepted clean worker commit into the target checkout and rerun final acceptance.", objectSchema("worker_id")),
+		functionTool("gary_apply_small_fix", "Apply one conservative textual patch to a stopped worker candidate, rerun acceptance, and commit only if it passes.", map[string]any{
+			"type": "object", "additionalProperties": false,
+			"properties": map[string]any{"worker_id": map[string]any{"type": "string"}, "reason": map[string]any{"type": "string"}, "patch": map[string]any{"type": "string"}},
+			"required":   []string{"worker_id", "reason", "patch"},
+		}),
 		functionTool("gary_request_matthew", "Persist a precise human-only blocker and stop the logical job until Matthew supplies the requested action.", map[string]any{
 			"type": "object", "additionalProperties": false,
 			"properties": map[string]any{

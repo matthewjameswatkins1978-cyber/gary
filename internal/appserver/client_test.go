@@ -4,8 +4,8 @@ import "testing"
 
 func TestDynamicToolsAreSmallAndUnique(t *testing.T) {
 	tools := DynamicTools()
-	if len(tools) != 5 {
-		t.Fatalf("dynamic tool count=%d want 5", len(tools))
+	if len(tools) != 7 {
+		t.Fatalf("dynamic tool count=%d want 7", len(tools))
 	}
 	seen := map[string]bool{}
 	for _, tool := range tools {

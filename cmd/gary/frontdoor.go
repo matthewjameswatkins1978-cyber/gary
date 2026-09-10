@@ -25,21 +25,121 @@ func (s *stringList) Set(value string) error {
 	return nil
 }
 
+type doOptions struct {
+	packetFile    string
+	repo          string
+	base          string
+	stateDir      string
+	id            string
+	workerProfile string
+	acceptance    stringList
+	job           string
+}
+
+// parseDoArgs deliberately does not use flag.FlagSet. Go's flag parser stops
+// option parsing at the first positional argument, which made an explicit
+// --accept silently become part of the job packet.
+func parseDoArgs(args []string) (doOptions, error) {
+	var options doOptions
+	var positional []string
+	optionsEnded := false
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if optionsEnded {
+			positional = append(positional, arg)
+			continue
+		}
+		if arg == "--" {
+			optionsEnded = true
+			continue
+		}
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			positional = append(positional, arg)
+			continue
+		}
+		name, value, hasValue := strings.Cut(arg, "=")
+		needsValue := func() (string, error) {
+			if hasValue {
+				if strings.TrimSpace(value) == "" {
+					return "", fmt.Errorf("%s requires a non-empty value", name)
+				}
+				return value, nil
+			}
+			if i+1 >= len(args) {
+				return "", fmt.Errorf("%s requires a value", name)
+			}
+			i++
+			if strings.TrimSpace(args[i]) == "" {
+				return "", fmt.Errorf("%s requires a non-empty value", name)
+			}
+			return args[i], nil
+		}
+		switch name {
+		case "--file":
+			v, err := needsValue()
+			if err != nil {
+				return options, err
+			}
+			options.packetFile = v
+		case "--repo":
+			v, err := needsValue()
+			if err != nil {
+				return options, err
+			}
+			options.repo = v
+		case "--base":
+			v, err := needsValue()
+			if err != nil {
+				return options, err
+			}
+			options.base = v
+		case "--state-dir":
+			v, err := needsValue()
+			if err != nil {
+				return options, err
+			}
+			options.stateDir = v
+		case "--id":
+			v, err := needsValue()
+			if err != nil {
+				return options, err
+			}
+			options.id = v
+		case "--worker-profile":
+			v, err := needsValue()
+			if err != nil {
+				return options, err
+			}
+			options.workerProfile = v
+		case "--accept":
+			v, err := needsValue()
+			if err != nil {
+				return options, err
+			}
+			options.acceptance = append(options.acceptance, v)
+		default:
+			return options, fmt.Errorf("unknown option %q", arg)
+		}
+	}
+	if options.packetFile != "" && len(positional) > 0 {
+		return options, errors.New("use --file or an inline job, not both")
+	}
+	if options.packetFile == "" && len(positional) == 0 {
+		return options, errors.New("supply a job string or --file packet.md")
+	}
+	options.job = strings.Join(positional, " ")
+	return options, nil
+}
+
 // cmdDo is the canonical front door. It creates an immutable local job packet
 // and hands it to the existing work command; it is not another dispatcher.
 func cmdDo() {
-	fs := flag.NewFlagSet("do", flag.ExitOnError)
-	packetFile := fs.String("file", "", "read the original job packet from a file")
-	repo := fs.String("repo", "", "target repository (defaults to the current Git repository)")
-	base := fs.String("base", "", "base ref (defaults to the current branch)")
-	stateRoot := fs.String("state-dir", "", "canonical GARY state root")
-	id := fs.String("id", "", "stable job id (defaults to a timestamped id)")
-	workerProfile := fs.String("worker-profile", "", "exact worker profile required for this job")
-	var acceptance stringList
-	fs.Var(&acceptance, "accept", "trusted acceptance command; repeat for multiple commands")
-	_ = fs.Parse(os.Args[2:])
+	options, err := parseDoArgs(os.Args[2:])
+	if err != nil {
+		fatalFrontDoor(err)
+	}
 
-	root := *stateRoot
+	root := options.stateDir
 	if root == "" {
 		root = config.StateRoot()
 	}
@@ -48,21 +148,26 @@ func cmdDo() {
 		fmt.Fprintf(os.Stderr, "GARY PARKED: new jobs are disabled at %s\n", filepath.Join(root, "PARKED"))
 		os.Exit(2)
 	}
-	target, err := resolveRepo(*repo)
+	target, err := resolveRepo(options.repo)
 	if err != nil {
 		fatalFrontDoor(err)
 	}
-	ref := *base
+	ref := options.base
 	if ref == "" {
 		ref = gitOutput(target, "branch", "--show-current")
 		if ref == "" {
 			fatalFrontDoor(errors.New("cannot infer a branch; supply --base"))
 		}
 	}
-	packet, packetSource, err := readOriginalPacket(*packetFile, fs.Args())
+	packetArgs := []string(nil)
+	if options.packetFile == "" {
+		packetArgs = []string{options.job}
+	}
+	packet, packetSource, err := readOriginalPacket(options.packetFile, packetArgs)
 	if err != nil {
 		fatalFrontDoor(err)
 	}
+	acceptance := options.acceptance
 	if len(acceptance) == 0 {
 		if configured := os.Getenv("GARY_ACCEPTANCE"); configured != "" {
 			for _, command := range strings.Split(configured, "\n") {
@@ -75,9 +180,12 @@ func cmdDo() {
 	if len(acceptance) == 0 {
 		acceptance = append(acceptance, "git diff --check")
 	}
-	jobID := strings.TrimSpace(*id)
+	jobID := strings.TrimSpace(options.id)
 	if jobID == "" {
 		jobID = "job-" + time.Now().UTC().Format("20060102-150405.000000000")
+	}
+	if active := activeJob(root); active != "" && active != jobID {
+		fatalFrontDoor(fmt.Errorf("another top-level job is active: %s", active))
 	}
 	jobDir := filepath.Join(root, "jobs", safeFrontName(jobID))
 	if err := os.MkdirAll(jobDir, 0o700); err != nil {
@@ -87,7 +195,12 @@ func cmdDo() {
 	if err := writeNewFile(originalPath, []byte(packet)); err != nil {
 		fatalFrontDoor(fmt.Errorf("preserve original packet: %w", err))
 	}
-	manifest := yardJobManifest{ID: jobID, RepoPath: target, BaseRef: ref, WorkerProfile: strings.TrimSpace(*workerProfile), PacketPath: "ORIGINAL_JOB.md", Acceptance: acceptance, StateDir: root}
+	preflight := buildPreflight(jobID, packet, target, ref, strings.TrimSpace(options.workerProfile), acceptance)
+	preflightPath := filepath.Join(jobDir, "PREFLIGHT.md")
+	if err := writeNewFile(preflightPath, []byte(preflight)); err != nil {
+		fatalFrontDoor(fmt.Errorf("preserve preflight: %w", err))
+	}
+	manifest := yardJobManifest{ID: jobID, RepoPath: target, BaseRef: ref, WorkerProfile: strings.TrimSpace(options.workerProfile), PacketPath: "ORIGINAL_JOB.md", Acceptance: acceptance, Preflight: preflight, StateDir: root}
 	manifestPath := filepath.Join(jobDir, "job.json")
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
@@ -96,9 +209,50 @@ func cmdDo() {
 	if err := writeNewFile(manifestPath, data); err != nil {
 		fatalFrontDoor(fmt.Errorf("write job manifest: %w", err))
 	}
-	fmt.Printf("GARY PREFLIGHT\nJob: %s\nTarget: %s\nBase: %s\nPacket: %s\nPacket source: %s\nAcceptance: %s\nStarting.\n", jobID, target, ref, originalPath, packetSource, strings.Join(acceptance, " | "))
+	fmt.Printf("%s\nPacket: %s\nPacket source: %s\nStarting.\n", preflight, originalPath, packetSource)
 	os.Args = []string{"gary", "work", manifestPath, "--state-dir", root}
 	cmdYardmaster()
+}
+
+func activeJob(root string) string {
+	files, _ := filepath.Glob(filepath.Join(root, "jobs", "*.json"))
+	for _, path := range files {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var state struct {
+			Job struct {
+				ID string `json:"id"`
+			} `json:"job"`
+			Status string `json:"status"`
+		}
+		if json.Unmarshal(data, &state) == nil && (state.Status == "RUNNING" || state.Status == "NEEDS_MATTHEW") {
+			return state.Job.ID
+		}
+	}
+	return ""
+}
+
+func buildPreflight(jobID, packet, target, ref, profile string, acceptance []string) string {
+	if profile == "" {
+		profile = "gpt-5.6-luna (baseline)"
+	}
+	rationale := "baseline local Luna route is the only proven default"
+	economics := "Incremental cash: UNKNOWN; allowance/quota: UNKNOWN; premium reserve: preserved"
+	if strings.Contains(profile, "mimo") {
+		rationale = "explicitly requested MiMo route; current evidence is successful execution with LOW identity confidence"
+		economics = "Incremental cash: UNKNOWN; MiMo Token Plan allowance: included if available; quota figures: UNKNOWN"
+	}
+	if strings.Contains(profile, "antigravity") {
+		rationale = "explicitly requested local Antigravity route; it remains candidate-only"
+		economics = "Incremental cash: UNKNOWN; Antigravity included quota: UNKNOWN; quota figures: UNKNOWN"
+	}
+	if strings.Contains(profile, "/") && !strings.Contains(profile, "antigravity") {
+		rationale = "explicitly requested provider/model route; it remains candidate-only"
+		economics = "Incremental cash: UNKNOWN; provider allowance/billing: UNKNOWN; quota figures: UNKNOWN"
+	}
+	return fmt.Sprintf("GARY PREFLIGHT\n\nJob: %s\nTarget: %s\nBase: %s\nPacket bytes: %d\n\nPlan:\n1. Give the complete packet to the Luna Yardmaster.\n2. Select or honour the named worker route: %s.\n3. Run independent Git/worktree and declared acceptance checks.\n4. Integrate only an accepted clean candidate.\n\nWorker choice: %s\nWhy: %s\nExpected wall time: broad range, approximately 15–120 minutes (confidence: LOW; derived from task size only)\n%s\nIncluded quota/allowance: UNKNOWN unless freshly reported. Prepaid or expiring credits: UNKNOWN. Premium reserve use: none planned unless Luna records a reason.\nMatthew needed: probably not; only a real authority, credential, spend, CAPTCHA/2FA or product-decision boundary should stop the job.\nYou can leave: YES while a healthy worker runs; GARY will wait mechanically for an event.\nAcceptance: %s\n", jobID, target, ref, len([]byte(packet)), profile, profile, rationale, economics, strings.Join(acceptance, " | "))
 }
 
 func cmdResume() {

@@ -42,13 +42,23 @@ func cmdStatus() {
 					ID     string `json:"id"`
 					Status string `json:"status"`
 				} `json:"worker"`
+				Workers []struct {
+					ID     string `json:"id"`
+					Status string `json:"status"`
+				} `json:"workers"`
 			}
 			if readErr != nil || json.Unmarshal(data, &state) != nil {
 				fmt.Printf("  %s: unreadable state\n", filepath.Base(path))
 				continue
 			}
 			worker := "none"
-			if state.Worker != nil {
+			if len(state.Workers) > 0 {
+				parts := make([]string, 0, len(state.Workers))
+				for _, item := range state.Workers {
+					parts = append(parts, item.ID+"/"+item.Status)
+				}
+				worker = strings.Join(parts, ",")
+			} else if state.Worker != nil {
 				worker = state.Worker.ID + "/" + state.Worker.Status
 			}
 			fmt.Printf("  %s: %s thread=%s worker=%s\n", state.Job.ID, state.Status, shortThread(state.ThreadID), worker)

@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 	"sort"
-
+	"strings"
 )
 
 const telltailAdapterProtocol = "telltail.adapter.v1"
@@ -22,11 +22,13 @@ type routeRequest struct {
 }
 
 type routeChoice struct {
-	ID         string  `json:"id"`
-	CostScore  float64 `json:"cost_score"`
-	Eligible   bool    `json:"eligible"`
-	Sufficient bool    `json:"sufficient"`
-	Priority   *int    `json:"priority,omitempty"`
+	ID            string  `json:"id"`
+	CostScore     float64 `json:"cost_score"`
+	Eligible      bool    `json:"eligible"`
+	Sufficient    bool    `json:"sufficient"`
+	Priority      *int    `json:"priority,omitempty"`
+	Certification string  `json:"certification,omitempty"`
+	Healthy       *bool   `json:"healthy,omitempty"`
 }
 
 type routeDecision struct {
@@ -181,6 +183,12 @@ func cheapestSufficient(choices []routeChoice) (routeChoice, bool) {
 		return routeChoice{}, false
 	}
 	sort.SliceStable(eligible, func(i, j int) bool {
+		if certificationRank(eligible[i].Certification) != certificationRank(eligible[j].Certification) {
+			return certificationRank(eligible[i].Certification) < certificationRank(eligible[j].Certification)
+		}
+		if eligible[i].Healthy != nil && eligible[j].Healthy != nil && *eligible[i].Healthy != *eligible[j].Healthy {
+			return *eligible[i].Healthy
+		}
 		if eligible[i].CostScore != eligible[j].CostScore {
 			return eligible[i].CostScore < eligible[j].CostScore
 		}
@@ -190,6 +198,21 @@ func cheapestSufficient(choices []routeChoice) (routeChoice, bool) {
 		return eligible[i].ID < eligible[j].ID
 	})
 	return eligible[0], true
+}
+
+func certificationRank(value string) int {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "CERTIFIED":
+		return 0
+	case "CANDIDATE", "":
+		return 1
+	case "DEGRADED":
+		return 2
+	case "BLOCKED":
+		return 3
+	default:
+		return 2
+	}
 }
 
 func stringValue(m map[string]any, key string) string {

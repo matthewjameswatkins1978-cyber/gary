@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/appserver"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
@@ -27,18 +26,13 @@ type yardJobManifest struct {
 	PacketPath    string   `json:"packet_path,omitempty"`
 	Task          string   `json:"task,omitempty"`
 	Acceptance    []string `json:"acceptance"`
+	Preflight     string   `json:"preflight,omitempty"`
 	StateDir      string   `json:"state_dir,omitempty"`
 }
 
 const yardmasterPrompt = `You are Luna, the persistent GARY Yardmaster brain.
 
-GARY is deliberately a thin local yard layer. Codex App Server owns your durable conversation, history, resume, approvals and input semantics. The yard tools own only local git worktrees, one worker process, deterministic acceptance, evidence and a human-boundary record. Do not recreate a planner, swarm, wave scheduler, heartbeat protocol, telemetry reader, project board, retry engine or provider matrix.
-
-Hold the whole supplied job together in this one durable thread. Use the yard tools when implementation work is needed. You may inspect the target through the yard tools, but do not implement the target yourself with built-in shell, file edits or apply-patch. Start at most one worker, and never spawn a replacement worker after an interruption: reconcile the existing process and worktree first.
-
-A worker saying “done” is not acceptance. After the worker stops, inspect the actual worktree and run the declared acceptance tool. Treat the filesystem, git state and acceptance output as authoritative over worker prose. If acceptance fails, report FAILED with the evidence; do not invent success or silently retry. If a genuine human-only boundary is reached, call gary_request_matthew with the exact action, then stop and return NEEDS_MATTHEW. Do not ask Matthew for ordinary debugging, package installation or a first failed test.
-
-Do not return while a worker is still running if another status check can make progress. When the job is mechanically accepted, return DONE with the worker id, branch, commit and acceptance evidence. End every response with exactly one line in this form:
+Codex App Server owns your durable conversation, history, resume, approvals and input semantics. GARY tools are the only permitted implementation boundary. Read the repository WORKFLOW.md policy supplied below and obey it. Treat Git, the filesystem and deterministic acceptance as authoritative. End every response with exactly one line in this form:
 GARY_STATUS: DONE|NEEDS_MATTHEW|FAILED
 
 The current job packet follows.`
@@ -90,7 +84,15 @@ func cmdYardmaster() {
 		fmt.Fprintf(os.Stderr, "work state: %v\n", err)
 		os.Exit(1)
 	}
+	if err := manager.Reconcile(); err != nil {
+		fmt.Fprintf(os.Stderr, "work reconcile: %v\n", err)
+		os.Exit(1)
+	}
 	state := manager.State()
+	if state.Status == "DONE" || state.Status == "FAILED" || state.Status == "CANCELLED" {
+		fmt.Printf("GARY_STATUS: %s\n", state.Status)
+		return
+	}
 	if state.Status == "NEEDS_MATTHEW" {
 		if strings.TrimSpace(*answer) == "" {
 			printMatthewBlocker(state)
@@ -142,6 +144,10 @@ func cmdYardmaster() {
 	state = manager.State()
 	input := buildYardmasterInput(manifest, state, *answer)
 	for turn := 0; turn < 120; turn++ {
+		if err := manager.IncrementYardmasterTurn(); err != nil {
+			fmt.Fprintf(os.Stderr, "work state: %v\n", err)
+			os.Exit(1)
+		}
 		fmt.Printf("\n[GARY yardmaster turn %d]\n", turn+1)
 		var transcript bytes.Buffer
 		progress := io.MultiWriter(os.Stdout, &transcript)
@@ -162,11 +168,28 @@ func cmdYardmaster() {
 		if state.Worker != nil {
 			view, statusErr := manager.WorkerStatus(state.Worker.ID)
 			if statusErr == nil && view.ProcessAlive {
-				input = "The existing worker is still running. Stay on this same durable job, wait briefly, then call gary_worker_status again. Do not spawn another worker."
-				time.Sleep(2 * time.Second)
+				event, waitErr := manager.WaitForWorkerEvent(ctx)
+				if waitErr != nil {
+					fmt.Fprintf(os.Stderr, "\nwork wait: %v\n", waitErr)
+					os.Exit(1)
+				}
+				input = fmt.Sprintf("A mechanical GARY event has arrived for the same job; do not spawn a replacement. Reconcile reality and continue. EVENT: %s", eventSummary(event))
 				continue
 			}
-			if statusErr == nil && view.Record.Status == "ACCEPTED" && strings.TrimSpace(view.DiffStat) != "" && !view.Dirty {
+			if statusErr == nil && !view.ProcessAlive && view.Record.Status == "RUNNING" {
+				if err := manager.Reconcile(); err != nil {
+					fmt.Fprintf(os.Stderr, "\nwork reconcile: %v\n", err)
+					os.Exit(1)
+				}
+				event, waitErr := manager.WaitForWorkerEvent(ctx)
+				if waitErr != nil {
+					fmt.Fprintf(os.Stderr, "\nwork wait: %v\n", waitErr)
+					os.Exit(1)
+				}
+				input = fmt.Sprintf("A mechanical GARY event has arrived for the same job; do not spawn a replacement. Reconcile reality and continue. EVENT: %s", eventSummary(event))
+				continue
+			}
+			if statusErr == nil && view.Record.Status == "INTEGRATED" && strings.TrimSpace(view.DiffStat) != "" && !view.Dirty {
 				_ = manager.SetStatus("DONE")
 				printYardmasterDone(manager.State())
 				return
@@ -178,7 +201,7 @@ func cmdYardmaster() {
 			}
 		}
 		// The model may have stopped after a useful observation. Give the same
-		// durable thread one more turn rather than creating a controller loop.
+		// durable thread one more turn; worker waiting itself is mechanical.
 		input = "Continue the same job from the durable state. Reconcile the existing worker and finish with mechanically evidenced DONE, NEEDS_MATTHEW, or FAILED."
 	}
 	_ = manager.SetStatus("FAILED")
@@ -225,7 +248,7 @@ func loadYardJobManifest(path string) (*yardJobManifest, error) {
 }
 
 func (m yardJobManifest) toSpec() yard.JobSpec {
-	return yard.JobSpec{ID: m.ID, RepoPath: m.RepoPath, BaseRef: m.BaseRef, WorkerProfile: m.WorkerProfile, Task: m.Task, Acceptance: m.Acceptance}
+	return yard.JobSpec{ID: m.ID, RepoPath: m.RepoPath, BaseRef: m.BaseRef, WorkerProfile: m.WorkerProfile, Task: m.Task, Acceptance: m.Acceptance, Preflight: m.Preflight}
 }
 
 func buildYardmasterInput(m *yardJobManifest, state yard.JobState, answer string) string {
@@ -233,11 +256,24 @@ func buildYardmasterInput(m *yardJobManifest, state yard.JobState, answer string
 	if profile == "" {
 		profile = "not fixed; Luna may select the baseline profile"
 	}
-	return fmt.Sprintf("%s\n\nJOB ID: %s\nTARGET REPOSITORY: %s\nBASE REF: %s\nREQUIRED WORKER PROFILE: %s\nACCEPTANCE:\n- %s\n\nWHOLE JOB PACKET:\n%s\n\nDURABLE GARY STATE:\n%s\n\n%s", yardmasterPrompt, m.ID, m.RepoPath, m.BaseRef, profile, strings.Join(m.Acceptance, "\n- "), m.Task, stateSummary(state), answerSummary(answer))
+	return fmt.Sprintf("%s\n\nWORKFLOW POLICY:\n%s\n\nPREFLIGHT:\n%s\n\nJOB ID: %s\nTARGET REPOSITORY: %s\nBASE REF: %s\nREQUIRED WORKER PROFILE: %s\nACCEPTANCE:\n- %s\n\nWHOLE JOB PACKET:\n%s\n\nDURABLE GARY STATE:\n%s\n\n%s", yardmasterPrompt, loadWorkflow(m.RepoPath), m.Preflight, m.ID, m.RepoPath, m.BaseRef, profile, strings.Join(m.Acceptance, "\n- "), m.Task, stateSummary(state), answerSummary(answer))
+}
+
+func loadWorkflow(repo string) string {
+	data, err := os.ReadFile(filepath.Join(repo, "WORKFLOW.md"))
+	if err == nil && strings.TrimSpace(string(data)) != "" {
+		return string(data)
+	}
+	return "Use the bounded GARY tools, preserve the packet, wait mechanically after dispatch, inspect reality, and never treat worker prose as acceptance."
 }
 
 func stateSummary(state yard.JobState) string {
 	data, _ := json.MarshalIndent(state, "", "  ")
+	return string(data)
+}
+
+func eventSummary(event yard.Event) string {
+	data, _ := json.Marshal(event)
 	return string(data)
 }
 
@@ -253,13 +289,14 @@ func yardToolHandler(manager *yard.Manager) appserver.ToolHandler {
 		switch name {
 		case "gary_spawn_worker":
 			var in struct {
-				Task    string `json:"task"`
-				Profile string `json:"profile"`
+				Task        string `json:"task"`
+				Profile     string `json:"profile"`
+				Independent bool   `json:"independent"`
 			}
 			if err := json.Unmarshal(raw, &in); err != nil {
 				return "", err
 			}
-			view, err := manager.SpawnWorker(in.Task, in.Profile)
+			view, err := manager.SpawnWorkerBounded(in.Task, in.Profile, in.Independent)
 			return encodeToolResult(view, err)
 		case "gary_worker_status":
 			var in struct {
@@ -288,6 +325,30 @@ func yardToolHandler(manager *yard.Manager) appserver.ToolHandler {
 			}
 			diff, err := manager.InspectDiff(in.WorkerID)
 			return diff, err
+		case "gary_integrate_worker":
+			var in struct {
+				WorkerID string `json:"worker_id"`
+			}
+			if err := json.Unmarshal(raw, &in); err != nil {
+				return "", err
+			}
+			if err := manager.IntegrateWorker(in.WorkerID); err != nil {
+				return "", err
+			}
+			return encodeToolResult(manager.State(), nil)
+		case "gary_apply_small_fix":
+			var in struct {
+				WorkerID string `json:"worker_id"`
+				Reason   string `json:"reason"`
+				Patch    string `json:"patch"`
+			}
+			if err := json.Unmarshal(raw, &in); err != nil {
+				return "", err
+			}
+			if err := manager.ApplySmallFix(in.WorkerID, in.Reason, in.Patch); err != nil {
+				return "", err
+			}
+			return encodeToolResult(manager.State(), nil)
 		case "gary_request_matthew":
 			var in struct {
 				Summary       string `json:"summary"`

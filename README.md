@@ -4,7 +4,7 @@
 
 The normal path is now local-first: `gary work job.json` starts one durable
 Luna thread through the local Codex App Server and exposes a small yard boundary
-for one local Git worktree, one Codex worker, real status/diff inspection,
+for local Git worktrees, at most two bounded Codex workers, real status/diff inspection,
 deterministic acceptance and a persisted Matthew blocker. GARY does not rebuild
 an agent supervisor or cloud scheduler. See
 [`docs/LUNA_YARDMASTER_PROTOTYPE.md`](docs/LUNA_YARDMASTER_PROTOTYPE.md).
@@ -28,7 +28,10 @@ rejected unless the job names them explicitly, and an unknown route is
 rejected before dispatch.
 
 There is no AI swarm, cloud scheduler, or second orchestration engine in the
-normal execution path.
+normal execution path. After dispatch, Luna sleeps; a mechanical worker exit
+or recovery event wakes the same durable thread. A second worker is allowed
+only for a genuinely independent task and accepted commits are integrated
+serially.
 
 ## Core idea
 
@@ -89,7 +92,10 @@ The normal execution front door is:
 
 ```powershell
 gary do "Review this repository" --accept "go test ./..."
+gary do --accept "go test ./..." "Review this repository"
 gary do --file .\JOB.md --repo C:\work\project --base master --accept "go test ./..."
+gary do --worker-profile mimo-v2.5 "Run the explicit MiMo test job"
+gary do -- "--job text may begin with a dash"
 ```
 
 The lower-level `work <job.json>` command remains available for prepared
@@ -100,7 +106,9 @@ Useful non-work commands:
 
 ```powershell
 go run ./cmd/gary doctor
+go run ./cmd/gary where
 go run ./cmd/gary status
+go run ./cmd/gary cancel <job-id>
 go run ./cmd/gary cost <job-id>
 go run ./cmd/gary smoke
 go test ./...
@@ -117,7 +125,7 @@ The meaningful work outcomes are deliberately small:
 - `NEEDS_MATTHEW` — responsible continuation requires something outside GARY's authority or reach and the job is resumable;
 - `FAILED` — execution or implementation ended without completion and without a genuine external blocker.
 
-`RUNNING` is observable while the Batch job is active. Parking is an external administrative switch, not an agent lifecycle state machine.
+`RUNNING` is observable while a local worker is active. Parking is an external administrative switch, not an agent lifecycle state machine.
 
 ## Blockers
 
@@ -155,13 +163,13 @@ It does not need permanent planner memory, child-job histories, supervision tele
 
 Workers receive a short-lived GitHub App installation token for the target repository, never the App private key. Google Cloud identity and secrets remain at the appropriate trusted boundary.
 
-The disposable Batch workspace is the main implementation sandbox. The agent may act broadly inside that workspace while consequential external authority remains constrained.
+The disposable local Git worktree is the main implementation sandbox. The agent may act broadly inside that worktree while consequential external authority remains constrained. Batch is legacy-only and explicit.
 
 See `docs/github-app-setup.md` and `docs/github-oidc-setup.md` for identity setup.
 
 ## Acceptance
 
-The agent is expected to run the relevant checks while it works. After the agent returns a candidate, GARY independently clones the base repository, applies that exact patch, and reruns the declared acceptance commands in a clean workspace.
+The agent is expected to run the relevant checks while it works. After the agent returns a candidate, GARY independently checks the exact committed candidate in its clean worker worktree, reruns the declared acceptance commands, then requires clean-base serial integration and final acceptance in the target checkout.
 
 Only that independent pass can produce `DONE`.
 

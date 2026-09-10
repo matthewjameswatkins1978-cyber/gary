@@ -17,12 +17,18 @@ func main() {
 		cmdVersion()
 	case "doctor":
 		cmdDoctor()
+	case "where":
+		cmdWhere()
+	case "profiles":
+		cmdProfiles()
 	case "work":
 		cmdYardmaster()
 	case "do":
 		cmdDo()
 	case "resume":
 		cmdResume()
+	case "cancel":
+		cmdCancel()
 	case "needs-me":
 		cmdNeedsMatthew()
 	case "park":
@@ -59,6 +65,7 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  work <job.json>  Give Luna one whole local-first job")
 	fmt.Fprintln(os.Stderr, "  yardmaster <job.json>  Alias for work")
 	fmt.Fprintln(os.Stderr, "  resume <job-id>  Resume a persisted job after Matthew's answer")
+	fmt.Fprintln(os.Stderr, "  cancel <job-id>  Cancel one job while preserving work and evidence")
 	fmt.Fprintln(os.Stderr, "  needs-me         Show persisted human-only blockers")
 	fmt.Fprintln(os.Stderr, "  park             Prevent new jobs")
 	fmt.Fprintln(os.Stderr, "  unpark           Allow new jobs")
@@ -66,6 +73,8 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "  status           Show recorded work status")
 	fmt.Fprintln(os.Stderr, "  cost             Show recorded job cost")
 	fmt.Fprintln(os.Stderr, "  doctor           Check environment readiness")
+	fmt.Fprintln(os.Stderr, "  where            Show the canonical GARY executable and state root")
+	fmt.Fprintln(os.Stderr, "  profiles         Show non-secret worker route inventory")
 	fmt.Fprintln(os.Stderr, "  smoke            Test the optional legacy Google Cloud Batch boundary")
 	fmt.Fprintln(os.Stderr, "  route            Decision-only Telltail adapter; launches nothing")
 	fmt.Fprintln(os.Stderr, "  version          Print version information")
