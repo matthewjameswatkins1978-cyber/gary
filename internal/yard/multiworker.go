@@ -135,13 +135,13 @@ func (m *Manager) IntegrateWorkerSerial(workerID string) error {
 		m.mu.Unlock()
 		return errors.New("worker not found")
 	}
-	if worker.Status != "ACCEPTED" {
-		m.mu.Unlock()
-		return fmt.Errorf("worker %s is not independently accepted", workerID)
-	}
 	if worker.Integrated {
 		m.mu.Unlock()
 		return nil
+	}
+	if worker.Status != "ACCEPTED" {
+		m.mu.Unlock()
+		return fmt.Errorf("worker %s is not independently accepted", workerID)
 	}
 	job := m.state.Job
 	workerCopy := *worker
