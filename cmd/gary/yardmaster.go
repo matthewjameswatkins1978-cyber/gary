@@ -150,8 +150,8 @@ func cmdYardmaster() {
 		}
 		fmt.Printf("\n[GARY yardmaster turn %d]\n", turn+1)
 		var transcript bytes.Buffer
-		progress := io.MultiWriter(os.Stdout, &transcript)
-		turnStatus, err := client.Turn(ctx, threadID, input, yardToolHandler(manager), progress)
+		progressWriter := io.MultiWriter(os.Stdout, &transcript)
+		turnStatus, err := client.Turn(ctx, threadID, input, yardToolHandler(manager), progressWriter)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "\nwork turn: %v\n", err)
 			os.Exit(1)
@@ -165,44 +165,31 @@ func cmdYardmaster() {
 			printMatthewBlocker(state)
 			os.Exit(3)
 		}
-		if state.Worker != nil {
-			view, statusErr := manager.WorkerStatus(state.Worker.ID)
-			if statusErr == nil && view.ProcessAlive {
-				event, waitErr := manager.WaitForWorkerEvent(ctx)
-				if waitErr != nil {
-					fmt.Fprintf(os.Stderr, "\nwork wait: %v\n", waitErr)
-					os.Exit(1)
-				}
-				input = fmt.Sprintf("A mechanical GARY event has arrived for the same job; do not spawn a replacement. Reconcile reality and continue. EVENT: %s", eventSummary(event))
-				continue
+
+		jobProgress := manager.Progress()
+		if jobProgress.Running > 0 {
+			event, waitErr := manager.WaitForAnyWorkerEvent(ctx)
+			if waitErr != nil {
+				fmt.Fprintf(os.Stderr, "\nwork wait: %v\n", waitErr)
+				os.Exit(1)
 			}
-			if statusErr == nil && !view.ProcessAlive && view.Record.Status == "RUNNING" {
-				if err := manager.Reconcile(); err != nil {
-					fmt.Fprintf(os.Stderr, "\nwork reconcile: %v\n", err)
-					os.Exit(1)
-				}
-				event, waitErr := manager.WaitForWorkerEvent(ctx)
-				if waitErr != nil {
-					fmt.Fprintf(os.Stderr, "\nwork wait: %v\n", waitErr)
-					os.Exit(1)
-				}
-				input = fmt.Sprintf("A mechanical GARY event has arrived for the same job; do not spawn a replacement. Reconcile reality and continue. EVENT: %s", eventSummary(event))
-				continue
-			}
-			if statusErr == nil && view.Record.Status == "INTEGRATED" && strings.TrimSpace(view.DiffStat) != "" && !view.Dirty {
-				_ = manager.SetStatus("DONE")
-				printYardmasterDone(manager.State())
-				return
-			}
-			if statusErr == nil && (view.Record.Status == "FAILED" || view.Record.Status == "ACCEPTANCE_FAILED") {
-				_ = manager.SetStatus("FAILED")
-				fmt.Printf("GARY_STATUS: FAILED\n")
-				return
-			}
+			input = fmt.Sprintf("A mechanical GARY event has arrived for the same job; do not spawn a replacement for an already-running task. Reconcile the whole worker set and continue. EVENT: %s", eventSummary(event))
+			continue
 		}
+		if jobProgress.AllIntegrated {
+			_ = manager.SetStatus("DONE")
+			printYardmasterDone(manager.State())
+			return
+		}
+		if jobProgress.Failed > 0 {
+			_ = manager.SetStatus("FAILED")
+			fmt.Printf("GARY_STATUS: FAILED\n")
+			return
+		}
+
 		// The model may have stopped after a useful observation. Give the same
-		// durable thread one more turn; worker waiting itself is mechanical.
-		input = "Continue the same job from the durable state. Reconcile the existing worker and finish with mechanically evidenced DONE, NEEDS_MATTHEW, or FAILED."
+		// durable thread one more turn; healthy worker waiting itself is mechanical.
+		input = "Continue the same job from the durable state. Reconcile the whole worker set and finish with mechanically evidenced DONE, NEEDS_MATTHEW, or FAILED."
 	}
 	_ = manager.SetStatus("FAILED")
 	fmt.Fprintln(os.Stderr, "work: Yardmaster turn limit reached without a terminal evidence state")
@@ -296,7 +283,7 @@ func yardToolHandler(manager *yard.Manager) appserver.ToolHandler {
 			if err := json.Unmarshal(raw, &in); err != nil {
 				return "", err
 			}
-			view, err := manager.SpawnWorkerBounded(in.Task, in.Profile, in.Independent)
+			view, err := manager.SpawnWorkerForYardmaster(in.Task, in.Profile, in.Independent)
 			return encodeToolResult(view, err)
 		case "gary_worker_status":
 			var in struct {
@@ -332,7 +319,7 @@ func yardToolHandler(manager *yard.Manager) appserver.ToolHandler {
 			if err := json.Unmarshal(raw, &in); err != nil {
 				return "", err
 			}
-			if err := manager.IntegrateWorker(in.WorkerID); err != nil {
+			if err := manager.IntegrateWorkerSerial(in.WorkerID); err != nil {
 				return "", err
 			}
 			return encodeToolResult(manager.State(), nil)
@@ -384,10 +371,15 @@ func printMatthewBlocker(state yard.JobState) {
 }
 
 func printYardmasterDone(state yard.JobState) {
-	if state.Worker == nil {
-		fmt.Println("GARY_STATUS: DONE")
+	workers := state.Workers
+	if len(workers) == 0 && state.Worker != nil {
+		workers = []*yard.WorkerRecord{state.Worker}
+	}
+	fmt.Println("\nGARY_STATUS: DONE")
+	if len(workers) == 0 {
 		return
 	}
-	view := state.Worker
-	fmt.Printf("\nGARY_STATUS: DONE\nWorker: %s\nBranch: %s\nCommit: %s\nWorktree: %s\nAcceptance evidence: %s\n", view.ID, view.Branch, view.CommitSHA, view.Worktree, view.AcceptancePath)
+	for i, view := range workers {
+		fmt.Printf("Worker %d: %s\nBranch: %s\nCommit: %s\nWorktree: %s\nAcceptance evidence: %s\n", i+1, view.ID, view.Branch, view.CommitSHA, view.Worktree, view.AcceptancePath)
+	}
 }
