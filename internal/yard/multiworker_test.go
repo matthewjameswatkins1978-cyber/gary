@@ -93,6 +93,9 @@ func TestIntegrateWorkerSerialLandsTwoIndependentCandidates(t *testing.T) {
 	if err := m.IntegrateWorkerSerial("one"); err != nil {
 		t.Fatalf("first integration: %v", err)
 	}
+	if err := m.IntegrateWorkerSerial("one"); err != nil {
+		t.Fatalf("idempotent integration retry: %v", err)
+	}
 	firstHead := captureGit(repo, "rev-parse", "HEAD")
 	if firstHead == baseSHA {
 		t.Fatal("first integration did not advance target HEAD")
