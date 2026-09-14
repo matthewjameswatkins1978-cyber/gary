@@ -181,7 +181,7 @@ func TestAcceptanceIsIndependentOfWorkerClaim(t *testing.T) {
 	if err := runGit(root, "-c", "user.name=yard-test", "-c", "user.email=yard-test@local", "commit", "-m", "candidate"); err != nil {
 		t.Fatal(err)
 	}
-	spec := JobSpec{ID: "acceptance-test", RepoPath: root, BaseRef: "main", Task: "test acceptance", Acceptance: []string{"if (Test-Path accepted.txt) { exit 0 } else { exit 1 }"}}
+	spec := JobSpec{ID: "acceptance-test", RepoPath: root, BaseRef: "main", Task: "test acceptance", Acceptance: []string{"git diff --check"}}
 	stateDir := t.TempDir()
 	m, err := NewManager(spec, stateDir)
 	if err != nil {

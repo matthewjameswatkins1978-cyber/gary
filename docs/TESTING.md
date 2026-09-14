@@ -11,9 +11,10 @@ go run ./cmd/gary doctor
 ```
 
 The Go tests cover flag order and exclusivity, durable packet/state recovery,
-duplicate-safe events, two-worker ceilings, explicit candidate routes, and
-independent acceptance. Telltail remains an offline decision/replay gate; a
-live provider canary requires a separately bounded explicit run.
+duplicate-safe events, strict two-worker independence and ceilings, whole-job
+completion, mechanical waiting while another worker is healthy, serial
+integration of two candidates from one base, rollback after failed composed
+acceptance, explicit candidate routes, and independent acceptance.
 
 Black Box tests cover append-only journal behavior, derived note regeneration,
 history rebuild after index corruption, filters, explicit related jobs,
@@ -21,3 +22,8 @@ incident suspected/proven-cause semantics and proof-required closeout, redacted
 bundles, readable restart breadcrumbs, and honest insufficient-data health
 inputs. Black Box is local and deterministic; it adds no paid or live AI call
 to CI.
+
+GitHub GARY CI runs for pull requests to `master` and for direct pushes to
+`master`, so the default branch cannot silently bypass the test/vet/CLI gate.
+Telltail remains an offline decision/replay gate; a live provider canary
+requires a separately bounded explicit run.
