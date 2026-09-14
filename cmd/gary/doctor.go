@@ -17,6 +17,10 @@ type check struct {
 }
 
 func cmdDoctor() {
+	if jobID := doctorJobArg(); jobID != "" {
+		cmdBlackBoxDoctor(jobID)
+		return
+	}
 	fmt.Println("GARY // DOCTOR")
 	fmt.Println()
 
@@ -33,6 +37,37 @@ func cmdDoctor() {
 		fmt.Println("Result: NOT READY")
 		os.Exit(2)
 	}
+}
+
+func doctorJobArg() string {
+	args := os.Args[2:]
+	jobID := ""
+	bundle := false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--bundle":
+			bundle = true
+		case "--job":
+			if i+1 >= len(args) || strings.TrimSpace(args[i+1]) == "" {
+				fmt.Fprintln(os.Stderr, "usage: gary doctor --job <job-id> --bundle")
+				os.Exit(2)
+			}
+			i++
+			jobID = args[i]
+		default:
+			fmt.Fprintf(os.Stderr, "unknown doctor option %q\n", args[i])
+			os.Exit(2)
+		}
+	}
+	if bundle && jobID == "" {
+		fmt.Fprintln(os.Stderr, "usage: gary doctor --job <job-id> --bundle")
+		os.Exit(2)
+	}
+	if jobID != "" && !bundle {
+		fmt.Fprintln(os.Stderr, "usage: gary doctor --job <job-id> --bundle")
+		os.Exit(2)
+	}
+	return jobID
 }
 
 func runChecks() []check {

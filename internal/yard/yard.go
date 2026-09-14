@@ -17,6 +17,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/blackbox"
 )
 
 const StateVersion = 2
@@ -305,7 +307,13 @@ func (m *Manager) IncrementYardmasterTurn() error {
 func (m *Manager) SetStatus(status string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	previous := m.state.Status
 	m.state.Status = status
+	if previous != status && previous != "" {
+		if err := m.appendEventLocked(Event{EventID: "status:" + m.state.Job.ID + ":" + strings.ToLower(previous) + ":" + strings.ToLower(status), JobID: m.state.Job.ID, Type: "STATUS_CHANGED", Timestamp: time.Now().UTC().Format(time.RFC3339Nano), Data: map[string]any{"from": previous, "to": status}}); err != nil {
+			return err
+		}
+	}
 	if status == "DONE" || status == "FAILED" || status == "CANCELLED" {
 		if created, err := time.Parse(time.RFC3339Nano, m.state.CreatedAt); err == nil {
 			m.state.ActualElapsedSeconds = time.Since(created).Seconds()
@@ -370,8 +378,9 @@ func (m *Manager) ResolveBlocker(answer string) error {
 	m.state.Status = "RUNNING"
 	m.state.MatthewInterventions++
 	if strings.TrimSpace(answer) != "" {
-		m.state.Job.Task += "\n\nMatthew supplied this unblock answer: " + answer
-		m.state.Amendments = append(m.state.Amendments, answer)
+		// The answer is passed to the resumed Yardmaster turn by the caller. Do
+		// not copy potentially sensitive operator input into durable job state.
+		m.state.Amendments = append(m.state.Amendments, "Matthew supplied an unblock answer (content omitted from durable state)")
 	}
 	if err := m.appendEventLocked(Event{EventID: fmt.Sprintf("matthew:%s:resume:%d", m.state.Job.ID, len(m.state.Amendments)), JobID: m.state.Job.ID, Type: "MATTHEW_RESUMED", Timestamp: time.Now().UTC().Format(time.RFC3339Nano)}); err != nil {
 		return err
@@ -1142,7 +1151,15 @@ func (m *Manager) saveLocked() error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, m.state.StatePath)
+	if err := os.Rename(tmpName, m.state.StatePath); err != nil {
+		return err
+	}
+	// The note is a derived breadcrumb, never the source of truth. A note
+	// failure must not weaken the durable state/event commit just completed.
+	if store, blackboxErr := blackbox.New(m.stateDir); blackboxErr == nil {
+		_, _ = store.RegenerateNote(m.state.Job.ID)
+	}
+	return nil
 }
 
 func cloneState(state JobState) JobState {

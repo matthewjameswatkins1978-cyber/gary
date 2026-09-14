@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/appserver"
+	"github.com/matthewjameswatkins1978-cyber/gary/internal/blackbox"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/config"
 	"github.com/matthewjameswatkins1978-cyber/gary/internal/yard"
 )
@@ -142,7 +143,8 @@ func cmdYardmaster() {
 	}
 
 	state = manager.State()
-	input := buildYardmasterInput(manifest, state, *answer)
+	safeAnswer := blackbox.RedactSensitive(*answer)
+	input := buildYardmasterInput(manifest, state, safeAnswer)
 	for turn := 0; turn < 120; turn++ {
 		if err := manager.IncrementYardmasterTurn(); err != nil {
 			fmt.Fprintf(os.Stderr, "work state: %v\n", err)

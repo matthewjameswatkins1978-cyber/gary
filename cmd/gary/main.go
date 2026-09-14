@@ -13,6 +13,36 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "jobs":
+		cmdJobs()
+	case "history":
+		cmdHistory()
+	case "recent":
+		cmdRecent()
+	case "show":
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "usage: gary show <job-id>")
+			os.Exit(2)
+		}
+		cmdShow(os.Args[2])
+	case "note":
+		cmdNote()
+	case "incidents", "issues":
+		cmdIssues()
+	case "incident":
+		cmdIncident()
+	case "relate":
+		cmdRelate()
+	case "lesson":
+		cmdLesson()
+	case "review":
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "usage: gary review <job-id>")
+			os.Exit(2)
+		}
+		cmdReview(os.Args[2])
+	case "health":
+		cmdHealth()
 	case "version":
 		cmdVersion()
 	case "doctor":
@@ -61,6 +91,17 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: gary <command>")
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Commands:")
+	fmt.Fprintln(os.Stderr, "  jobs             Show the searchable local job history")
+	fmt.Fprintln(os.Stderr, "  history          Search/filter durable job history")
+	fmt.Fprintln(os.Stderr, "  recent           Show the most recent jobs")
+	fmt.Fprintln(os.Stderr, "  show <job-id>    Show a one-screen operational summary")
+	fmt.Fprintln(os.Stderr, "  note <job-id> <text>  Record an operator note")
+	fmt.Fprintln(os.Stderr, "  incidents        Show recorded operational incidents")
+	fmt.Fprintln(os.Stderr, "  incident open|close  Record or close an incident with proof")
+	fmt.Fprintln(os.Stderr, "  relate <from> <to> <kind>  Link related jobs with evidence")
+	fmt.Fprintln(os.Stderr, "  lesson <job-id> <text>  Record a lesson candidate")
+	fmt.Fprintln(os.Stderr, "  review <job-id>  Show an analysis-oriented diagnosis view")
+	fmt.Fprintln(os.Stderr, "  health           Show evidence-backed operational health")
 	fmt.Fprintln(os.Stderr, "  do <job>         Run one ordinary-language job through canonical GARY")
 	fmt.Fprintln(os.Stderr, "  work <job.json>  Give Luna one whole local-first job")
 	fmt.Fprintln(os.Stderr, "  yardmaster <job.json>  Alias for work")

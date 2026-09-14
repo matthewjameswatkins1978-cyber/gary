@@ -78,5 +78,23 @@ restart, resume the same thread and reconcile the saved process/worktree/Git
 state. Never duplicate a worker merely because a client or App Server
 connection disappeared. A healthy worker causes no Yardmaster model turn.
 
+## 7. Black Box operational memory
+
+Job history records reality. Incidents record failures. Lessons record what was
+learned. Tests prove fixes. Rules govern future behavior. The existing
+append-only job event journal is the forensic source; human notes and the local
+history index are derived views. History may be rebuilt at any time without
+rewriting raw job evidence.
+
+Incidents must keep symptom, expected behavior, suspected cause, proven cause,
+recovery, fix, and regression proof distinct. Closing an incident requires a
+proven cause, a fix, and evidence of regression/live proof. Lesson candidates
+may point to a code fix, regression test, or operational rule, but GARY never
+silently rewrites its rulebook or agent hints.
+
+Use `gary review <job-id>` and `gary doctor --job <job-id> --bundle` for
+diagnosis. Ordinary debugging belongs to GARY/Luna; `EXECUTIVE QUESTIONS` is
+reserved for a genuine Matthew boundary.
+
 **Whole job. One capable agent. Useful local tools. Real boundaries. Hard
 evidence. Human-controlled escalation. Finish the work.**

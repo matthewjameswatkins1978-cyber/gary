@@ -175,6 +175,27 @@ Only that independent pass can produce `DONE`.
 
 Batch `SUCCEEDED` means the container finished. It is not software acceptance.
 
+## GARY Black Box
+
+GARY keeps a sparse append-only journal for each job and derives a human note
+and searchable local history from it. This makes messy work inspectable across
+projects without adding another supervisor or relying on model recollection.
+
+```powershell
+gary jobs
+gary history search "worker"
+gary show <job-id>
+gary review <job-id>
+gary doctor --job <job-id> --bundle
+gary health
+```
+
+See [`docs/BLACK_BOX.md`](docs/BLACK_BOX.md) for the storage layout, explicit
+incident/related-job/lesson commands, rebuild behavior, and Lucy context
+export. The core rule is: **Job history records reality. Incidents record
+failures. Lessons record what was learned. Tests prove fixes. Rules govern
+future behavior.**
+
 ## Development
 
 GARY is written in Go.

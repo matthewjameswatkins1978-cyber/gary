@@ -221,8 +221,11 @@ func TestEventJournalIsDurableAndIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) != 3 {
-		t.Fatalf("journal events=%d, want JOB_CREATED/PREFLIGHT/JOB_DONE exactly once", len(lines))
+	if len(lines) != 4 {
+		t.Fatalf("journal events=%d, want JOB_CREATED/PREFLIGHT/STATUS_CHANGED/JOB_DONE exactly once", len(lines))
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(m.State().StatePath), "events.JOB_NOTE.md")); err != nil {
+		t.Fatalf("derived job note was not refreshed: %v", err)
 	}
 	seen := map[string]bool{}
 	for _, line := range lines {
