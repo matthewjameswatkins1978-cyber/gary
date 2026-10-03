@@ -1,12 +1,17 @@
 name: GARY CI
 
 on:
+  # Feature-branch work is validated by the PR event only. Push CI is reserved
+  # for the integration branch so one logical change does not pay twice.
   pull_request:
     branches: [master]
   push:
     branches:
       - master
-      - simplify/**
+
+concurrency:
+  group: gary-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -14,6 +19,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
