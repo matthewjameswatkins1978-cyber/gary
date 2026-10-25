@@ -1,6 +1,12 @@
-# GARY Reborn
+# GARY
 
-## Canonical product: local Luna Yardmaster
+**Give the job once. See the work. Check the proof.**
+
+GARY is a local foreman for delegated software work. It keeps a durable job moving through real Git worktrees and bounded coding workers, while making completion depend on verification, not on an agent declaring itself finished.
+
+This is an engineering tool under active development, not a hosted service or an autonomous permission authority. The primary path is a local Luna Yardmaster; a former cloud Batch path remains available only as an explicit legacy command.
+
+## The local Luna Yardmaster
 
 The normal path is now local-first: `gary work job.json` starts one durable
 Luna thread through the local Codex App Server and exposes a small yard boundary
